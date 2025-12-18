@@ -30,13 +30,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for GCR
-        run: gcloud auth configure-docker --quiet
-
-      - name: Build Docker image
-        run: docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest .
-
-      - name: Push Docker image
         run: |
+          gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and Push Docker image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest .
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest
 
