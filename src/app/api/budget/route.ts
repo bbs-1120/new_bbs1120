@@ -136,7 +136,7 @@ async function updateMetaBudget(
   return { success: false, error: lastError };
 }
 
-// TikTok Ads API - 複数の広告主ID対応
+// TikTok Ads API - 複数の広告主ID対応 + Smart Performance Campaign対応
 async function updateTikTokBudget(
   campaignId: string | undefined,
   newBudget: number
@@ -151,19 +151,18 @@ async function updateTikTokBudget(
     return { success: false, error: "キャンペーンIDが取得できません" };
   }
 
-  // 主要な広告主IDリスト（CPNから自動で探索）
-  const advertiserIds = [
-    "7433722339872899088", "7431834844448997393", "7431483320573247504",
-    "7424330265591627792", "7426279250719948817", "7426279558556663825",
-    "7424321809509761040", "7424324316726181904", "7424324893380100113",
-    "7424093414238535681", "7415898963447955472", "7413556028375236625",
-    "7412906864523935760", "7412906577210097680", "7412906240952565777",
-    "7312016244365099009", "7310106935712661506", "7288971698601279490",
-  ];
+  // 広告主IDリストを取得
+  const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
+  const advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
+
+  if (advertiserIds.length === 0) {
+    return { success: false, error: "広告主IDが設定されていません" };
+  }
 
   let lastError = "広告主IDが見つかりませんでした";
   
   for (const advertiserId of advertiserIds) {
+    // 1. まず通常のキャンペーン更新APIを試す
     try {
       const response = await fetch(
         "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
@@ -174,7 +173,7 @@ async function updateTikTokBudget(
             "Access-Token": accessToken,
           },
           body: JSON.stringify({
-            advertiser_id: advertiserId,
+            advertiser_id: advertiserId.trim(),
             campaign_id: campaignId,
             budget: newBudget,
           }),
@@ -187,8 +186,18 @@ async function updateTikTokBudget(
         return { success: true };
       } else {
         lastError = data.message || "TikTok APIエラー";
+        
+        // Smart Performance Campaignエラーの場合はSPC APIを試す
+        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+          const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId.trim(), campaignId, newBudget);
+          if (spcResult.success) {
+            return { success: true };
+          }
+          lastError = spcResult.error || lastError;
+        }
+        
         // 権限エラーやキャンペーンが見つからない場合は次の広告主IDを試す
-        if (data.code === 40002 || data.code === 40001) {
+        if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
           continue;
         }
       }
@@ -201,7 +210,44 @@ async function updateTikTokBudget(
   return { success: false, error: lastError };
 }
 
-// Pangle Ads API (TikTok for Business経由) - 複数の広告主ID対応
+// TikTok Smart Performance Campaign 専用API
+async function updateTikTokSpcBudget(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string,
+  newBudget: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(
+      "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/update/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+        body: JSON.stringify({
+          advertiser_id: advertiserId,
+          campaign_id: campaignId,
+          budget: newBudget,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.code === 0) {
+      return { success: true };
+    } else {
+      return { success: false, error: data.message || "SPC APIエラー" };
+    }
+  } catch (error) {
+    console.error("TikTok SPC API error:", error);
+    return { success: false, error: "SPC APIへの接続に失敗しました" };
+  }
+}
+
+// Pangle Ads API (TikTok for Business経由) - 複数の広告主ID対応 + Smart Performance Campaign対応
 async function updatePangleBudget(
   campaignId: string | undefined,
   newBudget: number
@@ -217,19 +263,18 @@ async function updatePangleBudget(
     return { success: false, error: "キャンペーンIDが取得できません" };
   }
 
-  // Pangle用広告主IDリスト
-  const advertiserIds = [
-    "7556179607188307969", "7563224138828382216", "7563230653786046480",
-    "7563231137359773697", "7563230674052939794", "7568789332065157128",
-    "7543850664410103826", "7543851268230545409", "7543851608480923664",
-    "7543982157253853192", "7543982888367456257", "7543982527271288850",
-    "7496794352266788881", "7496810375237746704", "7496810726489669633",
-    "7496811321158402049", "7496816002530017296", "7496819982039466000",
-  ];
+  // 広告主IDリストを取得
+  const advertiserIdsStr = process.env.PANGLE_ADVERTISER_IDS || process.env.TIKTOK_ADVERTISER_IDS || "";
+  const advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
+
+  if (advertiserIds.length === 0) {
+    return { success: false, error: "広告主IDが設定されていません" };
+  }
 
   let lastError = "広告主IDが見つかりませんでした";
   
   for (const advertiserId of advertiserIds) {
+    // 1. まず通常のキャンペーン更新APIを試す
     try {
       const response = await fetch(
         "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
@@ -240,7 +285,7 @@ async function updatePangleBudget(
             "Access-Token": accessToken,
           },
           body: JSON.stringify({
-            advertiser_id: advertiserId,
+            advertiser_id: advertiserId.trim(),
             campaign_id: campaignId,
             budget: newBudget,
           }),
@@ -253,7 +298,17 @@ async function updatePangleBudget(
         return { success: true };
       } else {
         lastError = data.message || "Pangle APIエラー";
-        if (data.code === 40002 || data.code === 40001) {
+        
+        // Smart Performance Campaignエラーの場合はSPC APIを試す
+        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+          const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId.trim(), campaignId, newBudget);
+          if (spcResult.success) {
+            return { success: true };
+          }
+          lastError = spcResult.error || lastError;
+        }
+        
+        if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
           continue;
         }
       }

@@ -125,7 +125,7 @@ async function updateMetaStatus(
   return { success: false, error: lastError };
 }
 
-// TikTok Ads API - キャンペーンステータス変更
+// TikTok Ads API - キャンペーンステータス変更 + Smart Performance Campaign対応
 async function updateTikTokStatus(
   campaignId: string | undefined,
   status: "active" | "paused"
@@ -154,6 +154,7 @@ async function updateTikTokStatus(
   let lastError = "広告主IDが見つかりませんでした";
   
   for (const advertiserId of advertiserIds) {
+    // 1. まず通常のステータス更新APIを試す
     try {
       const response = await fetch(
         "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
@@ -177,6 +178,16 @@ async function updateTikTokStatus(
         return { success: true };
       } else {
         lastError = data.message || "TikTok APIエラー";
+        
+        // Smart Performance Campaignエラーの場合はSPC APIを試す
+        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId.trim(), campaignId, tiktokStatus);
+          if (spcResult.success) {
+            return { success: true };
+          }
+          lastError = spcResult.error || lastError;
+        }
+        
         // 権限エラーやキャンペーンが見つからない場合は次の広告主IDを試す
         if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
           continue;
@@ -191,7 +202,44 @@ async function updateTikTokStatus(
   return { success: false, error: lastError };
 }
 
-// Pangle Ads API - キャンペーンステータス変更
+// TikTok Smart Performance Campaign ステータス変更
+async function updateTikTokSpcStatus(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string,
+  optStatus: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(
+      "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/update/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+        body: JSON.stringify({
+          advertiser_id: advertiserId,
+          campaign_id: campaignId,
+          operation_status: optStatus,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.code === 0) {
+      return { success: true };
+    } else {
+      return { success: false, error: data.message || "SPC APIエラー" };
+    }
+  } catch (error) {
+    console.error("TikTok SPC Status API error:", error);
+    return { success: false, error: "SPC APIへの接続に失敗しました" };
+  }
+}
+
+// Pangle Ads API - キャンペーンステータス変更 + Smart Performance Campaign対応
 async function updatePangleStatus(
   campaignId: string | undefined,
   status: "active" | "paused"
@@ -219,6 +267,7 @@ async function updatePangleStatus(
   let lastError = "広告主IDが見つかりませんでした";
   
   for (const advertiserId of advertiserIds) {
+    // 1. まず通常のステータス更新APIを試す
     try {
       const response = await fetch(
         "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
@@ -242,6 +291,16 @@ async function updatePangleStatus(
         return { success: true };
       } else {
         lastError = data.message || "Pangle APIエラー";
+        
+        // Smart Performance Campaignエラーの場合はSPC APIを試す
+        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId.trim(), campaignId, pangleStatus);
+          if (spcResult.success) {
+            return { success: true };
+          }
+          lastError = spcResult.error || lastError;
+        }
+        
         if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
           continue;
         }
