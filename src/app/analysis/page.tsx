@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power, Lightbulb, AlertTriangle, CheckCircle, Info } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power, Lightbulb, AlertTriangle, CheckCircle, Info, History } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
 import { GoalProgress } from "@/components/ui/goal-progress";
 import { ComparisonCard, ComparisonBadge } from "@/components/ui/comparison-card";
@@ -13,6 +13,7 @@ import { AlertBanner, AlertSettingsModal, AutoStopPanel } from "@/components/ui/
 import { SearchFilter, FilterOptions } from "@/components/ui/search-filter";
 import { CpnMemo } from "@/components/ui/cpn-memo";
 import { DashboardConfigModal, DashboardConfigButton, getWidgetConfig, DashboardWidget } from "@/components/ui/dashboard-config";
+import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
 
 interface SummaryData {
   spend: number;
@@ -130,6 +131,7 @@ export default function AnalysisPage() {
   const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
   const [showAlertSettings, setShowAlertSettings] = useState(false);
   const [showDashboardConfig, setShowDashboardConfig] = useState(false);
+  const [showChangeHistory, setShowChangeHistory] = useState(false);
   const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidget[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<FilterOptions>({ media: [], profitRange: {}, roasRange: {}, status: [] });
@@ -222,11 +224,29 @@ export default function AnalysisPage() {
           [cpn.cpnKey]: { type: "success", text: `¥${budgetValue.toLocaleString()}に変更しました` } 
         }));
         setBudgetInputs(prev => ({ ...prev, [cpn.cpnKey]: "" }));
+        // 変更履歴を追加
+        addChangeRecord({
+          type: "budget",
+          cpnName: cpn.cpnName,
+          media: cpn.media,
+          oldValue: cpn.dailyBudget,
+          newValue: budgetValue,
+          success: true,
+        });
       } else {
         setBudgetMessages(prev => ({ 
           ...prev, 
           [cpn.cpnKey]: { type: "error", text: result.error || "変更に失敗しました" } 
         }));
+        // 失敗も記録
+        addChangeRecord({
+          type: "budget",
+          cpnName: cpn.cpnName,
+          media: cpn.media,
+          oldValue: cpn.dailyBudget,
+          newValue: budgetValue,
+          success: false,
+        });
       }
     } catch {
       setBudgetMessages(prev => ({ 
@@ -274,11 +294,29 @@ export default function AnalysisPage() {
             ? { ...c, status: newStatus === "active" ? "ACTIVE" : "PAUSED" }
             : c
         ));
+        // 変更履歴を追加
+        addChangeRecord({
+          type: "status",
+          cpnName: cpn.cpnName,
+          media: cpn.media,
+          oldValue: isCurrentlyActive ? "ON" : "OFF",
+          newValue: newStatus === "active" ? "ON" : "OFF",
+          success: true,
+        });
       } else {
         setStatusMessages(prev => ({ 
           ...prev, 
           [cpn.cpnKey]: { type: "error", text: result.error || "変更に失敗しました" } 
         }));
+        // 失敗も記録
+        addChangeRecord({
+          type: "status",
+          cpnName: cpn.cpnName,
+          media: cpn.media,
+          oldValue: isCurrentlyActive ? "ON" : "OFF",
+          newValue: newStatus === "active" ? "ON" : "OFF",
+          success: false,
+        });
       }
     } catch {
       setStatusMessages(prev => ({ 
@@ -935,7 +973,24 @@ export default function AnalysisPage() {
       {/* CPN別（旧 当日合計の一部） */}
       {activeTab === "cpn" && (
         <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-slate-900">当日のCPN合計数値（{cpnList.length}件）</h2>
+          {/* ヘッダーと変更履歴ボタン */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">当日のCPN合計数値（{cpnList.length}件）</h2>
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowChangeHistory(!showChangeHistory)}
+              className="flex items-center gap-2"
+            >
+              <History className="h-4 w-4" />
+              変更履歴
+            </Button>
+          </div>
+
+          {/* 変更履歴パネル */}
+          {showChangeHistory && (
+            <ChangeHistory onClose={() => setShowChangeHistory(false)} />
+          )}
           
           {/* メイン指標 */}
           <div className="grid grid-cols-3 gap-6">
