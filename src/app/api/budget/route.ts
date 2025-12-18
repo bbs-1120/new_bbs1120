@@ -204,6 +204,7 @@ async function updateTikTokBudget(
             advertiser_id: advertiserId,
             campaign_id: campaignId,
             budget: newBudget,
+            budget_mode: "BUDGET_MODE_DAY",
           }),
         }
       );
@@ -264,6 +265,7 @@ async function updateTikTokSpcBudget(
           advertiser_id: advertiserId,
           campaign_id: campaignId,
           budget: newBudget,
+          budget_mode: "BUDGET_MODE_DAY",
         }),
       }
     );
@@ -335,6 +337,7 @@ async function updatePangleBudget(
             advertiser_id: advertiserId,
             campaign_id: campaignId,
             budget: newBudget,
+            budget_mode: "BUDGET_MODE_DAY",
           }),
         }
       );
