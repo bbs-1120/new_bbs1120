@@ -409,4 +409,46 @@ export async function getFullAnalysisData() {
   });
 }
 
+/**
+ * 今月（12月）の利益合計を取得
+ */
+export async function getMonthlyProfit(): Promise<number> {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+  }
+
+  try {
+    // 過去データを取得
+    const historicalData = await fetchHistoricalData(spreadsheetId);
+    
+    // 当日データも取得
+    const todayData = await fetchTodayData(spreadsheetId);
+
+    // 今月の開始日を計算（12月1日）
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    // 過去データから今月分を集計
+    let monthlyProfit = 0;
+    
+    for (const row of historicalData) {
+      if (row.date >= monthStart) {
+        monthlyProfit += row.profit;
+      }
+    }
+
+    // 当日データも加算
+    for (const row of todayData) {
+      monthlyProfit += row.profit;
+    }
+
+    return monthlyProfit;
+  } catch (error) {
+    console.error("Error calculating monthly profit:", error);
+    return 0;
+  }
+}
+
 export type { RawRowData };

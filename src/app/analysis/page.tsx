@@ -67,21 +67,28 @@ export default function AnalysisPage() {
   const [mediaList, setMediaList] = useState<MediaData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"summary" | "cpn" | "project" | "media">("summary");
 
   const fetchData = async () => {
     try {
+      setError(null);
       const response = await fetch("/api/analysis");
       const data = await response.json();
 
+      console.log("API Response:", data);
+
       if (data.success) {
         setSummary(data.summary);
-        setCpnList(data.cpnList);
-        setProjectList(data.projectList);
-        setMediaList(data.mediaList);
+        setCpnList(data.cpnList || []);
+        setProjectList(data.projectList || []);
+        setMediaList(data.mediaList || []);
+      } else {
+        setError(data.error || "データの取得に失敗しました");
       }
-    } catch (error) {
-      console.error("Failed to fetch analysis data:", error);
+    } catch (err) {
+      console.error("Failed to fetch analysis data:", err);
+      setError("ネットワークエラーが発生しました");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -111,11 +118,41 @@ export default function AnalysisPage() {
       <>
         <Header title="マイ分析" description="悠太のCPN分析ダッシュボード" />
         <div className="flex items-center justify-center h-64">
-          <p className="text-slate-500">読み込み中...</p>
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-2" />
+            <p className="text-slate-500">データを読み込み中...</p>
+          </div>
         </div>
       </>
     );
   }
+
+  if (error) {
+    return (
+      <>
+        <Header title="マイ分析" description="悠太のCPN分析ダッシュボード" />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-red-500 mb-4">{error}</p>
+            <Button onClick={fetchData}>再試行</Button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // summaryがnullの場合のデフォルト値
+  const displaySummary = summary || {
+    spend: 0,
+    mcv: 0,
+    cv: 0,
+    revenue: 0,
+    profit: 0,
+    roas: 0,
+    cpa: 0,
+    cvr: 0,
+    monthlyProfit: 0,
+  };
 
   return (
     <>
@@ -174,9 +211,9 @@ export default function AnalysisPage() {
       </div>
 
       {/* ① 当日合計 */}
-      {activeTab === "summary" && summary && (
+      {activeTab === "summary" && (
         <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-slate-900">当日のCPN合計数値</h2>
+          <h2 className="text-lg font-semibold text-slate-900">当日のCPN合計数値（{cpnList.length}件）</h2>
           
           {/* メイン指標 */}
           <div className="grid grid-cols-3 gap-6">
@@ -186,7 +223,7 @@ export default function AnalysisPage() {
                   <div>
                     <p className="text-sm text-slate-500">消化金額</p>
                     <p className="text-2xl font-bold text-slate-900">
-                      {formatCurrency(summary.spend)}
+                      {formatCurrency(displaySummary.spend)}
                     </p>
                   </div>
                   <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
@@ -201,14 +238,14 @@ export default function AnalysisPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-slate-500">利益</p>
-                    <p className={`text-2xl font-bold ${summary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatCurrency(summary.profit)}
+                    <p className={`text-2xl font-bold ${displaySummary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(displaySummary.profit)}
                     </p>
                   </div>
                   <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
-                    summary.profit >= 0 ? "bg-green-100" : "bg-red-100"
+                    displaySummary.profit >= 0 ? "bg-green-100" : "bg-red-100"
                   }`}>
-                    {summary.profit >= 0 ? (
+                    {displaySummary.profit >= 0 ? (
                       <TrendingUp className="h-6 w-6 text-green-600" />
                     ) : (
                       <TrendingDown className="h-6 w-6 text-red-600" />
@@ -223,8 +260,8 @@ export default function AnalysisPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-slate-500">ROAS</p>
-                    <p className={`text-2xl font-bold ${summary.roas >= 100 ? "text-green-600" : "text-red-600"}`}>
-                      {formatPercent(summary.roas)}
+                    <p className={`text-2xl font-bold ${displaySummary.roas >= 100 ? "text-green-600" : "text-red-600"}`}>
+                      {formatPercent(displaySummary.roas)}
                     </p>
                   </div>
                   <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
@@ -244,28 +281,28 @@ export default function AnalysisPage() {
               <div className="grid grid-cols-4 gap-6">
                 <div>
                   <p className="text-sm text-slate-500">MCV</p>
-                  <p className="text-xl font-semibold text-slate-900">{summary.mcv.toLocaleString()}</p>
+                  <p className="text-xl font-semibold text-slate-900">{displaySummary.mcv.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">CV</p>
-                  <p className="text-xl font-semibold text-slate-900">{summary.cv.toLocaleString()}</p>
+                  <p className="text-xl font-semibold text-slate-900">{displaySummary.cv.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">売上</p>
-                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(summary.revenue)}</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(displaySummary.revenue)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">CPA</p>
-                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(summary.cpa)}</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(displaySummary.cpa)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">CVR</p>
-                  <p className="text-xl font-semibold text-slate-900">{formatPercent(summary.cvr)}</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatPercent(displaySummary.cvr)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">12月利益</p>
-                  <p className={`text-xl font-semibold ${summary.monthlyProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {formatCurrency(summary.monthlyProfit)}
+                  <p className={`text-xl font-semibold ${displaySummary.monthlyProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatCurrency(displaySummary.monthlyProfit)}
                   </p>
                 </div>
               </div>

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getFullAnalysisData } from "@/lib/googleSheets";
+import { getFullAnalysisData, getMonthlyProfit } from "@/lib/googleSheets";
 
 export async function GET() {
   try {
     // スプレッドシートからデータを取得（当日 + 過去7日分の集計付き）
-    const sheetData = await getFullAnalysisData();
+    const [sheetData, monthlyProfit] = await Promise.all([
+      getFullAnalysisData(),
+      getMonthlyProfit(),
+    ]);
 
     // 1. 当日合計を計算
     let totalClicks = 0;
@@ -17,7 +20,7 @@ export async function GET() {
       roas: 0,
       cpa: 0,
       cvr: 0,
-      monthlyProfit: 0,
+      monthlyProfit: monthlyProfit, // 12月利益
     };
 
     // データを集計
