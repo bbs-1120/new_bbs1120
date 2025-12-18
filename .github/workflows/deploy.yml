@@ -4,7 +4,7 @@ name: Deploy to GCP
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # 手動実行も可能
+  workflow_dispatch:
 
 env:
   PROJECT_ID: adpilot-prod-1218
@@ -21,9 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # GCP認証（サービスアカウントキー使用）
       - name: Authenticate to Google Cloud
-        id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
@@ -31,25 +29,17 @@ jobs:
       - name: Setup Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Cloud Buildでイメージをビルド
-      - name: Build with Cloud Build
-        run: |
-          gcloud builds submit \
-            --tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --timeout=1200s \
-            --project=${{ env.PROJECT_ID }} \
-            .
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
 
-      # 最新タグも追加
-      - name: Tag as latest
-        run: |
-          gcloud container images add-tag \
-            ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            ${{ env.IMAGE_NAME }}:latest \
-            --quiet \
-            --project=${{ env.PROJECT_ID }}
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest .
 
-      # Cloud Runにデプロイ
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -64,7 +54,6 @@ jobs:
             --project=${{ env.PROJECT_ID }} \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,CHATWORK_API_TOKEN=CHATWORK_API_TOKEN:latest,CHATWORK_ROOM_ID=CHATWORK_ROOM_ID:latest,GOOGLE_SHEETS_CLIENT_EMAIL=GOOGLE_SHEETS_CLIENT_EMAIL:latest,GOOGLE_SHEETS_PRIVATE_KEY=GOOGLE_SHEETS_PRIVATE_KEY:latest,GOOGLE_SHEETS_SPREADSHEET_ID=GOOGLE_SHEETS_SPREADSHEET_ID:latest,META_ACCESS_TOKEN=META_ACCESS_TOKEN:latest,TIKTOK_ACCESS_TOKEN=TIKTOK_ACCESS_TOKEN:latest,TIKTOK_ADVERTISER_IDS=TIKTOK_ADVERTISER_IDS:latest"
 
-      # デプロイ結果を表示
       - name: Show Service URL
         run: |
           URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)' --project=${{ env.PROJECT_ID }})
