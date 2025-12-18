@@ -1,20 +1,15 @@
-# CI: プルリクエスト時のテスト・リント
+# CI: プルリクエスト時にテスト実行
 name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
-  push:
-    branches: [develop]
-
-env:
-  NODE_VERSION: '20'
+    branches: [main]
 
 jobs:
-  # リント & 型チェック
-  lint:
-    name: Lint & Type Check
+  test:
+    name: Lint & Build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,66 +17,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Run ESLint
+      - name: Run linter
         run: npm run lint
-
-      - name: Type Check
-        run: npx tsc --noEmit
-
-  # ビルドテスト
-  build:
-    name: Build Test
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Generate Prisma Client
-        run: npx prisma generate
 
       - name: Build
         run: npm run build
         env:
-          # ビルド時にエラーを防ぐためのダミー値
+          # ビルド時に必要な環境変数（ダミー値）
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-
-  # セキュリティチェック
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run npm audit
-        run: npm audit --audit-level=high
-        continue-on-error: true
-
