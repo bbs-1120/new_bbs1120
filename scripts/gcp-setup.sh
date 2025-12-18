@@ -9,7 +9,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${GREEN}🚀 AdPilot GCP環境構築スクリプト${NC}"
+echo -e "${GREEN}🚀 GrowthDeck GCP環境構築スクリプト${NC}"
 echo "=================================="
 
 # プロジェクトID設定
@@ -35,7 +35,7 @@ echo -e "${GREEN}✅ 認証OK${NC}"
 echo -e "\n${YELLOW}2. プロジェクト設定${NC}"
 gcloud config set project $PROJECT_ID 2>/dev/null || {
   echo -e "${YELLOW}プロジェクトを作成します...${NC}"
-  gcloud projects create $PROJECT_ID --name="AdPilot Production"
+  gcloud projects create $PROJECT_ID --name="GrowthDeck Production"
 }
 echo -e "${GREEN}✅ プロジェクト設定完了${NC}"
 

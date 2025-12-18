@@ -38,3 +38,27 @@ export function isReCpn(cpnName: string): boolean {
   return cpnName.includes("_Re");
 }
 
+/**
+ * ROASに応じた色クラスを返す（高いほど目立つ赤/紫ベース）
+ */
+export function getRoasColorClass(roas: number): string {
+  if (roas >= 301) return "text-fuchsia-600 font-bold";  // 301%以上: 濃い紫（最も目立つ）
+  if (roas >= 251) return "text-purple-600 font-bold";   // 251%以上: 紫
+  if (roas >= 200) return "text-rose-600 font-bold";     // 200%以上: ローズ
+  if (roas >= 151) return "text-orange-600 font-bold";   // 151%以上: オレンジ
+  if (roas >= 100) return "text-amber-600 font-semibold"; // 100%以上: アンバー（損益分岐）
+  return "text-slate-400";                               // それ以下: グレー（目立たない）
+}
+
+/**
+ * ROASに応じた背景色クラスを返す（高いほど目立つ赤/紫ベース）
+ */
+export function getRoasBgClass(roas: number): string {
+  if (roas >= 301) return "bg-fuchsia-100 text-fuchsia-700";
+  if (roas >= 251) return "bg-purple-100 text-purple-700";
+  if (roas >= 200) return "bg-rose-100 text-rose-700";
+  if (roas >= 151) return "bg-orange-100 text-orange-700";
+  if (roas >= 100) return "bg-amber-100 text-amber-700";
+  return "bg-slate-100 text-slate-500";
+}
+

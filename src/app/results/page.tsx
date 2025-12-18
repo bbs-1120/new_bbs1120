@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { JudgmentBadge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { Search, Download, RefreshCw } from "lucide-react";
+import { getRoasColorClass } from "@/lib/utils";
 
 interface JudgmentResult {
   cpnKey: string;
@@ -29,6 +30,8 @@ export default function ResultsPage() {
   const [selectedMedia, setSelectedMedia] = useState("全て");
   const [selectedJudgment, setSelectedJudgment] = useState("全て");
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [sortKey, setSortKey] = useState<string>("todayProfit");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // データを取得
   useEffect(() => {
@@ -84,6 +87,40 @@ export default function ResultsPage() {
   const formatCurrency = (value: number) => {
     const sign = value < 0 ? "" : "+";
     return `${sign}¥${Math.floor(value).toLocaleString("ja-JP")}`;
+  };
+
+  // ソート処理
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+
+  const sortedResults = [...filteredResults].sort((a, b) => {
+    let aVal: number | string = 0;
+    let bVal: number | string = 0;
+
+    switch (sortKey) {
+      case "cpnName": aVal = a.cpnName; bVal = b.cpnName; break;
+      case "todayProfit": aVal = a.todayProfit; bVal = b.todayProfit; break;
+      case "profit7Days": aVal = a.profit7Days; bVal = b.profit7Days; break;
+      case "roas7Days": aVal = a.roas7Days; bVal = b.roas7Days; break;
+      case "consecutiveLossDays": aVal = a.consecutiveLossDays; bVal = b.consecutiveLossDays; break;
+      default: aVal = a.todayProfit; bVal = b.todayProfit;
+    }
+
+    if (typeof aVal === "string") {
+      return sortDir === "asc" ? aVal.localeCompare(bVal as string) : (bVal as string).localeCompare(aVal);
+    }
+    return sortDir === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+  });
+
+  const SortIcon = ({ columnKey }: { columnKey: string }) => {
+    if (sortKey !== columnKey) return <span className="text-slate-300 ml-1">↕</span>;
+    return <span className="text-indigo-600 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
   };
 
   const toggleSelect = (key: string) => {
@@ -144,13 +181,13 @@ export default function ResultsPage() {
         description={`CPN仕分け結果の一覧表示（${results.length}件）`}
       />
 
-      {/* 媒体タブ */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      {/* 媒体タブ - スマホ対応 */}
+      <div className="flex flex-wrap gap-1.5 lg:gap-2 mb-4 lg:mb-6 overflow-x-auto scrollbar-hide -mx-4 px-4 lg:mx-0 lg:px-0">
         {mediaList.map((media) => (
           <button
             key={media}
             onClick={() => setSelectedMedia(media)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+            className={`px-2 lg:px-4 py-1.5 lg:py-2 rounded-lg text-xs lg:text-sm font-medium border transition-all whitespace-nowrap ${
               selectedMedia === media
                 ? media === "全て"
                   ? "bg-indigo-600 text-white border-indigo-600"
@@ -161,7 +198,7 @@ export default function ResultsPage() {
             }`}
           >
             {media}
-            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+            <span className={`ml-1 lg:ml-2 px-1 lg:px-1.5 py-0.5 rounded text-[10px] lg:text-xs ${
               selectedMedia === media
                 ? "bg-white/20"
                 : "bg-black/10"
@@ -172,71 +209,73 @@ export default function ResultsPage() {
         ))}
       </div>
 
-      {/* フィルターバー */}
-      <Card className="mb-6">
-        <div className="p-4 flex flex-wrap gap-4 items-center">
-          <div className="relative flex-1 min-w-[200px]">
+      {/* フィルターバー - スマホ対応 */}
+      <Card className="mb-4 lg:mb-6">
+        <div className="p-2 lg:p-4 flex flex-col lg:flex-row gap-2 lg:gap-4 lg:items-center">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
               placeholder="CPN名で検索..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-9 lg:pl-10 pr-3 lg:pr-4 py-1.5 lg:py-2 border border-slate-200 rounded-lg text-xs lg:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
-          <select
-            value={selectedJudgment}
-            onChange={(e) => setSelectedJudgment(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            {judgmentOptions.map((option) => (
-              <option key={option} value={option}>
-                {option === "全て" ? "判定: 全て" : option}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <select
+              value={selectedJudgment}
+              onChange={(e) => setSelectedJudgment(e.target.value)}
+              className="flex-1 lg:flex-none border border-slate-200 rounded-lg px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {judgmentOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option === "全て" ? "判定: 全て" : option}
+                </option>
+              ))}
+            </select>
 
-          <Button variant="secondary" size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            CSV出力
-          </Button>
+            <Button variant="secondary" size="sm" className="text-xs lg:text-sm whitespace-nowrap">
+              <Download className="mr-1 lg:mr-2 h-3 w-3 lg:h-4 lg:w-4" />
+              <span className="hidden lg:inline">CSV</span>出力
+            </Button>
+          </div>
         </div>
       </Card>
 
-      {/* 選択アクション */}
+      {/* 選択アクション - スマホ対応 */}
       {selectedKeys.length > 0 && (
-        <div className="mb-4 p-4 bg-indigo-50 rounded-lg flex items-center justify-between">
-          <span className="text-sm text-indigo-700">
+        <div className="mb-3 lg:mb-4 p-2 lg:p-4 bg-indigo-50 rounded-lg flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+          <span className="text-xs lg:text-sm text-indigo-700">
             {selectedKeys.length}件選択中
           </span>
           <div className="flex gap-2">
-            <Button size="sm" variant="secondary">
+            <Button size="sm" variant="secondary" className="text-xs">
               手修正
             </Button>
-            <Button size="sm">
+            <Button size="sm" className="text-xs">
               送信対象に追加
             </Button>
           </div>
         </div>
       )}
 
-      {/* 結果テーブル */}
+      {/* 結果テーブル - スマホ対応 */}
       <Card>
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="font-medium text-slate-900">
+        <div className="p-2 lg:p-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-sm lg:text-base font-medium text-slate-900">
             {selectedMedia === "全て" ? "全媒体" : selectedMedia}
-            <span className="ml-2 text-slate-500 font-normal">
+            <span className="ml-1 lg:ml-2 text-slate-500 font-normal">
               ({filteredResults.length}件)
             </span>
           </h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto scrollbar-hide">
+          <table className="w-full min-w-[700px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-left">
+                <th className="px-2 lg:px-3 py-2 lg:py-3 text-left w-8 lg:w-10">
                   <input
                     type="checkbox"
                     checked={
@@ -244,64 +283,79 @@ export default function ResultsPage() {
                       filteredResults.length > 0
                     }
                     onChange={toggleSelectAll}
-                    className="rounded border-slate-300"
+                    className="rounded border-slate-300 h-3 w-3 lg:h-4 lg:w-4"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                  CPN名
+                <th 
+                  onClick={() => handleSort("cpnName")}
+                  className="px-2 lg:px-3 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 whitespace-nowrap"
+                >
+                  CPN名 <SortIcon columnKey="cpnName" />
                 </th>
                 {(selectedMedia === "全て" || selectedMedia === "TikTok/Pangle") && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  <th className="px-2 lg:px-3 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase whitespace-nowrap">
                     媒体
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                <th className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-center text-[10px] lg:text-xs font-medium text-slate-500 uppercase whitespace-nowrap w-10 lg:w-12">
                   Re
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                <th className="px-2 lg:px-3 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase whitespace-nowrap">
                   判定
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">
-                  当日利益
+                <th 
+                  onClick={() => handleSort("todayProfit")}
+                  className="px-2 lg:px-3 py-2 lg:py-3 text-right text-[10px] lg:text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 whitespace-nowrap"
+                >
+                  利益 <SortIcon columnKey="todayProfit" />
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">
-                  7日利益
+                <th 
+                  onClick={() => handleSort("profit7Days")}
+                  className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-right text-[10px] lg:text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 whitespace-nowrap"
+                >
+                  7日利益 <SortIcon columnKey="profit7Days" />
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">
-                  7日ROAS
+                <th 
+                  onClick={() => handleSort("roas7Days")}
+                  className="px-2 lg:px-3 py-2 lg:py-3 text-right text-[10px] lg:text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 whitespace-nowrap"
+                >
+                  ROAS <SortIcon columnKey="roas7Days" />
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">
-                  赤字日数
+                <th 
+                  onClick={() => handleSort("consecutiveLossDays")}
+                  className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-center text-[10px] lg:text-xs font-medium text-slate-500 uppercase cursor-pointer hover:bg-slate-100 whitespace-nowrap"
+                >
+                  赤字 <SortIcon columnKey="consecutiveLossDays" />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                <th className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase whitespace-nowrap">
                   理由
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {filteredResults.map((result) => (
+              {sortedResults.map((result) => (
                 <tr
                   key={result.cpnKey}
                   className={`hover:bg-slate-50 ${
                     selectedKeys.includes(result.cpnKey) ? "bg-indigo-50" : ""
                   }`}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-2 lg:px-3 py-2 lg:py-3 w-8 lg:w-10">
                     <input
                       type="checkbox"
                       checked={selectedKeys.includes(result.cpnKey)}
                       onChange={() => toggleSelect(result.cpnKey)}
-                      className="rounded border-slate-300"
+                      className="rounded border-slate-300 h-3 w-3 lg:h-4 lg:w-4"
                     />
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-slate-900">
+                  <td className="px-2 lg:px-3 py-2 lg:py-3 min-w-[100px] lg:min-w-[180px]">
+                    <p className="text-[10px] lg:text-sm font-medium text-slate-900 break-all line-clamp-2" title={result.cpnName}>
                       {result.cpnName}
                     </p>
                   </td>
                   {(selectedMedia === "全て" || selectedMedia === "TikTok/Pangle") && (
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                    <td className="px-2 lg:px-3 py-2 lg:py-3 whitespace-nowrap">
+                      <span className={`inline-flex px-1.5 lg:px-2 py-0.5 lg:py-1 text-[9px] lg:text-xs font-medium rounded-full ${
                         result.media === "Meta" ? "bg-blue-100 text-blue-700" :
                         result.media === "TikTok" ? "bg-pink-100 text-pink-700" :
                         result.media === "Pangle" ? "bg-orange-100 text-orange-700" :
@@ -313,9 +367,9 @@ export default function ResultsPage() {
                       </span>
                     </td>
                   )}
-                  <td className="px-4 py-3">
+                  <td className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-center whitespace-nowrap w-10 lg:w-12">
                     <span
-                      className={`text-xs font-medium px-2 py-1 rounded ${
+                      className={`text-[9px] lg:text-xs font-medium px-1.5 lg:px-2 py-0.5 lg:py-1 rounded ${
                         result.isRe
                           ? "bg-purple-100 text-purple-700"
                           : "bg-slate-100 text-slate-500"
@@ -324,47 +378,47 @@ export default function ResultsPage() {
                       {result.isRe ? "Re" : "-"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 lg:px-3 py-2 lg:py-3 whitespace-nowrap">
                     <JudgmentBadge judgment={result.judgment} />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-2 lg:px-3 py-2 lg:py-3 text-right whitespace-nowrap">
                     <span
-                      className={`text-sm font-medium ${
+                      className={`text-[10px] lg:text-sm font-medium ${
                         result.todayProfit >= 0 ? "text-green-600" : "text-red-600"
                       }`}
                     >
                       {formatCurrency(result.todayProfit)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-right whitespace-nowrap">
                     <span
-                      className={`text-sm font-medium ${
+                      className={`text-[10px] lg:text-sm font-medium ${
                         result.profit7Days >= 0 ? "text-green-600" : "text-red-600"
                       }`}
                     >
                       {formatCurrency(result.profit7Days)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-sm text-slate-600">
+                  <td className="px-2 lg:px-3 py-2 lg:py-3 text-right whitespace-nowrap">
+                    <span className={`text-[10px] lg:text-sm font-medium ${getRoasColorClass(result.roas7Days)}`}>
                       {result.roas7Days.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 text-center whitespace-nowrap">
                     {formatLossDays(result)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="hidden lg:table-cell px-2 lg:px-3 py-2 lg:py-3 min-w-[100px]">
                     <div className="flex flex-wrap gap-1">
                       {result.reasons.slice(0, 2).map((reason, index) => (
                         <span
                           key={index}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600"
+                          className="inline-flex items-center px-1.5 lg:px-2 py-0.5 rounded text-[9px] lg:text-xs bg-slate-100 text-slate-600 whitespace-nowrap"
                         >
                           {reason}
                         </span>
                       ))}
                       {result.reasons.length > 2 && (
-                        <span className="text-xs text-slate-400">
+                        <span className="text-[9px] lg:text-xs text-slate-400">
                           +{result.reasons.length - 2}
                         </span>
                       )}

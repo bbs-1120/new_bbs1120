@@ -18,7 +18,7 @@ self.addEventListener('push', (event) => {
   console.log('Push notification received:', event);
   
   let data = {
-    title: 'AdPilot',
+    title: 'GrowthDeck',
     body: '新しい通知があります',
     icon: '/icons/Cactus-Jack.jpg',
     badge: '/icons/Cactus-Jack.jpg',

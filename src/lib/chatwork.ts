@@ -186,25 +186,26 @@ export async function sendErrorNotification(
   const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
   
   const errorTypeLabels: Record<string, string> = {
-    api_error: "🔴 APIエラー",
-    anomaly: "⚠️ 異常検知",
-    budget_change: "💰 予算変更エラー",
-    status_change: "🔌 ステータス変更エラー",
-    system: "🚨 システムエラー",
+    api_error: "APIエラー",
+    anomaly: "異常検知",
+    budget_change: "予算変更エラー",
+    status_change: "ステータス変更エラー",
+    system: "システムエラー",
   };
 
-  let message = `[info][title]${errorTypeLabels[errorType] || "❌ エラー"}[/title]`;
+  let message = `[toall]\n\n`;
+  message += `エラーが発生しています。\n`;
+  message += `以下エラー内容\n↓\n\n`;
+  message += `【${errorTypeLabels[errorType] || "エラー"}】\n`;
   message += `発生日時：${now}\n`;
   message += `内容：${errorMessage}\n`;
   
   if (details) {
     message += `\n詳細：\n`;
     for (const [key, value] of Object.entries(details)) {
-      message += `  ${key}: ${JSON.stringify(value)}\n`;
+      message += `${key}: ${JSON.stringify(value)}\n`;
     }
   }
-  
-  message += `[/info]`;
 
   return sendToChatwork(apiToken, roomId, message);
 }
@@ -226,12 +227,14 @@ export async function sendAnomalyAlert(
 
   const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
-  let message = `[info][title]⚠️ 異常検知アラート[/title]`;
+  let message = `[toall]\n\n`;
+  message += `エラーが発生しています。\n`;
+  message += `以下エラー内容\n↓\n\n`;
+  message += `【異常検知アラート】\n`;
   message += `検知日時：${now}\n`;
   message += `媒体：${media}\n`;
   message += `CPN：${cpnName}\n`;
   message += `\n${anomalyDetails}\n`;
-  message += `[/info]`;
 
   return sendToChatwork(apiToken, roomId, message);
 }

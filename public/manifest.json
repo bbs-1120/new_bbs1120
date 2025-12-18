@@ -1,6 +1,6 @@
 {
-  "name": "AdPilot - Campaign Intelligence",
-  "short_name": "AdPilot",
+  "name": "GrowthDeck - 広告運用ダッシュボード",
+  "short_name": "GrowthDeck",
   "description": "広告運用を自動化・最適化するインテリジェントプラットフォーム",
   "start_url": "/analysis",
   "display": "standalone",

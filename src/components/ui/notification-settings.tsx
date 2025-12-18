@@ -54,7 +54,7 @@ export function NotificationSettings() {
         // テスト通知
         await sendLocalNotification({
           title: '🔔 通知が有効になりました',
-          body: 'AdPilotからの通知を受け取れるようになりました',
+          body: 'GrowthDeckからの通知を受け取れるようになりました',
           data: { url: '/analysis' }
         });
       }
@@ -68,7 +68,7 @@ export function NotificationSettings() {
   const handleTestNotification = async () => {
     await sendLocalNotification({
       title: '📊 テスト通知',
-      body: 'これはAdPilotからのテスト通知です',
+      body: 'これはGrowthDeckからのテスト通知です',
       data: { url: '/analysis' }
     });
   };

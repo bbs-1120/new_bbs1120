@@ -53,7 +53,7 @@ export async function sendErrorNotification(
   const timestamp = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
   
   const message = `
-🚨 AdPilot エラー通知
+🚨 GrowthDeck エラー通知
 
 【種類】${errorType}
 【時刻】${timestamp}
@@ -108,7 +108,7 @@ export async function sendDailySummaryNotification(
   const roasEmoji = roas >= 100 ? "✅" : "⚠️";
   
   const message = `
-📊 AdPilot 日次レポート
+📊 GrowthDeck 日次レポート
 
 ${profitEmoji} 本日利益: ¥${profit.toLocaleString()}
 💸 消化: ¥${spend.toLocaleString()}

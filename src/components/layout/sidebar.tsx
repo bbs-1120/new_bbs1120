@@ -18,6 +18,7 @@ import {
   Zap,
   Menu,
   X,
+  Clock,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -61,6 +62,52 @@ const navigation: NavCategory[] = [
   },
 ];
 
+// サイドバー用の時計コンポーネント
+function SidebarClock() {
+  const [time, setTime] = useState<string>("");
+  const [date, setDate] = useState<string>("");
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      const dateStr = now.toLocaleDateString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        weekday: "short",
+      });
+      setTime(timeStr);
+      setDate(dateStr);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="mx-2 mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
+      <div className="flex items-center gap-2 mb-1">
+        <Clock className="h-4 w-4 text-[#36c5f0]" />
+        <span className="text-xs text-white/60">日本時間</span>
+      </div>
+      <div className="text-2xl font-mono font-bold text-white tracking-wider">
+        {time}
+      </div>
+      <div className="text-xs text-white/50 mt-0.5">
+        {date}
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -96,7 +143,7 @@ export function Sidebar() {
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center">
             <Zap className="h-4 w-4 text-white" />
           </div>
-          <span className="text-white font-bold">AdPilot</span>
+          <span className="text-white font-bold">GrowthDeck</span>
         </div>
         <DarkModeToggle />
       </div>
@@ -124,8 +171,8 @@ export function Sidebar() {
               <Zap className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-[15px] font-bold text-white tracking-tight">AdPilot</h1>
-              <p className="text-[10px] text-white/50 -mt-0.5">Campaign Intelligence</p>
+              <h1 className="text-[15px] font-bold text-white tracking-tight">GrowthDeck</h1>
+              <p className="text-[10px] text-white/50 -mt-0.5">広告運用ダッシュボード</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -143,6 +190,9 @@ export function Sidebar() {
 
         {/* ナビゲーション */}
         <nav className="flex-1 overflow-y-auto py-4 px-2">
+          {/* 時計 */}
+          <SidebarClock />
+          
           {navigation.map((category) => (
             <div key={category.category} className="mb-5">
               {/* カテゴリヘッダー */}

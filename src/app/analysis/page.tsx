@@ -14,6 +14,8 @@ import { SearchFilter, FilterOptions } from "@/components/ui/search-filter";
 import { CpnMemo } from "@/components/ui/cpn-memo";
 import { DashboardConfigModal, DashboardConfigButton, getWidgetConfig, DashboardWidget } from "@/components/ui/dashboard-config";
 import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
+import { AnalysisPageSkeleton } from "@/components/ui/skeleton";
+import { getRoasColorClass } from "@/lib/utils";
 
 interface SummaryData {
   spend: number;
@@ -142,6 +144,9 @@ export default function AnalysisPage() {
     dayOverDay: { spend: number; revenue: number; profit: number; cv: number; mcv: number };
     weekOverWeek: { spend: number; revenue: number; profit: number; cv: number; mcv: number };
   } | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [nextRefreshIn, setNextRefreshIn] = useState(20 * 60); // 秒
 
   // 比較データを取得
   const fetchComparisonData = async () => {
@@ -414,7 +419,18 @@ export default function AnalysisPage() {
       setError(null);
       // refresh=trueでキャッシュをスキップして最新データを取得
       const url = refresh ? "/api/analysis?refresh=true" : "/api/analysis";
-      const response = await fetch(url);
+      
+      // タイムアウト付きfetch（30秒）
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      const response = await fetch(url, { 
+        signal: controller.signal,
+        // キャッシュを活用
+        cache: refresh ? "no-store" : "default",
+      });
+      clearTimeout(timeoutId);
+      
       const data = await response.json();
 
       if (data.success) {
@@ -436,6 +452,10 @@ export default function AnalysisPage() {
           projectMonthly: data.projectMonthly || [],
           aiAdvice: data.aiAdvice || [],
         });
+        
+        // 最終更新時刻を記録
+        setLastUpdated(new Date());
+        setNextRefreshIn(20 * 60); // 次の更新までリセット
       } else {
         setError(data.error || "データの取得に失敗しました");
       }
@@ -451,20 +471,40 @@ export default function AnalysisPage() {
   useEffect(() => {
     // まずローカルキャッシュから読み込み（即座に表示）
     const hasCachedData = loadFromLocalCache();
-    
-    // バックグラウンドで最新データを取得
-    if (hasCachedData) {
-      // キャッシュがある場合は静かに更新
-      fetchData().catch(() => {});
-    } else {
-      // キャッシュがない場合はローディング表示
-      fetchData();
-    }
-    
-    fetchGptAdvice(); // GPTアドバイスも取得
-    fetchComparisonData(); // 比較データも取得
     setDashboardWidgets(getWidgetConfig()); // ダッシュボード設定を読み込み
+    
+    // すべてのデータを並列で取得（高速化）
+    const loadAllData = async () => {
+      await Promise.all([
+        hasCachedData 
+          ? fetchData().catch(() => {}) // キャッシュがある場合は静かに更新
+          : fetchData(), // キャッシュがない場合はローディング表示
+        fetchGptAdvice(),
+        fetchComparisonData(),
+      ]);
+    };
+    
+    loadAllData();
   }, []);
+
+  // 20分ごとの自動更新
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+
+    // カウントダウン用のインターバル（1秒ごと）
+    const countdownInterval = setInterval(() => {
+      setNextRefreshIn(prev => {
+        if (prev <= 1) {
+          // 0になったらデータを更新
+          fetchData(true);
+          return 20 * 60; // 20分にリセット
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(countdownInterval);
+  }, [autoRefreshEnabled]);
 
   // ウィジェット表示判定
   const isWidgetVisible = (widgetId: string) => {
@@ -521,12 +561,7 @@ export default function AnalysisPage() {
     return (
       <>
         <Header title="デイリーレポート" description="本日の広告パフォーマンス" />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <RefreshCw className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-2" />
-            <p className="text-slate-500">データを読み込み中...</p>
-          </div>
-        </div>
+        <AnalysisPageSkeleton />
       </>
     );
   }
@@ -562,6 +597,55 @@ export default function AnalysisPage() {
     <>
       <Header title="デイリーレポート" description="本日の広告パフォーマンス" />
 
+      {/* 自動更新バー - モバイル対応 */}
+      <div className="mb-4 p-2 lg:p-3 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+        {/* モバイル: 縦積み / デスクトップ: 横並び */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+          {/* ステータス表示 */}
+          <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? "bg-green-500 animate-pulse" : "bg-slate-400"}`} />
+              <span className="text-slate-600 dark:text-slate-300">
+                {autoRefreshEnabled ? "自動更新ON" : "OFF"}
+              </span>
+            </div>
+            {lastUpdated && (
+              <span className="text-slate-500">
+                更新: {lastUpdated.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            {autoRefreshEnabled && (
+              <span className="text-slate-500">
+                次回: {Math.floor(nextRefreshIn / 60)}:{String(nextRefreshIn % 60).padStart(2, '0')}
+              </span>
+            )}
+          </div>
+          {/* ボタン */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+              className={`px-2 lg:px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                autoRefreshEnabled 
+                  ? "bg-green-100 text-green-700 hover:bg-green-200" 
+                  : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+              }`}
+            >
+              {autoRefreshEnabled ? "停止" : "開始"}
+            </button>
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => handleRefresh()}
+              disabled={isRefreshing}
+              className="text-xs"
+            >
+              <RefreshCw className={`h-3 w-3 lg:h-4 lg:w-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">今すぐ</span>更新
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Meta利益アラート */}
       {mediaList.length > 0 && (
         <AlertBanner 
@@ -584,12 +668,8 @@ export default function AnalysisPage() {
         onSave={(widgets) => setDashboardWidgets(widgets)}
       />
 
-      {/* 更新ボタン */}
-      <div className="mb-4 lg:mb-6 flex items-center gap-2">
-        <Button onClick={handleRefresh} loading={isRefreshing} className="flex-1 sm:flex-none">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          データを更新
-        </Button>
+      {/* 設定ボタン */}
+      <div className="mb-4 lg:mb-6 flex justify-end">
         <DashboardConfigButton onOpen={() => setShowDashboardConfig(true)} />
       </div>
 
@@ -731,12 +811,18 @@ export default function AnalysisPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis 
                         dataKey="date" 
-                        tick={{ fontSize: 11 }}
+                        tick={{ fontSize: 10 }}
                         tickFormatter={(value) => value.split("-")[2] + "日"}
                       />
                       <YAxis 
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`}
+                        tick={{ fontSize: 9 }}
+                        tickFormatter={(value) => {
+                          const absValue = Math.abs(value);
+                          if (absValue >= 1000000) return `${value < 0 ? "-" : ""}¥${(absValue / 1000000).toFixed(1)}M`;
+                          if (absValue >= 1000) return `${value < 0 ? "-" : ""}¥${Math.floor(absValue / 1000)}k`;
+                          return `¥${Math.floor(value)}`;
+                        }}
+                        width={50}
                       />
                       <Tooltip 
                         formatter={(value) => [`¥${(value as number)?.toLocaleString() || 0}`, ""]}
@@ -809,6 +895,93 @@ export default function AnalysisPage() {
             </Card>
           </div>
 
+          {/* 当日利益TOP10 CPN */}
+          <Card className="mb-6">
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-base flex items-center gap-2">
+                🔥 本日の利益TOP10 CPN
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {cpnList.length > 0 ? (
+                <div className="overflow-x-auto scrollbar-hide">
+                  <table className="w-full text-sm table-auto min-w-[500px] lg:min-w-0">
+                    <thead className="bg-slate-50 border-y border-slate-200">
+                      <tr>
+                        <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 w-7 lg:w-8">#</th>
+                        <th className="px-1.5 lg:px-2 py-2 text-left text-[10px] lg:text-xs font-medium text-slate-500 w-12 lg:w-14">媒体</th>
+                        <th className="px-1.5 lg:px-2 py-2 text-left text-[10px] lg:text-xs font-medium text-slate-500 min-w-[120px]">CPN名</th>
+                        <th className="px-1.5 lg:px-2 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-emerald-50">💰 利益</th>
+                        <th className="px-1.5 lg:px-2 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">ROAS</th>
+                        <th className="hidden sm:table-cell px-1.5 lg:px-2 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">消化</th>
+                        <th className="hidden sm:table-cell px-1.5 lg:px-2 py-2 pr-3 lg:pr-4 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">CV</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[...cpnList]
+                        .sort((a, b) => b.profit - a.profit)
+                        .slice(0, 10)
+                        .map((cpn, index) => {
+                          const rank = index + 1;
+                          return (
+                            <tr key={cpn.cpnKey} className="hover:bg-slate-50">
+                              <td className="px-1.5 lg:px-2 py-1.5 lg:py-2 text-center">
+                                <span className={`inline-flex items-center justify-center w-5 h-5 lg:w-6 lg:h-6 rounded-full text-[10px] lg:text-xs font-bold ${
+                                  rank === 1 ? "bg-gradient-to-br from-yellow-400 to-amber-500 text-white shadow-sm" :
+                                  rank === 2 ? "bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-sm" :
+                                  rank === 3 ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-sm" :
+                                  "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {rank}
+                                </span>
+                              </td>
+                              <td className="px-1.5 lg:px-2 py-1.5 lg:py-2">
+                                <span className={`px-1 lg:px-1.5 py-0.5 text-[9px] lg:text-[10px] font-medium rounded ${
+                                  cpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                                  cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                                  cpn.media === "Pangle" ? "bg-orange-100 text-orange-700" :
+                                  "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {cpn.media}
+                                </span>
+                              </td>
+                              <td className="px-1.5 lg:px-2 py-1.5 lg:py-2">
+                                <p className="text-[10px] lg:text-xs text-slate-800 break-all line-clamp-2">
+                                  {cpn.cpnName}
+                                </p>
+                              </td>
+                              <td className={`px-2 lg:px-3 py-1.5 lg:py-2 text-right whitespace-nowrap ${
+                                cpn.profit >= 0 
+                                  ? "bg-gradient-to-r from-emerald-50 to-green-100" 
+                                  : "bg-gradient-to-r from-red-50 to-rose-100"
+                              }`}>
+                                <span className={`text-xs lg:text-sm font-bold ${cpn.profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                                  ¥{Math.floor(cpn.profit).toLocaleString()}
+                                </span>
+                              </td>
+                              <td className={`px-1.5 lg:px-2 py-1.5 lg:py-2 text-right text-[10px] lg:text-xs whitespace-nowrap ${getRoasColorClass(cpn.roas)}`}>
+                                {cpn.roas.toFixed(1)}%
+                              </td>
+                              <td className="hidden sm:table-cell px-1.5 lg:px-2 py-1.5 lg:py-2 text-right text-[10px] lg:text-xs text-slate-500 whitespace-nowrap">
+                                ¥{Math.floor(cpn.spend).toLocaleString()}
+                              </td>
+                              <td className="hidden sm:table-cell px-1.5 lg:px-2 py-1.5 lg:py-2 pr-3 lg:pr-4 text-right text-[10px] lg:text-xs text-slate-500 whitespace-nowrap">
+                                {cpn.cv.toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-6 text-center text-slate-400 text-sm">
+                  データがありません
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* 案件別ランキング */}
           <Card>
             <CardHeader>
@@ -825,8 +998,13 @@ export default function AnalysisPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis 
                       type="number"
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`}
+                      tick={{ fontSize: 9 }}
+                      tickFormatter={(value) => {
+                        const absValue = Math.abs(value);
+                        if (absValue >= 1000000) return `${value < 0 ? "-" : ""}¥${(absValue / 1000000).toFixed(1)}M`;
+                        if (absValue >= 1000) return `${value < 0 ? "-" : ""}¥${Math.floor(absValue / 1000)}k`;
+                        return `¥${Math.floor(value)}`;
+                      }}
                     />
                     <YAxis 
                       dataKey="name" 
@@ -993,39 +1171,39 @@ export default function AnalysisPage() {
           )}
           
           {/* メイン指標 */}
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-6">
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 lg:pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-500">消化金額</p>
-                    <p className="text-2xl font-bold text-slate-900">
+                    <p className="text-xs lg:text-sm text-slate-500">消化金額</p>
+                    <p className="text-xl lg:text-2xl font-bold text-slate-900">
                       {formatCurrency(displaySummary.spend)}
                     </p>
                   </div>
-                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <DollarSign className="h-6 w-6 text-blue-600" />
+                  <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                    <DollarSign className="h-5 w-5 lg:h-6 lg:w-6 text-blue-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 lg:pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-500">利益</p>
-                    <p className={`text-2xl font-bold ${displaySummary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    <p className="text-xs lg:text-sm text-slate-500">利益</p>
+                    <p className={`text-xl lg:text-2xl font-bold ${displaySummary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {formatCurrency(displaySummary.profit)}
                     </p>
                   </div>
-                  <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                  <div className={`h-10 w-10 lg:h-12 lg:w-12 rounded-full flex items-center justify-center ${
                     displaySummary.profit >= 0 ? "bg-green-100" : "bg-red-100"
                   }`}>
                     {displaySummary.profit >= 0 ? (
-                      <TrendingUp className="h-6 w-6 text-green-600" />
+                      <TrendingUp className="h-5 w-5 lg:h-6 lg:w-6 text-green-600" />
                     ) : (
-                      <TrendingDown className="h-6 w-6 text-red-600" />
+                      <TrendingDown className="h-5 w-5 lg:h-6 lg:w-6 text-red-600" />
                     )}
                   </div>
                 </div>
@@ -1033,16 +1211,16 @@ export default function AnalysisPage() {
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 lg:pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-500">ROAS</p>
-                    <p className={`text-2xl font-bold ${displaySummary.roas >= 100 ? "text-green-600" : "text-red-600"}`}>
+                    <p className="text-xs lg:text-sm text-slate-500">ROAS</p>
+                    <p className={`text-xl lg:text-2xl font-bold ${getRoasColorClass(displaySummary.roas)}`}>
                       {formatPercent(displaySummary.roas)}
                     </p>
                   </div>
-                  <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                    <BarChart3 className="h-6 w-6 text-purple-600" />
+                  <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                    <BarChart3 className="h-5 w-5 lg:h-6 lg:w-6 text-purple-600" />
                   </div>
                 </div>
               </CardContent>
@@ -1050,55 +1228,55 @@ export default function AnalysisPage() {
           </div>
 
           {/* 詳細指標 */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-4 border border-cyan-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-8 w-8 rounded-lg bg-cyan-500 flex items-center justify-center">
-                  <Target className="h-4 w-4 text-white" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-4">
+            <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-3 lg:p-4 border border-cyan-200">
+              <div className="flex items-center gap-2 mb-1 lg:mb-2">
+                <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-lg bg-cyan-500 flex items-center justify-center">
+                  <Target className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
                 </div>
-                <p className="text-xs font-medium text-cyan-700">MCV</p>
+                <p className="text-[10px] lg:text-xs font-medium text-cyan-700">MCV</p>
               </div>
-              <p className="text-2xl font-bold text-cyan-900">{displaySummary.mcv.toLocaleString()}</p>
+              <p className="text-lg lg:text-2xl font-bold text-cyan-900">{displaySummary.mcv.toLocaleString()}</p>
             </div>
 
-            <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl p-4 border border-violet-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-8 w-8 rounded-lg bg-violet-500 flex items-center justify-center">
-                  <Target className="h-4 w-4 text-white" />
+            <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl p-3 lg:p-4 border border-violet-200">
+              <div className="flex items-center gap-2 mb-1 lg:mb-2">
+                <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-lg bg-violet-500 flex items-center justify-center">
+                  <Target className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
                 </div>
-                <p className="text-xs font-medium text-violet-700">CV</p>
+                <p className="text-[10px] lg:text-xs font-medium text-violet-700">CV</p>
               </div>
-              <p className="text-2xl font-bold text-violet-900">{displaySummary.cv.toLocaleString()}</p>
+              <p className="text-lg lg:text-2xl font-bold text-violet-900">{displaySummary.cv.toLocaleString()}</p>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 border border-amber-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-8 w-8 rounded-lg bg-amber-500 flex items-center justify-center">
-                  <DollarSign className="h-4 w-4 text-white" />
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-3 lg:p-4 border border-amber-200">
+              <div className="flex items-center gap-2 mb-1 lg:mb-2">
+                <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-lg bg-amber-500 flex items-center justify-center">
+                  <DollarSign className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
                 </div>
-                <p className="text-xs font-medium text-amber-700">売上</p>
+                <p className="text-[10px] lg:text-xs font-medium text-amber-700">売上</p>
               </div>
-              <p className="text-2xl font-bold text-amber-900">{formatCurrency(displaySummary.revenue)}</p>
+              <p className="text-lg lg:text-2xl font-bold text-amber-900">{formatCurrency(displaySummary.revenue)}</p>
             </div>
 
-            <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-4 border border-rose-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-8 w-8 rounded-lg bg-rose-500 flex items-center justify-center">
-                  <DollarSign className="h-4 w-4 text-white" />
+            <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-3 lg:p-4 border border-rose-200">
+              <div className="flex items-center gap-2 mb-1 lg:mb-2">
+                <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-lg bg-rose-500 flex items-center justify-center">
+                  <DollarSign className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
                 </div>
-                <p className="text-xs font-medium text-rose-700">CPA</p>
+                <p className="text-[10px] lg:text-xs font-medium text-rose-700">CPA</p>
               </div>
-              <p className="text-2xl font-bold text-rose-900">{formatCurrency(displaySummary.cpa)}</p>
+              <p className="text-lg lg:text-2xl font-bold text-rose-900">{formatCurrency(displaySummary.cpa)}</p>
             </div>
 
-            <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl p-4 border border-teal-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-8 w-8 rounded-lg bg-teal-500 flex items-center justify-center">
-                  <BarChart3 className="h-4 w-4 text-white" />
+            <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl p-3 lg:p-4 border border-teal-200">
+              <div className="flex items-center gap-2 mb-1 lg:mb-2">
+                <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-lg bg-teal-500 flex items-center justify-center">
+                  <BarChart3 className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
                 </div>
-                <p className="text-xs font-medium text-teal-700">CVR</p>
+                <p className="text-[10px] lg:text-xs font-medium text-teal-700">CVR</p>
               </div>
-              <p className="text-2xl font-bold text-teal-900">{formatPercent(displaySummary.cvr)}</p>
+              <p className="text-lg lg:text-2xl font-bold text-teal-900">{formatPercent(displaySummary.cvr)}</p>
             </div>
 
             <div className={`bg-gradient-to-br rounded-xl p-4 border ${
@@ -1167,69 +1345,69 @@ export default function AnalysisPage() {
               />
             </div>
           </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+          <div className="overflow-x-auto scrollbar-hide">
+            <table className="w-full text-sm min-w-[900px]">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                 <tr>
                   <th 
-                    className="px-3 py-2 text-left text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-left text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap min-w-[150px]"
                     onClick={() => handleCpnSort("cpnName")}
                   >
                     CPN名<SortIcon columnKey="cpnName" />
                   </th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-slate-500">媒体</th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-slate-500">ON/OFF</th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">媒体</th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">ON/OFF</th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("dailyBudget")}
                   >
                     現在予算<SortIcon columnKey="dailyBudget" />
                   </th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-slate-500">変更後予算</th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">変更後</th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("profit")}
                   >
                     利益<SortIcon columnKey="profit" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("roas")}
                   >
                     ROAS<SortIcon columnKey="roas" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("spend")}
                   >
                     消化<SortIcon columnKey="spend" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("mcv")}
                   >
                     MCV<SortIcon columnKey="mcv" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("cv")}
                   >
                     CV<SortIcon columnKey="cv" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-center text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("consecutiveLoss")}
                   >
-                    赤字日数<SortIcon columnKey="consecutiveLoss" />
+                    赤字<SortIcon columnKey="consecutiveLoss" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("profit7Days")}
                   >
-                    7日利益<SortIcon columnKey="profit7Days" />
+                    7日益<SortIcon columnKey="profit7Days" />
                   </th>
                   <th 
-                    className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
+                    className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("roas7Days")}
                   >
                     7日ROAS<SortIcon columnKey="roas7Days" />
@@ -1343,7 +1521,7 @@ export default function AnalysisPage() {
                       {formatCurrency(cpn.profit)}
                     </td>
                     {/* ROAS */}
-                    <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{formatPercent(cpn.roas)}</td>
+                    <td className={`px-3 py-2 text-right whitespace-nowrap ${getRoasColorClass(cpn.roas)}`}>{formatPercent(cpn.roas)}</td>
                     {/* 消化 */}
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{formatCurrency(cpn.spend)}</td>
                     {/* MCV */}
@@ -1420,8 +1598,14 @@ export default function AnalysisPage() {
                       height={80}
                     />
                     <YAxis 
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`}
+                      tick={{ fontSize: 9 }}
+                      tickFormatter={(value) => {
+                        const absValue = Math.abs(value);
+                        if (absValue >= 1000000) return `${value < 0 ? "-" : ""}¥${(absValue / 1000000).toFixed(1)}M`;
+                        if (absValue >= 1000) return `${value < 0 ? "-" : ""}¥${Math.floor(absValue / 1000)}k`;
+                        return `¥${Math.floor(value)}`;
+                      }}
+                      width={50}
                     />
                     <Tooltip 
                       formatter={(value, name) => [
@@ -1451,23 +1635,23 @@ export default function AnalysisPage() {
 
           {/* 案件一覧（クリックで詳細） */}
           <Card>
-            <CardHeader>
-              <CardTitle>案件名別の利益（{projectList.length}件）</CardTitle>
-              <p className="text-sm text-slate-500 mt-1">案件名をクリックすると詳細を表示</p>
+            <CardHeader className="pb-2 lg:pb-4">
+              <CardTitle className="text-base lg:text-lg">案件名別の利益（{projectList.length}件）</CardTitle>
+              <p className="text-xs lg:text-sm text-slate-500 mt-1">案件名をクリックすると詳細を表示</p>
             </CardHeader>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto scrollbar-hide">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">案件名</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">消化金額</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">MCV</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CV</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">売上</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">利益</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">ROAS</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CPA</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CVR</th>
+                    <th className="px-2 lg:px-4 py-2 text-left text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">案件名</th>
+                    <th className="px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">消化</th>
+                    <th className="hidden sm:table-cell px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">MCV</th>
+                    <th className="px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">CV</th>
+                    <th className="hidden sm:table-cell px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">売上</th>
+                    <th className="px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">利益</th>
+                    <th className="px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">ROAS</th>
+                    <th className="hidden lg:table-cell px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">CPA</th>
+                    <th className="hidden lg:table-cell px-2 lg:px-4 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">CVR</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1478,22 +1662,22 @@ export default function AnalysisPage() {
                         className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedProject === project.projectName ? "bg-indigo-50" : ""}`}
                         onClick={() => setSelectedProject(selectedProject === project.projectName ? null : project.projectName)}
                       >
-                        <td className="px-4 py-2 font-medium text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <span className={`transition-transform ${selectedProject === project.projectName ? "rotate-90" : ""}`}>▶</span>
-                            {project.projectName}
+                        <td className="px-2 lg:px-4 py-2 font-medium text-slate-900 text-xs lg:text-sm">
+                          <div className="flex items-center gap-1 lg:gap-2">
+                            <span className={`transition-transform text-[10px] lg:text-sm ${selectedProject === project.projectName ? "rotate-90" : ""}`}>▶</span>
+                            <span className="break-all">{project.projectName}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(project.spend)}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{project.mcv}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{project.cv}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(project.revenue)}</td>
-                        <td className={`px-4 py-2 text-right font-medium ${project.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        <td className="px-2 lg:px-4 py-2 text-right text-slate-600 text-xs lg:text-sm whitespace-nowrap">{formatCurrency(project.spend)}</td>
+                        <td className="hidden sm:table-cell px-2 lg:px-4 py-2 text-right text-slate-600 text-xs lg:text-sm">{project.mcv}</td>
+                        <td className="px-2 lg:px-4 py-2 text-right text-slate-600 text-xs lg:text-sm">{project.cv}</td>
+                        <td className="hidden sm:table-cell px-2 lg:px-4 py-2 text-right text-slate-600 text-xs lg:text-sm whitespace-nowrap">{formatCurrency(project.revenue)}</td>
+                        <td className={`px-2 lg:px-4 py-2 text-right font-medium text-xs lg:text-sm whitespace-nowrap ${project.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                           {formatCurrency(project.profit)}
                         </td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatPercent(project.roas)}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(project.cpa)}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatPercent(project.cvr)}</td>
+                        <td className={`px-2 lg:px-4 py-2 text-right text-xs lg:text-sm whitespace-nowrap ${getRoasColorClass(project.roas)}`}>{formatPercent(project.roas)}</td>
+                        <td className="hidden lg:table-cell px-2 lg:px-4 py-2 text-right text-slate-600 text-xs lg:text-sm whitespace-nowrap">{formatCurrency(project.cpa)}</td>
+                        <td className="hidden lg:table-cell px-2 lg:px-4 py-2 text-right text-slate-600 text-xs lg:text-sm">{formatPercent(project.cvr)}</td>
                       </tr>
                       {/* 詳細パネル */}
                       {selectedProject === project.projectName && (
@@ -1561,7 +1745,7 @@ export default function AnalysisPage() {
                                               <td className={`px-2 py-1 text-right font-medium ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                                 {formatCurrency(cpn.profit)}
                                               </td>
-                                              <td className="px-2 py-1 text-right text-slate-600">{formatPercent(cpn.roas)}</td>
+                                              <td className={`px-2 py-1 text-right ${getRoasColorClass(cpn.roas)}`}>{formatPercent(cpn.roas)}</td>
                                             </tr>
                                           ))
                                         }
@@ -1614,12 +1798,18 @@ export default function AnalysisPage() {
               <CardContent>
                 {mediaList.length > 0 ? (
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={mediaList} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart data={mediaList} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="media" tick={{ fontSize: 12 }} />
+                      <XAxis dataKey="media" tick={{ fontSize: 11 }} />
                       <YAxis 
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`}
+                        tick={{ fontSize: 9 }}
+                        tickFormatter={(value) => {
+                          const absValue = Math.abs(value);
+                          if (absValue >= 1000000) return `${value < 0 ? "-" : ""}¥${(absValue / 1000000).toFixed(1)}M`;
+                          if (absValue >= 1000) return `${value < 0 ? "-" : ""}¥${Math.floor(absValue / 1000)}k`;
+                          return `¥${Math.floor(value)}`;
+                        }}
+                        width={50}
                       />
                       <Tooltip 
                         formatter={(value) => [`¥${(value as number)?.toLocaleString() || 0}`, "利益"]}
@@ -1763,25 +1953,25 @@ export default function AnalysisPage() {
                                   📈 「{media.media}」のパフォーマンス詳細
                                 </h4>
                                 
-                                {/* サマリーカード */}
-                                <div className="grid grid-cols-4 gap-4 mb-4">
-                                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                                    <div className="text-lg font-bold text-blue-700">{formatCurrency(media.spend)}</div>
-                                    <div className="text-xs text-blue-600">消化金額</div>
+                                {/* サマリーカード - スマホ対応 */}
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4">
+                                  <div className="text-center p-2 lg:p-3 bg-blue-50 rounded-lg">
+                                    <div className="text-sm lg:text-lg font-bold text-blue-700">{formatCurrency(media.spend)}</div>
+                                    <div className="text-[10px] lg:text-xs text-blue-600">消化</div>
                                   </div>
-                                  <div className={`text-center p-3 rounded-lg ${media.profit >= 0 ? "bg-green-50" : "bg-red-50"}`}>
-                                    <div className={`text-lg font-bold ${media.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                  <div className={`text-center p-2 lg:p-3 rounded-lg ${media.profit >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+                                    <div className={`text-sm lg:text-lg font-bold ${media.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
                                       {formatCurrency(media.profit)}
                                     </div>
-                                    <div className={`text-xs ${media.profit >= 0 ? "text-green-600" : "text-red-600"}`}>利益</div>
+                                    <div className={`text-[10px] lg:text-xs ${media.profit >= 0 ? "text-green-600" : "text-red-600"}`}>利益</div>
                                   </div>
-                                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                                    <div className="text-lg font-bold text-purple-700">{formatPercent(media.roas)}</div>
-                                    <div className="text-xs text-purple-600">ROAS</div>
+                                  <div className="text-center p-2 lg:p-3 bg-purple-50 rounded-lg">
+                                    <div className="text-sm lg:text-lg font-bold text-purple-700">{formatPercent(media.roas)}</div>
+                                    <div className="text-[10px] lg:text-xs text-purple-600">ROAS</div>
                                   </div>
-                                  <div className="text-center p-3 bg-amber-50 rounded-lg">
-                                    <div className="text-lg font-bold text-amber-700">{media.cv}件</div>
-                                    <div className="text-xs text-amber-600">CV</div>
+                                  <div className="text-center p-2 lg:p-3 bg-amber-50 rounded-lg">
+                                    <div className="text-sm lg:text-lg font-bold text-amber-700">{media.cv}件</div>
+                                    <div className="text-[10px] lg:text-xs text-amber-600">CV</div>
                                   </div>
                                 </div>
                                 
@@ -1813,7 +2003,7 @@ export default function AnalysisPage() {
                                               <td className={`px-2 py-1 text-right font-medium ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                                 {formatCurrency(cpn.profit)}
                                               </td>
-                                              <td className="px-2 py-1 text-right text-slate-600">{formatPercent(cpn.roas)}</td>
+                                              <td className={`px-2 py-1 text-right ${getRoasColorClass(cpn.roas)}`}>{formatPercent(cpn.roas)}</td>
                                               <td className="px-2 py-1 text-right text-slate-600">{cpn.mcv}</td>
                                             </tr>
                                           ))

@@ -3,7 +3,7 @@ import { getFullAnalysisData, getMonthlyProfit, getDailyTrendData, getProjectMon
 import { getCache, setCache } from "@/lib/cache";
 
 const CACHE_KEY = "analysis_data";
-const CACHE_TTL = 30 * 60 * 1000; // 30分間キャッシュ
+const CACHE_TTL = 5 * 60 * 1000; // 5分間キャッシュ（高速レスポンス）
 
 interface CachedData {
   sheetData: Awaited<ReturnType<typeof getFullAnalysisData>>;
@@ -337,7 +337,8 @@ export async function GET(request: Request) {
     // AIアドバイスを生成
     const aiAdvice = generateAIAdvice(summary, cpnList, projectList, mediaList, dailyTrend);
 
-    return NextResponse.json({
+    // レスポンスにキャッシュヘッダーを追加
+    const response = NextResponse.json({
       success: true,
       summary,
       cpnList,
@@ -346,7 +347,14 @@ export async function GET(request: Request) {
       dailyTrend,
       projectMonthly,
       aiAdvice,
+      cachedAt: new Date().toISOString(),
     });
+
+    // より積極的なキャッシュ設定（高速表示のため）
+    // ブラウザキャッシュ2分、CDNキャッシュ5分、stale-while-revalidate 10分
+    response.headers.set("Cache-Control", "public, max-age=120, s-maxage=300, stale-while-revalidate=600");
+    
+    return response;
   } catch (error) {
     console.error("Analysis API error:", error);
     return NextResponse.json(

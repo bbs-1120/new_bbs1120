@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     switch (type) {
       case "test":
         success = await sendLineNotify({ 
-          message: message || "\n🔔 AdPilot LINE通知テスト\n\n接続成功しました！" 
+          message: message || "\n🔔 GrowthDeck LINE通知テスト\n\n接続成功しました！" 
         });
         break;
 
