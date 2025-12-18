@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3 } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power } from "lucide-react";
 
 interface SummaryData {
   spend: number;
@@ -77,6 +77,8 @@ export default function AnalysisPage() {
   const [budgetInputs, setBudgetInputs] = useState<Record<string, string>>({});
   const [budgetUpdating, setBudgetUpdating] = useState<Record<string, boolean>>({});
   const [budgetMessages, setBudgetMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+  const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
+  const [statusMessages, setStatusMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
 
   const handleBudgetChange = (cpnKey: string, value: string) => {
     setBudgetInputs(prev => ({ ...prev, [cpnKey]: value }));
@@ -132,6 +134,57 @@ export default function AnalysisPage() {
       }));
     } finally {
       setBudgetUpdating(prev => ({ ...prev, [cpn.cpnKey]: false }));
+    }
+  };
+
+  const handleStatusToggle = async (cpn: CpnData) => {
+    // 現在のステータスを判定（ON -> OFF、OFF -> ON）
+    const currentStatus = cpn.status?.toLowerCase();
+    const isCurrentlyActive = currentStatus === "active" || currentStatus === "enable" || currentStatus === "enabled" || currentStatus === "on";
+    const newStatus = isCurrentlyActive ? "paused" : "active";
+
+    setStatusUpdating(prev => ({ ...prev, [cpn.cpnKey]: true }));
+    setStatusMessages(prev => ({ ...prev, [cpn.cpnKey]: undefined as unknown as { type: "success" | "error"; text: string } }));
+
+    try {
+      const response = await fetch("/api/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cpnKey: cpn.cpnKey,
+          cpnName: cpn.cpnName,
+          media: cpn.media,
+          campaignId: cpn.campaignId,
+          status: newStatus,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setStatusMessages(prev => ({ 
+          ...prev, 
+          [cpn.cpnKey]: { type: "success", text: newStatus === "active" ? "ONにしました" : "OFFにしました" } 
+        }));
+        // ステータスを更新
+        setCpnList(prev => prev.map(c => 
+          c.cpnKey === cpn.cpnKey 
+            ? { ...c, status: newStatus === "active" ? "ACTIVE" : "PAUSED" }
+            : c
+        ));
+      } else {
+        setStatusMessages(prev => ({ 
+          ...prev, 
+          [cpn.cpnKey]: { type: "error", text: result.error || "変更に失敗しました" } 
+        }));
+      }
+    } catch {
+      setStatusMessages(prev => ({ 
+        ...prev, 
+        [cpn.cpnKey]: { type: "error", text: "通信エラーが発生しました" } 
+      }));
+    } finally {
+      setStatusUpdating(prev => ({ ...prev, [cpn.cpnKey]: false }));
     }
   };
 
@@ -473,6 +526,7 @@ export default function AnalysisPage() {
                     CPN名<SortIcon columnKey="cpnName" />
                   </th>
                   <th className="px-2 py-2 text-center text-xs font-medium text-slate-500">媒体</th>
+                  <th className="px-2 py-2 text-center text-xs font-medium text-slate-500">ON/OFF</th>
                   <th 
                     className="px-3 py-2 text-right text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100"
                     onClick={() => handleCpnSort("dailyBudget")}
@@ -551,6 +605,53 @@ export default function AnalysisPage() {
                       }`}>
                         {cpn.media || "-"}
                       </span>
+                    </td>
+                    <td className="px-2 py-2 text-center whitespace-nowrap">
+                      {isTargetMedia ? (() => {
+                        const currentStatus = cpn.status?.toLowerCase() || "";
+                        const isActive = currentStatus === "active" || currentStatus === "enable" || currentStatus === "enabled" || currentStatus === "on";
+                        const statusMessage = statusMessages[cpn.cpnKey];
+                        
+                        return (
+                          <div className="flex flex-col items-center gap-1">
+                            <button
+                              onClick={() => handleStatusToggle(cpn)}
+                              disabled={statusUpdating[cpn.cpnKey]}
+                              className={`relative inline-flex items-center justify-center w-16 h-7 rounded-full transition-colors ${
+                                statusUpdating[cpn.cpnKey] 
+                                  ? "bg-slate-200 cursor-wait" 
+                                  : isActive 
+                                    ? "bg-green-500 hover:bg-green-600" 
+                                    : "bg-slate-300 hover:bg-slate-400"
+                              }`}
+                              title={isActive ? "クリックでOFF" : "クリックでON"}
+                            >
+                              {statusUpdating[cpn.cpnKey] ? (
+                                <RefreshCw className="h-3 w-3 text-slate-500 animate-spin" />
+                              ) : (
+                                <>
+                                  <span className={`absolute left-1 transition-opacity ${isActive ? "opacity-100" : "opacity-0"}`}>
+                                    <Power className="h-4 w-4 text-white" />
+                                  </span>
+                                  <span className={`text-xs font-bold ${isActive ? "text-white ml-4" : "text-slate-600 mr-2"}`}>
+                                    {isActive ? "ON" : "OFF"}
+                                  </span>
+                                  <span className={`absolute right-1 transition-opacity ${isActive ? "opacity-0" : "opacity-100"}`}>
+                                    <Power className="h-4 w-4 text-slate-500" />
+                                  </span>
+                                </>
+                              )}
+                            </button>
+                            {statusMessage && (
+                              <span className={`text-xs ${statusMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                                {statusMessage.text}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })() : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{cpn.dailyBudget}</td>
                     <td className="px-2 py-2">
