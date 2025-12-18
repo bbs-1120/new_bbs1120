@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSheetData } from "@/lib/googleSheets";
+import { getFullAnalysisData } from "@/lib/googleSheets";
 
 export async function GET() {
   try {
-    // スプレッドシートからデータを取得
-    const sheetData = await getSheetData();
+    // スプレッドシートからデータを取得（当日 + 過去7日分の集計付き）
+    const sheetData = await getFullAnalysisData();
 
     // 1. 当日合計を計算
+    let totalClicks = 0;
     const summary = {
       spend: 0,
       mcv: 0,
@@ -26,6 +27,7 @@ export async function GET() {
       summary.cv += row.cv || 0;
       summary.revenue += row.revenue || 0;
       summary.profit += row.profit || 0;
+      totalClicks += row.clicks || 0;
     }
 
     // 計算指標
@@ -35,8 +37,10 @@ export async function GET() {
     if (summary.cv > 0) {
       summary.cpa = summary.spend / summary.cv;
     }
-    // CVR計算（クリック数があれば）
-    summary.cvr = 0; // クリック数がないため後で追加
+    // CVR計算（クリック数がある場合）
+    if (totalClicks > 0) {
+      summary.cvr = (summary.cv / totalClicks) * 100;
+    }
 
     // 2. CPN別データ
     const cpnList = sheetData.map((row) => ({
@@ -56,23 +60,25 @@ export async function GET() {
       profit: row.profit || 0,
       roas: row.roas || 0,
       cpa: row.cpa || 0,
+      status: row.status || "",
     }));
 
-    // 3. 案件名別の集計
+    // 3. 案件名別の集計（スプレッドシートのprojectName列を使用）
     const projectMap = new Map<string, {
       spend: number;
       mcv: number;
       cv: number;
       revenue: number;
       profit: number;
+      clicks: number;
     }>();
 
     for (const row of sheetData) {
-      // 案件名をCPN名から抽出（例：「案件名_CPN名」の形式を想定）
-      const projectName = extractProjectName(row.cpnName || "");
+      // スプレッドシートの案件名列を使用
+      const projectName = row.projectName || "その他";
       
       if (!projectMap.has(projectName)) {
-        projectMap.set(projectName, { spend: 0, mcv: 0, cv: 0, revenue: 0, profit: 0 });
+        projectMap.set(projectName, { spend: 0, mcv: 0, cv: 0, revenue: 0, profit: 0, clicks: 0 });
       }
       
       const project = projectMap.get(projectName)!;
@@ -81,6 +87,7 @@ export async function GET() {
       project.cv += row.cv || 0;
       project.revenue += row.revenue || 0;
       project.profit += row.profit || 0;
+      project.clicks += row.clicks || 0;
     }
 
     const projectList = Array.from(projectMap.entries()).map(([projectName, data]) => ({
@@ -92,7 +99,7 @@ export async function GET() {
       profit: data.profit,
       roas: data.spend > 0 ? (data.revenue / data.spend) * 100 : 0,
       cpa: data.cv > 0 ? data.spend / data.cv : 0,
-      cvr: 0, // クリック数がないため
+      cvr: data.clicks > 0 ? (data.cv / data.clicks) * 100 : 0,
     })).sort((a, b) => b.profit - a.profit);
 
     // 4. 媒体別の集計
@@ -145,18 +152,3 @@ export async function GET() {
     );
   }
 }
-
-// 案件名を抽出するヘルパー関数
-function extractProjectName(cpnName: string): string {
-  // CPN名から案件名を抽出するロジック
-  // 例：「案件名_CPN名」→「案件名」
-  // 実際のスプレッドシートの形式に合わせて調整が必要
-  
-  // アンダースコアやハイフンで分割して最初の部分を取得
-  const parts = cpnName.split(/[_\-\/]/);
-  if (parts.length > 0) {
-    return parts[0].trim() || "その他";
-  }
-  return cpnName || "その他";
-}
-
