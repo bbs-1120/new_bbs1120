@@ -3,6 +3,8 @@
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { NotificationSettings } from "@/components/ui/notification-settings";
+import { AnomalyPanel } from "@/components/ui/anomaly-panel";
 import { useState, useEffect } from "react";
 import { Save, CheckCircle } from "lucide-react";
 
@@ -284,6 +286,12 @@ export default function SettingsPage() {
             設定を保存
           </Button>
         </div>
+
+        {/* 通知設定 */}
+        <NotificationSettings />
+
+        {/* 異常検知AI */}
+        <AnomalyPanel />
       </div>
     </>
   );
