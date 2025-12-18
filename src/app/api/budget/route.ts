@@ -136,96 +136,133 @@ async function updateMetaBudget(
   return { success: false, error: lastError };
 }
 
-// TikTok Ads API
+// TikTok Ads API - 複数の広告主ID対応
 async function updateTikTokBudget(
   campaignId: string | undefined,
   newBudget: number
 ): Promise<{ success: boolean; error?: string }> {
   const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
-  const advertiserId = process.env.TIKTOK_ADVERTISER_ID;
   
-  if (!accessToken || !advertiserId) {
-    return { success: false, error: "TikTok APIの認証情報が設定されていません。.envにTIKTOK_ACCESS_TOKENとTIKTOK_ADVERTISER_IDを追加してください。" };
+  if (!accessToken) {
+    return { success: false, error: "TikTok APIの認証情報が設定されていません。.envにTIKTOK_ACCESS_TOKENを追加してください。" };
   }
 
   if (!campaignId) {
     return { success: false, error: "キャンペーンIDが取得できません" };
   }
 
-  try {
-    const response = await fetch(
-      "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Token": accessToken,
-        },
-        body: JSON.stringify({
-          advertiser_id: advertiserId,
-          campaign_id: campaignId,
-          budget: newBudget,
-        }),
+  // 主要な広告主IDリスト（CPNから自動で探索）
+  const advertiserIds = [
+    "7433722339872899088", "7431834844448997393", "7431483320573247504",
+    "7424330265591627792", "7426279250719948817", "7426279558556663825",
+    "7424321809509761040", "7424324316726181904", "7424324893380100113",
+    "7424093414238535681", "7415898963447955472", "7413556028375236625",
+    "7412906864523935760", "7412906577210097680", "7412906240952565777",
+    "7312016244365099009", "7310106935712661506", "7288971698601279490",
+  ];
+
+  let lastError = "広告主IDが見つかりませんでした";
+  
+  for (const advertiserId of advertiserIds) {
+    try {
+      const response = await fetch(
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Token": accessToken,
+          },
+          body: JSON.stringify({
+            advertiser_id: advertiserId,
+            campaign_id: campaignId,
+            budget: newBudget,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.code === 0) {
+        return { success: true };
+      } else {
+        lastError = data.message || "TikTok APIエラー";
+        // 権限エラーやキャンペーンが見つからない場合は次の広告主IDを試す
+        if (data.code === 40002 || data.code === 40001) {
+          continue;
+        }
       }
-    );
-
-    const data = await response.json();
-
-    if (data.code === 0) {
-      return { success: true };
-    } else {
-      return { success: false, error: data.message || "TikTok APIエラー" };
+    } catch (error) {
+      console.error("TikTok API error:", error);
+      lastError = "TikTok APIへの接続に失敗しました";
     }
-  } catch (error) {
-    console.error("TikTok API error:", error);
-    return { success: false, error: "TikTok APIへの接続に失敗しました" };
   }
+
+  return { success: false, error: lastError };
 }
 
-// Pangle Ads API (TikTok for Business経由)
+// Pangle Ads API (TikTok for Business経由) - 複数の広告主ID対応
 async function updatePangleBudget(
   campaignId: string | undefined,
   newBudget: number
 ): Promise<{ success: boolean; error?: string }> {
   // PangleはTikTok for Businessと同じAPIを使用
   const accessToken = process.env.PANGLE_ACCESS_TOKEN || process.env.TIKTOK_ACCESS_TOKEN;
-  const advertiserId = process.env.PANGLE_ADVERTISER_ID || process.env.TIKTOK_ADVERTISER_ID;
   
-  if (!accessToken || !advertiserId) {
-    return { success: false, error: "Pangle APIの認証情報が設定されていません。.envにPANGLE_ACCESS_TOKENとPANGLE_ADVERTISER_IDを追加してください。" };
+  if (!accessToken) {
+    return { success: false, error: "Pangle APIの認証情報が設定されていません。" };
   }
 
   if (!campaignId) {
     return { success: false, error: "キャンペーンIDが取得できません" };
   }
 
-  try {
-    const response = await fetch(
-      "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Token": accessToken,
-        },
-        body: JSON.stringify({
-          advertiser_id: advertiserId,
-          campaign_id: campaignId,
-          budget: newBudget,
-        }),
+  // Pangle用広告主IDリスト
+  const advertiserIds = [
+    "7556179607188307969", "7563224138828382216", "7563230653786046480",
+    "7563231137359773697", "7563230674052939794", "7568789332065157128",
+    "7543850664410103826", "7543851268230545409", "7543851608480923664",
+    "7543982157253853192", "7543982888367456257", "7543982527271288850",
+    "7496794352266788881", "7496810375237746704", "7496810726489669633",
+    "7496811321158402049", "7496816002530017296", "7496819982039466000",
+  ];
+
+  let lastError = "広告主IDが見つかりませんでした";
+  
+  for (const advertiserId of advertiserIds) {
+    try {
+      const response = await fetch(
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Token": accessToken,
+          },
+          body: JSON.stringify({
+            advertiser_id: advertiserId,
+            campaign_id: campaignId,
+            budget: newBudget,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.code === 0) {
+        return { success: true };
+      } else {
+        lastError = data.message || "Pangle APIエラー";
+        if (data.code === 40002 || data.code === 40001) {
+          continue;
+        }
       }
-    );
-
-    const data = await response.json();
-
-    if (data.code === 0) {
-      return { success: true };
-    } else {
-      return { success: false, error: data.message || "Pangle APIエラー" };
+    } catch (error) {
+      console.error("Pangle API error:", error);
+      lastError = "Pangle APIへの接続に失敗しました";
     }
-  } catch (error) {
-    console.error("Pangle API error:", error);
-    return { success: false, error: "Pangle APIへの接続に失敗しました" };
   }
+
+  return { success: false, error: lastError };
 }
 
