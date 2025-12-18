@@ -11,8 +11,10 @@ import {
   AlertCircle,
   PlayCircle,
   Send,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 
 interface SummaryData {
   stop: number;
@@ -152,69 +154,99 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* サマリーカード */}
+      {/* サマリーカード - クリック可能 */}
       <div className="grid grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">停止</p>
-                <p className="text-3xl font-bold text-red-600">{summary.stop}</p>
+        <Link href="/results/stop">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-red-300">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">停止</p>
+                  <p className="text-3xl font-bold text-red-600">{summary.stop}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <StopCircle className="h-6 w-6 text-red-600" />
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-                <StopCircle className="h-6 w-6 text-red-600" />
+              <div className="mt-4 flex items-center text-sm text-slate-500">
+                <span>詳細を見る</span>
+                <ChevronRight className="h-4 w-4 ml-1" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">作り替え</p>
-                <p className="text-3xl font-bold text-orange-600">{summary.replace}</p>
+        <Link href="/results/replace">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-orange-300">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">作り替え</p>
+                  <p className="text-3xl font-bold text-orange-600">{summary.replace}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                  <RefreshCw className="h-6 w-6 text-orange-600" />
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                <RefreshCw className="h-6 w-6 text-orange-600" />
+              <div className="mt-4 flex items-center text-sm text-slate-500">
+                <span>詳細を見る</span>
+                <ChevronRight className="h-4 w-4 ml-1" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">継続</p>
-                <p className="text-3xl font-bold text-green-600">{summary.continue}</p>
+        <Link href="/results/continue">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-green-300">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">継続</p>
+                  <p className="text-3xl font-bold text-green-600">{summary.continue}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className="mt-4 flex items-center text-sm text-slate-500">
+                <span>詳細を見る</span>
+                <ChevronRight className="h-4 w-4 ml-1" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">要確認</p>
-                <p className="text-3xl font-bold text-yellow-600">{summary.check}</p>
+        <Link href="/results/check">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-yellow-300">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">要確認</p>
+                  <p className="text-3xl font-bold text-yellow-600">{summary.check}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-yellow-600" />
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-yellow-600" />
+              <div className="mt-4 flex items-center text-sm text-slate-500">
+                <span>詳細を見る</span>
+                <ChevronRight className="h-4 w-4 ml-1" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* 最新の仕分け結果 */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>最新の仕分け結果（{summary.total}件）</CardTitle>
+          <Link href="/results">
+            <Button variant="ghost" size="sm">
+              すべて見る
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </Link>
         </CardHeader>
         {recentResults.length > 0 ? (
           <div className="overflow-x-auto">

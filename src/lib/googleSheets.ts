@@ -34,35 +34,6 @@ interface RawRowData {
   cpc: number;
 }
 
-// ヘッダー行からカラムインデックスを取得
-function getColumnIndices(headerRow: string[]): Record<string, number> {
-  const mapping: Record<string, string> = {
-    "媒体": "media",
-    "CPNキー": "cpnKey",
-    "CPN名": "cpnName",
-    "日付": "date",
-    "消化金額": "spend",
-    "売上": "revenue",
-    "利益": "profit",
-    "ROAS": "roas",
-    "CV": "cv",
-    "MCV": "mcv",
-    "CPM": "cpm",
-    "CPC": "cpc",
-  };
-
-  const indices: Record<string, number> = {};
-
-  for (let i = 0; i < headerRow.length; i++) {
-    const header = headerRow[i]?.trim();
-    if (header && mapping[header]) {
-      indices[mapping[header]] = i;
-    }
-  }
-
-  return indices;
-}
-
 // 値をパース
 function parseValue(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -71,77 +42,99 @@ function parseValue(value: unknown): string {
 
 function parseNumber(value: unknown): number {
   if (value === null || value === undefined) return 0;
-  const str = String(value).replace(/[,¥%]/g, "").trim();
-  const num = parseFloat(str);
-  return isNaN(num) ? 0 : num;
-}
-
-function parseDate(value: unknown): Date {
-  if (value === null || value === undefined) return new Date();
-  
-  const str = String(value).trim();
-  
-  // YYYY/MM/DD or YYYY-MM-DD 形式
-  const match = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if (match) {
-    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
-  }
-  
-  // Google Sheetsのシリアル値（数値）の場合
-  const num = parseFloat(str);
-  if (!isNaN(num) && num > 0) {
-    // Excelのシリアル値を変換（1900年1月1日が基準）
-    const date = new Date((num - 25569) * 86400 * 1000);
-    return date;
-  }
-  
-  return new Date(str);
+  const str = String(value).replace(/[,¥%円]/g, "").trim();
+  // マイナス記号の処理
+  const isNegative = str.startsWith("-") || str.startsWith("−") || str.startsWith("▲");
+  const cleanStr = str.replace(/^[-−▲]/, "");
+  const num = parseFloat(cleanStr);
+  if (isNaN(num)) return 0;
+  return isNegative ? -num : num;
 }
 
 /**
- * スプレッドシートからRAWデータを取得
+ * ◆新規グロース部_当日 シートからデータを取得
+ * 269行目以降で「悠太」を含む行のみ抽出
  */
 export async function fetchRawDataFromSheet(spreadsheetId: string): Promise<RawRowData[]> {
   const sheets = getGoogleSheetsClient();
 
-  // RAWシートのデータを取得
+  // シートのデータを取得（269行目以降、十分な範囲を取得）
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: "RAW!A:L", // A列からL列まで
+    range: "◆新規グロース部_当日!A269:Z1000",
   });
 
   const rows = response.data.values;
-  if (!rows || rows.length < 2) {
+  if (!rows || rows.length === 0) {
     return [];
   }
 
-  // ヘッダー行からカラムインデックスを取得
-  const headerRow = rows[0] as string[];
-  const indices = getColumnIndices(headerRow);
+  // 今日の日付
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  // データ行をパース
+  // データ行をパース（「悠太」を含む行のみ）
   const data: RawRowData[] = [];
 
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length === 0) continue;
+  // 列インデックス（0始まり）
+  // B列(1): 媒体
+  // L列(11): キャンペーン別データ（CPNキー）
+  // M列(12): 消化金額
+  // N列(13): MCV
+  // O列(14): CV
+  // P列(15): 売上
+  // Q列(16): 利益
+  // R列(17): ロアス
 
-    const cpnKey = parseValue(row[indices.cpnKey]);
-    if (!cpnKey) continue; // CPNキーがない行はスキップ
+  for (const row of rows) {
+    if (!row || row.length < 12) continue;
+
+    const cpnKey = parseValue(row[11]); // L列: キャンペーン別データ
+    
+    // 「悠太」を含む行のみ抽出
+    if (!cpnKey.includes("悠太")) continue;
+
+    const media = parseValue(row[1]); // B列: 媒体
+    if (!media) continue;
+
+    // 媒体名を正規化
+    let normalizedMedia = media;
+    if (media.toLowerCase() === "fb" || media.toLowerCase() === "facebook") {
+      normalizedMedia = "Meta";
+    } else if (media.toLowerCase() === "tiktok") {
+      normalizedMedia = "TikTok";
+    } else if (media.toLowerCase() === "pangle") {
+      normalizedMedia = "Pangle";
+    } else if (media.toLowerCase() === "youtube") {
+      normalizedMedia = "YouTube";
+    } else if (media.toLowerCase() === "line") {
+      normalizedMedia = "LINE";
+    }
+
+    // CPN名を抽出（CPNキーから最後の部分を取得）
+    const cpnParts = cpnKey.split("_");
+    const cpnName = cpnParts.length > 0 ? cpnParts[cpnParts.length - 1] : cpnKey;
+
+    const spend = parseNumber(row[12]);    // M列: 消化金額
+    const revenue = parseNumber(row[15]);  // P列: 売上
+    const profit = parseNumber(row[16]);   // Q列: 利益
+    const roas = parseNumber(row[17]);     // R列: ロアス
+    const mcv = Math.round(parseNumber(row[13])); // N列: MCV
+    const cv = Math.round(parseNumber(row[14]));  // O列: CV
 
     data.push({
-      media: parseValue(row[indices.media]),
+      media: normalizedMedia,
       cpnKey,
-      cpnName: parseValue(row[indices.cpnName]),
-      date: parseDate(row[indices.date]),
-      spend: parseNumber(row[indices.spend]),
-      revenue: parseNumber(row[indices.revenue]),
-      profit: parseNumber(row[indices.profit]),
-      roas: parseNumber(row[indices.roas]),
-      cv: Math.round(parseNumber(row[indices.cv])),
-      mcv: Math.round(parseNumber(row[indices.mcv])),
-      cpm: parseNumber(row[indices.cpm]),
-      cpc: parseNumber(row[indices.cpc]),
+      cpnName,
+      date: today,
+      spend,
+      revenue,
+      profit,
+      roas,
+      cv,
+      mcv,
+      cpm: 0, // このシートにはCPMがない
+      cpc: 0, // このシートにはCPCがない
     });
   }
 
@@ -180,4 +173,3 @@ export async function testConnection(spreadsheetId: string): Promise<{
 }
 
 export type { RawRowData };
-
