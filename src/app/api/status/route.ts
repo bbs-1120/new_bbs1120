@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdvertiserIdByAccountName } from "@/lib/advertiserMapping";
+import { sendErrorNotification } from "@/lib/chatwork";
 
 interface StatusChangeRequest {
   cpnKey: string;
@@ -58,6 +59,13 @@ export async function POST(request: Request) {
         message: `${cpnName}を${statusText}にしました`,
       });
     } else {
+      // エラー通知を送信
+      await sendErrorNotification("status_change", result.error || "ステータス変更に失敗", {
+        cpnName,
+        media,
+        campaignId,
+        status,
+      });
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 500 }
@@ -65,6 +73,10 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Status API error:", error);
+    // エラー通知を送信
+    await sendErrorNotification("status_change", "ステータス変更中にエラーが発生", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return NextResponse.json(
       { success: false, error: "ステータス変更に失敗しました" },
       { status: 500 }

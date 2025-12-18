@@ -167,3 +167,72 @@ export async function sendToChatwork(
   }
 }
 
+/**
+ * エラー通知をChatworkに送信
+ */
+export async function sendErrorNotification(
+  errorType: "api_error" | "anomaly" | "budget_change" | "status_change" | "system",
+  errorMessage: string,
+  details?: Record<string, unknown>
+): Promise<{ success: boolean; error?: string }> {
+  const apiToken = process.env.CHATWORK_API_TOKEN;
+  const roomId = process.env.CHATWORK_ERROR_ROOM_ID;
+
+  if (!apiToken || !roomId) {
+    console.error("Chatwork error notification: Missing API token or room ID");
+    return { success: false, error: "Chatwork設定が不完全です" };
+  }
+
+  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+  
+  const errorTypeLabels: Record<string, string> = {
+    api_error: "🔴 APIエラー",
+    anomaly: "⚠️ 異常検知",
+    budget_change: "💰 予算変更エラー",
+    status_change: "🔌 ステータス変更エラー",
+    system: "🚨 システムエラー",
+  };
+
+  let message = `[info][title]${errorTypeLabels[errorType] || "❌ エラー"}[/title]`;
+  message += `発生日時：${now}\n`;
+  message += `内容：${errorMessage}\n`;
+  
+  if (details) {
+    message += `\n詳細：\n`;
+    for (const [key, value] of Object.entries(details)) {
+      message += `  ${key}: ${JSON.stringify(value)}\n`;
+    }
+  }
+  
+  message += `[/info]`;
+
+  return sendToChatwork(apiToken, roomId, message);
+}
+
+/**
+ * 異常検知アラートをChatworkに送信
+ */
+export async function sendAnomalyAlert(
+  cpnName: string,
+  media: string,
+  anomalyDetails: string
+): Promise<{ success: boolean; error?: string }> {
+  const apiToken = process.env.CHATWORK_API_TOKEN;
+  const roomId = process.env.CHATWORK_ERROR_ROOM_ID;
+
+  if (!apiToken || !roomId) {
+    return { success: false, error: "Chatwork設定が不完全です" };
+  }
+
+  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+
+  let message = `[info][title]⚠️ 異常検知アラート[/title]`;
+  message += `検知日時：${now}\n`;
+  message += `媒体：${media}\n`;
+  message += `CPN：${cpnName}\n`;
+  message += `\n${anomalyDetails}\n`;
+  message += `[/info]`;
+
+  return sendToChatwork(apiToken, roomId, message);
+}
+

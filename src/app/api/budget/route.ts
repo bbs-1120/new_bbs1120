@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdvertiserIdByAccountName } from "@/lib/advertiserMapping";
+import { sendErrorNotification } from "@/lib/chatwork";
 
 interface BudgetChangeRequest {
   cpnKey: string;
@@ -65,6 +66,13 @@ export async function POST(request: Request) {
         message: `${cpnName}の予算を¥${newBudget.toLocaleString()}に変更しました`,
       });
     } else {
+      // エラー通知を送信
+      await sendErrorNotification("budget_change", result.error || "予算変更に失敗", {
+        cpnName,
+        media,
+        campaignId,
+        newBudget,
+      });
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 500 }
@@ -72,6 +80,10 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Budget API error:", error);
+    // エラー通知を送信
+    await sendErrorNotification("budget_change", "予算変更中にエラーが発生", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return NextResponse.json(
       { success: false, error: "予算変更に失敗しました" },
       { status: 500 }
