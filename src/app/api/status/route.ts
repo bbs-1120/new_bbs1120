@@ -173,9 +173,10 @@ async function updateTikTokStatus(
   for (let i = 0; i < advertiserIds.length; i++) {
     const advertiserId = advertiserIds[i].trim();
     
+    // 1. まず campaign/update/ APIでoperation_statusを更新
     try {
       const response = await fetch(
-        "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
         {
           method: "POST",
           headers: {
@@ -184,19 +185,21 @@ async function updateTikTokStatus(
           },
           body: JSON.stringify({
             advertiser_id: advertiserId,
-            campaign_ids: [campaignId],
-            opt_status: tiktokStatus,
+            campaign_id: campaignId,
+            operation_status: tiktokStatus,
           }),
         }
       );
 
       const data = await response.json();
+      console.log(`TikTok status update response:`, JSON.stringify(data));
 
       if (data.code === 0) {
         return { success: true };
       } else {
         lastError = data.message || "TikTok APIエラー";
         
+        // SPCの場合はSPC APIを試す
         if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
           const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, tiktokStatus);
           if (spcResult.success) {
@@ -294,7 +297,7 @@ async function updatePangleStatus(
     
     try {
       const response = await fetch(
-        "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
         {
           method: "POST",
           headers: {
@@ -303,13 +306,14 @@ async function updatePangleStatus(
           },
           body: JSON.stringify({
             advertiser_id: advertiserId,
-            campaign_ids: [campaignId],
-            opt_status: pangleStatus,
+            campaign_id: campaignId,
+            operation_status: pangleStatus,
           }),
         }
       );
 
       const data = await response.json();
+      console.log(`Pangle status update response:`, JSON.stringify(data));
 
       if (data.code === 0) {
         return { success: true };
