@@ -70,14 +70,23 @@ export async function POST(request: Request) {
   }
 }
 
-// Meta (Facebook) Ads API
+// Meta (Facebook) Ads API - 複数のビジネスマネージャー対応
 async function updateMetaBudget(
   campaignId: string | undefined,
   newBudget: number
 ): Promise<{ success: boolean; error?: string }> {
-  const accessToken = process.env.META_ACCESS_TOKEN;
+  // 全てのビジネスマネージャーのトークンを取得
+  const tokens = [
+    process.env.META_ACCESS_TOKEN,
+    process.env.META_TOKEN_BUSINESS01,
+    process.env.META_TOKEN_BUSINESS03,
+    process.env.META_TOKEN_BUSINESS08,
+    process.env.META_TOKEN_BUSINESS11,
+    process.env.META_TOKEN_BUSINESS13,
+    process.env.META_TOKEN_BUSINESS14,
+  ].filter(Boolean) as string[];
   
-  if (!accessToken) {
+  if (tokens.length === 0) {
     return { success: false, error: "Meta APIの認証情報が設定されていません。.envにMETA_ACCESS_TOKENを追加してください。" };
   }
 
@@ -85,36 +94,46 @@ async function updateMetaBudget(
     return { success: false, error: "キャンペーンIDが取得できません" };
   }
 
-  try {
-    // Meta Marketing API - キャンペーンの日予算を更新
-    // 予算はセント単位（100倍）で送信
-    const budgetInCents = newBudget * 100;
-    
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${campaignId}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          daily_budget: budgetInCents,
-          access_token: accessToken,
-        }),
+  // 予算は円単位で送信（日本のアカウントの場合）
+  // ※通常は100倍（セント）だが、日本円アカウントは円のまま
+  const budgetValue = newBudget;
+
+  // 各トークンで試行
+  let lastError = "";
+  for (const accessToken of tokens) {
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${campaignId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            daily_budget: budgetValue,
+            access_token: accessToken,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success || data.id) {
+        return { success: true };
+      } else {
+        lastError = data.error?.message || "Meta APIエラー";
+        // 権限エラーの場合は次のトークンを試す
+        if (data.error?.code === 190 || data.error?.code === 200) {
+          continue;
+        }
       }
-    );
-
-    const data = await response.json();
-
-    if (data.success || data.id) {
-      return { success: true };
-    } else {
-      return { success: false, error: data.error?.message || "Meta APIエラー" };
+    } catch (error) {
+      console.error("Meta API error:", error);
+      lastError = "Meta APIへの接続に失敗しました";
     }
-  } catch (error) {
-    console.error("Meta API error:", error);
-    return { success: false, error: "Meta APIへの接続に失敗しました" };
   }
+
+  return { success: false, error: lastError };
 }
 
 // TikTok Ads API
