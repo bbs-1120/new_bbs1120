@@ -557,6 +557,35 @@ export default function AnalysisPage() {
     return `${value.toFixed(1)}%`;
   };
 
+  // メンテナンス時間チェック（0:00〜0:30）
+  const isMaintenanceTime = () => {
+    const now = new Date();
+    const jstHour = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" })).getHours();
+    const jstMinute = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" })).getMinutes();
+    return jstHour === 0 && jstMinute < 30;
+  };
+
+  if (isMaintenanceTime()) {
+    return (
+      <>
+        <Header title="デイリーレポート" description="本日の広告パフォーマンス" />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center p-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200 shadow-lg max-w-md">
+            <div className="text-5xl mb-4">🔧</div>
+            <h2 className="text-xl font-bold text-amber-800 mb-2">メンテナンス中</h2>
+            <p className="text-amber-700 mb-4">
+              毎日 0:00〜0:30 の間はデータ更新のため<br />
+              一時的にご利用いただけません。
+            </p>
+            <div className="text-sm text-amber-600 bg-amber-100 px-4 py-2 rounded-lg">
+              0:30以降に再度アクセスしてください
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (isLoading) {
     return (
       <>
