@@ -70,13 +70,13 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"summary" | "cpn" | "project" | "media">("summary");
 
-  const fetchData = async () => {
+  const fetchData = async (refresh: boolean = false) => {
     try {
       setError(null);
-      const response = await fetch("/api/analysis");
+      // refresh=trueでキャッシュをスキップして最新データを取得
+      const url = refresh ? "/api/analysis?refresh=true" : "/api/analysis";
+      const response = await fetch(url);
       const data = await response.json();
-
-      console.log("API Response:", data);
 
       if (data.success) {
         setSummary(data.summary);
@@ -101,7 +101,7 @@ export default function AnalysisPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchData();
+    await fetchData(true); // キャッシュをスキップして最新データを取得
   };
 
   const formatCurrency = (value: number) => {

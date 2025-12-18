@@ -1,13 +1,36 @@
 import { NextResponse } from "next/server";
 import { getFullAnalysisData, getMonthlyProfit } from "@/lib/googleSheets";
+import { getCache, setCache } from "@/lib/cache";
 
-export async function GET() {
+const CACHE_KEY = "analysis_data";
+const CACHE_TTL = 3 * 60 * 1000; // 3分間キャッシュ
+
+interface CachedData {
+  sheetData: Awaited<ReturnType<typeof getFullAnalysisData>>;
+  monthlyProfit: number;
+}
+
+export async function GET(request: Request) {
   try {
-    // スプレッドシートからデータを取得（当日 + 過去7日分の集計付き）
-    const [sheetData, monthlyProfit] = await Promise.all([
-      getFullAnalysisData(),
-      getMonthlyProfit(),
-    ]);
+    // URLパラメータでキャッシュをスキップできる
+    const { searchParams } = new URL(request.url);
+    const skipCache = searchParams.get("refresh") === "true";
+
+    // キャッシュからデータを取得
+    let cachedData = skipCache ? null : getCache<CachedData>(CACHE_KEY);
+
+    if (!cachedData) {
+      // キャッシュがない場合はスプレッドシートから取得
+      const [sheetData, monthlyProfit] = await Promise.all([
+        getFullAnalysisData(),
+        getMonthlyProfit(),
+      ]);
+
+      cachedData = { sheetData, monthlyProfit };
+      setCache(CACHE_KEY, cachedData, CACHE_TTL);
+    }
+
+    const { sheetData, monthlyProfit } = cachedData;
 
     // 1. 当日合計を計算
     let totalClicks = 0;
