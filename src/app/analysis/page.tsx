@@ -1,0 +1,416 @@
+"use client";
+
+import { Header } from "@/components/layout/header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3 } from "lucide-react";
+
+interface SummaryData {
+  spend: number;
+  mcv: number;
+  cv: number;
+  revenue: number;
+  profit: number;
+  roas: number;
+  cpa: number;
+  cvr: number;
+  monthlyProfit: number;
+}
+
+interface CpnData {
+  cpnKey: string;
+  cpnName: string;
+  accountName: string;
+  dailyBudget: string;
+  budgetSchedule: string;
+  profit7Days: number;
+  roas7Days: number;
+  consecutiveZeroMcv: number;
+  consecutiveLoss: number;
+  spend: number;
+  mcv: number;
+  cv: number;
+  revenue: number;
+  profit: number;
+  roas: number;
+  cpa: number;
+}
+
+interface ProjectData {
+  projectName: string;
+  spend: number;
+  mcv: number;
+  cv: number;
+  revenue: number;
+  profit: number;
+  roas: number;
+  cpa: number;
+  cvr: number;
+}
+
+interface MediaData {
+  media: string;
+  spend: number;
+  mcv: number;
+  cv: number;
+  revenue: number;
+  profit: number;
+  roas: number;
+  cpa: number;
+}
+
+export default function AnalysisPage() {
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [cpnList, setCpnList] = useState<CpnData[]>([]);
+  const [projectList, setProjectList] = useState<ProjectData[]>([]);
+  const [mediaList, setMediaList] = useState<MediaData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"summary" | "cpn" | "project" | "media">("summary");
+
+  const fetchData = async () => {
+    try {
+      const response = await fetch("/api/analysis");
+      const data = await response.json();
+
+      if (data.success) {
+        setSummary(data.summary);
+        setCpnList(data.cpnList);
+        setProjectList(data.projectList);
+        setMediaList(data.mediaList);
+      }
+    } catch (error) {
+      console.error("Failed to fetch analysis data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+  };
+
+  const formatCurrency = (value: number) => {
+    const sign = value < 0 ? "-" : "";
+    return `${sign}¥${Math.abs(value).toLocaleString("ja-JP")}`;
+  };
+
+  const formatPercent = (value: number) => {
+    return `${value.toFixed(1)}%`;
+  };
+
+  if (isLoading) {
+    return (
+      <>
+        <Header title="マイ分析" description="悠太のCPN分析ダッシュボード" />
+        <div className="flex items-center justify-center h-64">
+          <p className="text-slate-500">読み込み中...</p>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Header title="マイ分析" description="悠太のCPN分析ダッシュボード" />
+
+      {/* 更新ボタン */}
+      <div className="mb-6">
+        <Button onClick={handleRefresh} loading={isRefreshing}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          データを更新
+        </Button>
+      </div>
+
+      {/* タブナビゲーション */}
+      <div className="flex gap-2 mb-6 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("summary")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "summary"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          ① 当日合計
+        </button>
+        <button
+          onClick={() => setActiveTab("cpn")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "cpn"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          ② CPN別
+        </button>
+        <button
+          onClick={() => setActiveTab("project")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "project"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          ③ 案件別
+        </button>
+        <button
+          onClick={() => setActiveTab("media")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "media"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          ④ 媒体別
+        </button>
+      </div>
+
+      {/* ① 当日合計 */}
+      {activeTab === "summary" && summary && (
+        <div className="space-y-6">
+          <h2 className="text-lg font-semibold text-slate-900">当日のCPN合計数値</h2>
+          
+          {/* メイン指標 */}
+          <div className="grid grid-cols-3 gap-6">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">消化金額</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {formatCurrency(summary.spend)}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">利益</p>
+                    <p className={`text-2xl font-bold ${summary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(summary.profit)}
+                    </p>
+                  </div>
+                  <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                    summary.profit >= 0 ? "bg-green-100" : "bg-red-100"
+                  }`}>
+                    {summary.profit >= 0 ? (
+                      <TrendingUp className="h-6 w-6 text-green-600" />
+                    ) : (
+                      <TrendingDown className="h-6 w-6 text-red-600" />
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">ROAS</p>
+                    <p className={`text-2xl font-bold ${summary.roas >= 100 ? "text-green-600" : "text-red-600"}`}>
+                      {formatPercent(summary.roas)}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 詳細指標 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>詳細指標</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-6">
+                <div>
+                  <p className="text-sm text-slate-500">MCV</p>
+                  <p className="text-xl font-semibold text-slate-900">{summary.mcv.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">CV</p>
+                  <p className="text-xl font-semibold text-slate-900">{summary.cv.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">売上</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(summary.revenue)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">CPA</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatCurrency(summary.cpa)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">CVR</p>
+                  <p className="text-xl font-semibold text-slate-900">{formatPercent(summary.cvr)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">12月利益</p>
+                  <p className={`text-xl font-semibold ${summary.monthlyProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatCurrency(summary.monthlyProfit)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ② CPN別 */}
+      {activeTab === "cpn" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>CPN単位のデータ（{cpnList.length}件）</CardTitle>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">CPN名</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">日予算</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">7日利益</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">7日ROAS</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-slate-500">連続赤字</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">消化</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">MCV</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">CV</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">利益</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">ROAS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {cpnList.map((cpn, index) => (
+                  <tr key={index} className="hover:bg-slate-50">
+                    <td className="px-3 py-2">
+                      <p className="font-medium text-slate-900 truncate max-w-[200px]">{cpn.cpnName}</p>
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">{cpn.dailyBudget}</td>
+                    <td className={`px-3 py-2 text-right font-medium ${cpn.profit7Days >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(cpn.profit7Days)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-600">{formatPercent(cpn.roas7Days)}</td>
+                    <td className="px-3 py-2 text-center">
+                      {cpn.consecutiveLoss > 0 && (
+                        <span className="text-red-600 font-medium">{cpn.consecutiveLoss}日</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(cpn.spend)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600">{cpn.mcv}</td>
+                    <td className="px-3 py-2 text-right text-slate-600">{cpn.cv}</td>
+                    <td className={`px-3 py-2 text-right font-medium ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(cpn.profit)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-slate-600">{formatPercent(cpn.roas)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ③ 案件別 */}
+      {activeTab === "project" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>案件名別の利益（{projectList.length}件）</CardTitle>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">案件名</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">消化金額</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">MCV</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CV</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">売上</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">利益</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">ROAS</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CPA</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CVR</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {projectList.map((project, index) => (
+                  <tr key={index} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 font-medium text-slate-900">{project.projectName}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(project.spend)}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{project.mcv}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{project.cv}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(project.revenue)}</td>
+                    <td className={`px-4 py-2 text-right font-medium ${project.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(project.profit)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatPercent(project.roas)}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(project.cpa)}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatPercent(project.cvr)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ④ 媒体別 */}
+      {activeTab === "media" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>媒体別の利益（{mediaList.length}件）</CardTitle>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">媒体</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">消化金額</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">MCV</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CV</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">売上</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">利益</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">ROAS</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CPA</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {mediaList.map((media, index) => (
+                  <tr key={index} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 font-medium text-slate-900">{media.media}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(media.spend)}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{media.mcv}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{media.cv}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(media.revenue)}</td>
+                    <td className={`px-4 py-2 text-right font-medium ${media.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(media.profit)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatPercent(media.roas)}</td>
+                    <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(media.cpa)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+

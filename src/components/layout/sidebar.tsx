@@ -10,10 +10,12 @@ import {
   History,
   RefreshCw,
   Send,
+  BarChart2,
 } from "lucide-react";
 
 const navigation = [
   { name: "ダッシュボード", href: "/", icon: LayoutDashboard },
+  { name: "マイ分析", href: "/analysis", icon: BarChart2 },
   { name: "仕分け結果", href: "/results", icon: ListChecks },
   { name: "データ同期", href: "/sync", icon: RefreshCw },
   { name: "Chatwork送信", href: "/send", icon: Send },

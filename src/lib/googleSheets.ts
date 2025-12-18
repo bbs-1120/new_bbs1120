@@ -172,4 +172,38 @@ export async function testConnection(spreadsheetId: string): Promise<{
   }
 }
 
+/**
+ * 分析用のデータを取得
+ */
+export async function getSheetData() {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+  }
+
+  const rawData = await fetchRawDataFromSheet(spreadsheetId);
+
+  // 分析用に拡張データを返す
+  return rawData.map((row) => ({
+    ...row,
+    accountName: extractAccountName(row.cpnKey),
+    dailyBudget: "-", // スプレッドシートに日予算列がある場合は対応
+    budgetSchedule: "-",
+    profit7Days: 0, // 7日間データは別途計算が必要
+    roas7Days: 0,
+    consecutiveZeroMcv: 0,
+    consecutiveLoss: 0,
+    cpa: row.cv > 0 ? row.spend / row.cv : 0,
+  }));
+}
+
+// アカウント名を抽出するヘルパー
+function extractAccountName(cpnKey: string): string {
+  const parts = cpnKey.split("_");
+  if (parts.length >= 2) {
+    return parts[0];
+  }
+  return cpnKey;
+}
+
 export type { RawRowData };
