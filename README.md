@@ -106,3 +106,4 @@ http://localhost:3000 でアクセス
 ## ライセンス
 
 Private
+# CI/CD Test Thu Dec 18 19:41:50 JST 2025
