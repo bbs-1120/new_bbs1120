@@ -82,6 +82,7 @@ export async function GET(request: Request) {
       spend: row.spend || 0,
       mcv: row.mcv || 0,
       cv: row.cv || 0,
+      media: row.media || "",
       revenue: row.revenue || 0,
       profit: row.profit || 0,
       roas: row.roas || 0,
