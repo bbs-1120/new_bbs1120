@@ -43,6 +43,7 @@ interface RawRowData {
   accountName: string;
   campaignBudget: string;
   status: string;
+  campaignId: string; // CPID
   budgetSchedule: string;
 }
 
@@ -170,6 +171,7 @@ export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[
       accountName: parseValue(row[18]), // S列: アカウント名
       campaignBudget: parseValue(row[19]), // T列: CampaignBudget
       status: parseValue(row[20]), // U列: Status
+      campaignId: parseValue(row[21]), // V列: CPID（キャンペーンID）
       budgetSchedule: parseValue(row[22]), // W列: 予算スケジューリング
     });
   }
@@ -284,6 +286,7 @@ export async function fetchHistoricalData(spreadsheetId: string): Promise<RawRow
       accountName: parseValue(row[18]), // S列: アカウント名
       campaignBudget: "",
       status: "",
+      campaignId: "", // 過去データにはCPIDなし
       budgetSchedule: "",
     });
   }
@@ -400,6 +403,7 @@ export async function getFullAnalysisData() {
     return {
       ...row,
       dailyBudget: row.campaignBudget || "-",
+      campaignId: row.campaignId || "", // CPID
       profit7Days: stats?.profit || 0,
       roas7Days: stats && stats.spend > 0 ? (stats.revenue / stats.spend) * 100 : 0,
       consecutiveZeroMcv: stats?.zeroMcvDays || 0,

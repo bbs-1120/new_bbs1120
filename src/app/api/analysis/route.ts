@@ -88,6 +88,7 @@ export async function GET(request: Request) {
       roas: row.roas || 0,
       cpa: row.cpa || 0,
       status: row.status || "",
+      campaignId: row.campaignId || "", // CPID（キャンペーンID）
     }));
 
     // 3. 案件名別の集計（スプレッドシートのprojectName列を使用）
