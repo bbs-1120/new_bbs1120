@@ -8,7 +8,7 @@ import {
   StopCircle,
   RefreshCw,
   CheckCircle,
-  AlertCircle,
+  AlertTriangle,
   PlayCircle,
   Send,
   ChevronRight,
@@ -20,17 +20,21 @@ interface SummaryData {
   stop: number;
   replace: number;
   continue: number;
-  check: number;
+  error: number;
   total: number;
 }
 
 interface JudgmentResult {
-  id: string;
+  cpnKey: string;
   cpnName: string;
-  media: { name: string };
+  media: string;
   judgment: string;
   todayProfit: number;
+  profit7Days: number;
+  roas7Days: number;
+  consecutiveLossDays: number;
   reasons: string[];
+  isRe: boolean;
 }
 
 export default function DashboardPage() {
@@ -38,26 +42,29 @@ export default function DashboardPage() {
     stop: 0,
     replace: 0,
     continue: 0,
-    check: 0,
+    error: 0,
     total: 0,
   });
   const [recentResults, setRecentResults] = useState<JudgmentResult[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // データを取得
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     try {
       const response = await fetch("/api/judgment");
       const data = await response.json();
       
       if (data.success) {
         setSummary(data.summary);
-        setRecentResults(data.results.slice(0, 10));
+        setRecentResults(data.results.slice(0, 15));
       }
     } catch (error) {
       console.error("Failed to fetch data:", error);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -65,9 +72,9 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // 仕分け実行
-  const handleExecute = async () => {
-    setIsExecuting(true);
+  // データ再取得（キャッシュクリア）
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
     setMessage(null);
     
     try {
@@ -75,48 +82,35 @@ export default function DashboardPage() {
       const data = await response.json();
       
       if (data.success) {
-        setMessage({ type: "success", text: `${data.count}件のCPNを仕分けしました` });
-        await fetchData();
+        setMessage({ type: "success", text: `${data.count}件のCPNを判定しました` });
+        setSummary(data.summary);
+        setRecentResults(data.results.slice(0, 15));
       } else {
-        setMessage({ type: "error", text: data.error || "仕分け処理に失敗しました" });
+        setMessage({ type: "error", text: data.error || "判定処理に失敗しました" });
       }
     } catch (error) {
       setMessage({ type: "error", text: "通信エラーが発生しました" });
     } finally {
-      setIsExecuting(false);
+      setIsRefreshing(false);
     }
   };
 
-  // データ同期
-  const handleSync = async () => {
-    setIsSyncing(true);
-    setMessage(null);
-    
-    try {
-      const response = await fetch("/api/sync", { method: "POST" });
-      const data = await response.json();
-      
-      if (data.success) {
-        setMessage({ 
-          type: "success", 
-          text: `${data.totalRows}件のデータを同期しました（新規: ${data.inserted}, 更新: ${data.updated}）` 
-        });
-      } else {
-        setMessage({ type: "error", text: data.error || "同期処理に失敗しました" });
-      }
-    } catch (error) {
-      setMessage({ type: "error", text: "通信エラーが発生しました" });
-    } finally {
-      setIsSyncing(false);
-    }
+  const formatCurrency = (value: number) => {
+    const sign = value < 0 ? "" : "+";
+    return `${sign}¥${Math.floor(value).toLocaleString("ja-JP")}`;
   };
 
-  const formatCurrency = (value: number | { toNumber?: () => number }) => {
-    const num = typeof value === "number" ? value : (value?.toNumber?.() ?? 0);
-    const sign = num < 0 ? "-" : "+";
-    const absValue = Math.abs(num).toLocaleString("ja-JP");
-    return `${sign}¥${absValue}`;
-  };
+  if (isLoading) {
+    return (
+      <>
+        <Header title="CPN診断" description="自動判定によるCPN分析結果" />
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
+          <span className="ml-3 text-slate-500">読み込み中...</span>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -140,13 +134,13 @@ export default function DashboardPage() {
 
       {/* アクションボタン */}
       <div className="flex gap-4 mb-8">
-        <Button size="lg" onClick={handleExecute} loading={isExecuting}>
+        <Button size="lg" onClick={handleRefresh} loading={isRefreshing}>
           <PlayCircle className="mr-2 h-5 w-5" />
-          仕分け実行
+          判定実行
         </Button>
-        <Button size="lg" variant="secondary" onClick={handleSync} loading={isSyncing}>
+        <Button size="lg" variant="secondary" onClick={() => window.location.href = "/analysis"}>
           <RefreshCw className="mr-2 h-5 w-5" />
-          データ同期
+          マイ分析
         </Button>
         <Button size="lg" variant="secondary" onClick={() => window.location.href = "/send"}>
           <Send className="mr-2 h-5 w-5" />
@@ -216,16 +210,16 @@ export default function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/results/check">
+        <Link href="/results/error">
           <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-yellow-300">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-500">要確認</p>
-                  <p className="text-3xl font-bold text-yellow-600">{summary.check}</p>
+                  <p className="text-sm text-slate-500">エラー</p>
+                  <p className="text-3xl font-bold text-yellow-600">{summary.error}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                  <AlertCircle className="h-6 w-6 text-yellow-600" />
+                  <AlertTriangle className="h-6 w-6 text-yellow-600" />
                 </div>
               </div>
               <div className="mt-4 flex items-center text-sm text-slate-500">
@@ -240,7 +234,7 @@ export default function DashboardPage() {
       {/* 最新の仕分け結果 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>最新の仕分け結果（{summary.total}件）</CardTitle>
+          <CardTitle>判定結果（{summary.total}件）</CardTitle>
           <Link href="/results">
             <Button variant="ghost" size="sm">
               すべて見る
@@ -253,47 +247,74 @@ export default function DashboardPage() {
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     CPN名
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     媒体
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     判定
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
                     当日利益
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    7日利益
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    7日ROAS
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     理由
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {recentResults.map((result) => (
-                  <tr key={result.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-medium text-slate-900 truncate max-w-xs">
+                  <tr key={result.cpnKey} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-slate-900 max-w-xs">
                         {result.cpnName}
                       </p>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-600">{result.media.name}</span>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        result.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                        result.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                        result.media === "Pangle" ? "bg-orange-100 text-orange-700" :
+                        "bg-slate-100 text-slate-700"
+                      }`}>
+                        {result.media}
+                      </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <JudgmentBadge judgment={result.judgment} />
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-3 text-right">
                       <span
                         className={`text-sm font-medium ${
-                          Number(result.todayProfit) >= 0 ? "text-green-600" : "text-red-600"
+                          result.todayProfit >= 0 ? "text-green-600" : "text-red-600"
                         }`}
                       >
                         {formatCurrency(result.todayProfit)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3 text-right">
+                      <span
+                        className={`text-sm font-medium ${
+                          result.profit7Days >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {formatCurrency(result.profit7Days)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-sm text-slate-600">
+                        {result.roas7Days.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {result.reasons.map((reason, index) => (
                           <span
@@ -303,17 +324,17 @@ export default function DashboardPage() {
                             {reason}
                           </span>
                         ))}
-                      </div>
+        </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+    </div>
         ) : (
           <CardContent>
             <p className="text-center text-slate-500 py-8">
-              まだ仕分け結果がありません。「データ同期」→「仕分け実行」の順に操作してください。
+              まだ判定結果がありません。「判定実行」をクリックしてください。
             </p>
           </CardContent>
         )}

@@ -1,8 +1,190 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Slack-inspired colors - Light Mode */
+  --background: #f8f8f8;
+  --foreground: #1d1c1d;
+  --sidebar-bg: #3f0e40;
+  --sidebar-hover: #350d36;
+  --sidebar-active: #1164a3;
+  --accent-purple: #611f69;
+  --accent-blue: #36c5f0;
+  --accent-green: #2eb67d;
+  --accent-yellow: #ecb22e;
+  --accent-red: #e01e5a;
+  --card-bg: #ffffff;
+  --border-color: #e8e8e8;
+  --text-muted: #616061;
+  --text-secondary: #868686;
+}
+
+/* Dark Mode */
+.dark {
+  --background: #1a1d21;
+  --foreground: #d1d2d3;
+  --sidebar-bg: #19171d;
+  --sidebar-hover: #27242c;
+  --sidebar-active: #1264a3;
+  --accent-purple: #9b59b6;
+  --accent-blue: #36c5f0;
+  --accent-green: #2eb67d;
+  --accent-yellow: #ecb22e;
+  --accent-red: #e01e5a;
+  --card-bg: #222529;
+  --border-color: #383838;
+  --text-muted: #9c9c9c;
+  --text-secondary: #8c8c8c;
+}
+
+.dark body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.dark .bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-slate-50 {
+  background-color: #2a2d32 !important;
+}
+
+.dark .bg-gray-100,
+.dark .bg-slate-100 {
+  background-color: #32363c !important;
+}
+
+.dark .border-gray-200,
+.dark .border-slate-200 {
+  border-color: var(--border-color) !important;
+}
+
+.dark .text-gray-900,
+.dark .text-slate-900 {
+  color: var(--foreground) !important;
+}
+
+.dark .text-gray-700,
+.dark .text-slate-700 {
+  color: #b0b0b0 !important;
+}
+
+.dark .text-gray-600,
+.dark .text-slate-600 {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-gray-500,
+.dark .text-slate-500 {
+  color: var(--text-secondary) !important;
+}
+
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #32363c;
+  border-color: var(--border-color);
+  color: var(--foreground);
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: var(--accent-blue);
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #555;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* Mobile optimizations */
+@media (max-width: 1023px) {
+  /* テーブルの横スクロール対応 */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* カードのタッチ領域を広げる */
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* テキストの読みやすさ向上 */
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* Safe area padding for notched devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Pull to refresh prevention */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+/* Improve touch scrolling */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar for tabs */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile card styles */
+@media (max-width: 640px) {
+  .card-mobile {
+    border-radius: 12px;
+  }
+}
+
+/* Responsive chart container */
+.chart-container {
+  height: 200px;
+}
+
+@media (min-width: 768px) {
+  .chart-container {
+    height: 300px;
+  }
+}
+
+/* Mobile-friendly tables */
+@media (max-width: 1023px) {
+  .table-mobile-scroll {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .table-mobile-scroll table {
+    min-width: 800px;
+  }
 }
 
 @theme inline {
@@ -12,15 +194,69 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Lato", "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Slack-style scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Slack-style focus ring */
+*:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }

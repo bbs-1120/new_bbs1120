@@ -11,6 +11,12 @@ interface JudgmentResult {
   isRe: boolean;
 }
 
+interface SimpleCpnResult {
+  cpnName: string;
+  media: string;
+  judgment: string;
+}
+
 // Decimalの値を数値に変換
 function toNumber(value: number | { toNumber: () => number }): number {
   if (typeof value === "number") return value;
@@ -80,6 +86,43 @@ export function generateChatworkMessage(results: JudgmentResult[]): string {
   message += "\n▼詳細\n管理画面URL[/info]";
 
   return message;
+}
+
+/**
+ * 継続CPNを媒体別にグループ化したメッセージを生成
+ */
+export function generateContinueMessageByMedia(results: SimpleCpnResult[]): { media: string; message: string }[] {
+  // 継続のみをフィルタ
+  const continueResults = results.filter((r) => r.judgment === "継続");
+
+  // 媒体別にグループ化
+  const mediaGroups: Record<string, string[]> = {};
+  for (const r of continueResults) {
+    // TikTokとPangleを統合表示
+    let mediaKey = r.media;
+    if (r.media === "Pangle") {
+      mediaKey = "TikTok"; // Pangleの場合もTikTokとして表示
+    }
+    
+    if (!mediaGroups[mediaKey]) {
+      mediaGroups[mediaKey] = [];
+    }
+    mediaGroups[mediaKey].push(r.cpnName);
+  }
+
+  // 媒体別メッセージを生成
+  const messages: { media: string; message: string }[] = [];
+  
+  for (const [media, cpnNames] of Object.entries(mediaGroups)) {
+    let message = `媒体：${media}\n`;
+    message += `処理：追加\n`;
+    message += `CP名：\n\n`;
+    message += cpnNames.join("\n");
+    
+    messages.push({ media, message });
+  }
+
+  return messages;
 }
 
 /**

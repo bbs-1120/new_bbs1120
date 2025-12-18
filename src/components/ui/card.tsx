@@ -1,27 +1,76 @@
 import { cn } from "@/lib/utils";
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  className?: string;
+  hover?: boolean;
 }
 
-export function Card({ children, className }: CardProps) {
+export function Card({ className, children, hover = false, ...props }: CardProps) {
   return (
-    <div className={cn("bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden", className)}>
+    <div
+      className={cn(
+        "bg-white rounded-xl border border-slate-200/60 shadow-sm",
+        hover && "hover:shadow-md hover:border-slate-300/60 transition-all duration-200",
+        className
+      )}
+      {...props}
+    >
       {children}
     </div>
   );
 }
 
-export function CardHeader({ children, className }: CardProps) {
-  return <div className={cn("px-6 py-4 border-b border-slate-200", className)}>{children}</div>;
+export function CardHeader({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("px-5 py-4 border-b border-slate-100", className)}
+      {...props}
+    >
+      {children}
+    </div>
+  );
 }
 
-export function CardTitle({ children, className }: CardProps) {
-  return <h3 className={cn("text-lg font-semibold text-slate-900", className)}>{children}</h3>;
+export function CardTitle({ className, children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+  return (
+    <h3
+      className={cn("text-[15px] font-bold text-slate-900", className)}
+      {...props}
+    >
+      {children}
+    </h3>
+  );
 }
 
-export function CardContent({ children, className }: CardProps) {
-  return <div className={cn("px-6 py-4", className)}>{children}</div>;
+export function CardDescription({ className, children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p
+      className={cn("text-sm text-slate-500 mt-0.5", className)}
+      {...props}
+    >
+      {children}
+    </p>
+  );
 }
 
+export function CardContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("px-5 py-4", className)}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CardFooter({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("px-5 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-xl", className)}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}

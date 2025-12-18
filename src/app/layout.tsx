@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
+import { DataProvider } from "@/components/providers/data-provider";
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
@@ -10,8 +11,30 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "CPN自動仕分けシステム",
-  description: "広告運用データのCPN自動仕分けシステム",
+  title: "AdPilot - Campaign Intelligence",
+  description: "広告運用を自動化・最適化するインテリジェントプラットフォーム",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "AdPilot",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: "/icons/Cactus-Jack.jpg",
+    apple: "/icons/Cactus-Jack.jpg",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#3f0e40",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -21,13 +44,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body className={`${notoSansJP.variable} font-sans antialiased bg-slate-50`}>
-        <Sidebar />
-        <main className="pl-64">
-          <div className="min-h-screen p-8">
-            {children}
-          </div>
-        </main>
+      <body className={`${notoSansJP.variable} font-sans antialiased bg-[#f8f8f8]`}>
+        <DataProvider>
+          <Sidebar />
+          <main className="lg:pl-64">
+            <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
+              {children}
+            </div>
+          </main>
+        </DataProvider>
       </body>
     </html>
   );

@@ -455,4 +455,268 @@ export async function getMonthlyProfit(): Promise<number> {
   }
 }
 
+/**
+ * 当月の日別データを取得（グラフ用）
+ */
+export async function getDailyTrendData() {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+  }
+
+  try {
+    // 過去データと当日データを取得
+    const [historicalData, todayData] = await Promise.all([
+      fetchHistoricalData(spreadsheetId),
+      fetchTodayData(spreadsheetId),
+    ]);
+
+    // 今月の開始日を計算
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    // 日別にデータを集計
+    const dailyMap = new Map<string, {
+      date: string;
+      spend: number;
+      revenue: number;
+      profit: number;
+      cv: number;
+      mcv: number;
+    }>();
+
+    // 過去データから今月分を集計
+    for (const row of historicalData) {
+      if (row.date < monthStart) continue;
+      
+      const dateStr = row.date.toISOString().split("T")[0];
+      if (!dailyMap.has(dateStr)) {
+        dailyMap.set(dateStr, { date: dateStr, spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0 });
+      }
+      
+      const daily = dailyMap.get(dateStr)!;
+      daily.spend += row.spend || 0;
+      daily.revenue += row.revenue || 0;
+      daily.profit += row.profit || 0;
+      daily.cv += row.cv || 0;
+      daily.mcv += row.mcv || 0;
+    }
+
+    // 当日データを追加
+    const todayStr = now.toISOString().split("T")[0];
+    if (!dailyMap.has(todayStr)) {
+      dailyMap.set(todayStr, { date: todayStr, spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0 });
+    }
+    const todayDaily = dailyMap.get(todayStr)!;
+    for (const row of todayData) {
+      todayDaily.spend += row.spend || 0;
+      todayDaily.revenue += row.revenue || 0;
+      todayDaily.profit += row.profit || 0;
+      todayDaily.cv += row.cv || 0;
+      todayDaily.mcv += row.mcv || 0;
+    }
+
+    // 日付順にソートして返す
+    const dailyList = Array.from(dailyMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => ({
+        ...d,
+        roas: d.spend > 0 ? (d.revenue / d.spend) * 100 : 0,
+        cumulativeProfit: 0, // 後で計算
+      }));
+
+    // 累計利益を計算
+    let cumulative = 0;
+    for (const day of dailyList) {
+      cumulative += day.profit;
+      day.cumulativeProfit = cumulative;
+    }
+
+    return dailyList;
+  } catch (error) {
+    console.error("Error getting daily trend data:", error);
+    return [];
+  }
+}
+
+/**
+ * 案件別の当月パフォーマンスを取得
+ */
+export async function getProjectMonthlyData() {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+  }
+
+  try {
+    const [historicalData, todayData] = await Promise.all([
+      fetchHistoricalData(spreadsheetId),
+      fetchTodayData(spreadsheetId),
+    ]);
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    // 案件別に集計
+    const projectMap = new Map<string, {
+      spend: number;
+      revenue: number;
+      profit: number;
+      cv: number;
+      mcv: number;
+      cpnCount: number;
+    }>();
+
+    // 過去データ
+    for (const row of historicalData) {
+      if (row.date < monthStart) continue;
+      
+      const projectName = row.projectName || "その他";
+      if (!projectMap.has(projectName)) {
+        projectMap.set(projectName, { spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0, cpnCount: 0 });
+      }
+      
+      const project = projectMap.get(projectName)!;
+      project.spend += row.spend || 0;
+      project.revenue += row.revenue || 0;
+      project.profit += row.profit || 0;
+      project.cv += row.cv || 0;
+      project.mcv += row.mcv || 0;
+    }
+
+    // 当日データ
+    const cpnSet = new Set<string>();
+    for (const row of todayData) {
+      const projectName = row.projectName || "その他";
+      if (!projectMap.has(projectName)) {
+        projectMap.set(projectName, { spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0, cpnCount: 0 });
+      }
+      
+      const project = projectMap.get(projectName)!;
+      project.spend += row.spend || 0;
+      project.revenue += row.revenue || 0;
+      project.profit += row.profit || 0;
+      project.cv += row.cv || 0;
+      project.mcv += row.mcv || 0;
+      
+      // CPN数カウント用
+      const cpnKey = `${projectName}:${row.cpnName}`;
+      if (!cpnSet.has(cpnKey)) {
+        cpnSet.add(cpnKey);
+        project.cpnCount++;
+      }
+    }
+
+    return Array.from(projectMap.entries())
+      .map(([name, data]) => ({
+        name,
+        ...data,
+        roas: data.spend > 0 ? (data.revenue / data.spend) * 100 : 0,
+      }))
+      .sort((a, b) => b.profit - a.profit);
+  } catch (error) {
+    console.error("Error getting project monthly data:", error);
+    return [];
+  }
+}
+
+/**
+ * 前日比・前週比の比較データを取得
+ */
+export async function getComparisonData() {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+  }
+
+  try {
+    const [historicalData, todayData] = await Promise.all([
+      fetchHistoricalData(spreadsheetId),
+      fetchTodayData(spreadsheetId),
+    ]);
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    // 日付ごとにデータを集計
+    const dailyMap = new Map<string, { spend: number; revenue: number; profit: number; cv: number; mcv: number }>();
+
+    for (const row of historicalData) {
+      const dateStr = row.date.toISOString().split("T")[0];
+      if (!dailyMap.has(dateStr)) {
+        dailyMap.set(dateStr, { spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0 });
+      }
+      const daily = dailyMap.get(dateStr)!;
+      daily.spend += row.spend || 0;
+      daily.revenue += row.revenue || 0;
+      daily.profit += row.profit || 0;
+      daily.cv += row.cv || 0;
+      daily.mcv += row.mcv || 0;
+    }
+
+    // 当日データを集計
+    const today = { spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0 };
+    for (const row of todayData) {
+      today.spend += row.spend || 0;
+      today.revenue += row.revenue || 0;
+      today.profit += row.profit || 0;
+      today.cv += row.cv || 0;
+      today.mcv += row.mcv || 0;
+    }
+
+    // 前日の日付
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+    // 先週同日の日付
+    const lastWeek = new Date(now);
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    const lastWeekStr = lastWeek.toISOString().split("T")[0];
+
+    const yesterdayData = dailyMap.get(yesterdayStr) || { spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0 };
+    const lastWeekData = dailyMap.get(lastWeekStr) || { spend: 0, revenue: 0, profit: 0, cv: 0, mcv: 0 };
+
+    // 比率計算（前日比）
+    const calcChange = (current: number, previous: number) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / Math.abs(previous)) * 100;
+    };
+
+    return {
+      today: {
+        ...today,
+        roas: today.spend > 0 ? (today.revenue / today.spend) * 100 : 0,
+      },
+      yesterday: {
+        ...yesterdayData,
+        roas: yesterdayData.spend > 0 ? (yesterdayData.revenue / yesterdayData.spend) * 100 : 0,
+      },
+      lastWeek: {
+        ...lastWeekData,
+        roas: lastWeekData.spend > 0 ? (lastWeekData.revenue / lastWeekData.spend) * 100 : 0,
+      },
+      dayOverDay: {
+        spend: calcChange(today.spend, yesterdayData.spend),
+        revenue: calcChange(today.revenue, yesterdayData.revenue),
+        profit: calcChange(today.profit, yesterdayData.profit),
+        cv: calcChange(today.cv, yesterdayData.cv),
+        mcv: calcChange(today.mcv, yesterdayData.mcv),
+      },
+      weekOverWeek: {
+        spend: calcChange(today.spend, lastWeekData.spend),
+        revenue: calcChange(today.revenue, lastWeekData.revenue),
+        profit: calcChange(today.profit, lastWeekData.profit),
+        cv: calcChange(today.cv, lastWeekData.cv),
+        mcv: calcChange(today.mcv, lastWeekData.mcv),
+      },
+    };
+  } catch (error) {
+    console.error("Error getting comparison data:", error);
+    return null;
+  }
+}
+
 export type { RawRowData };

@@ -2,67 +2,206 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
   ListChecks,
   Settings,
   History,
   RefreshCw,
   Send,
-  BarChart2,
+  BarChart3,
+  Sparkles,
+  PieChart,
+  ChevronDown,
+  MessageSquare,
+  Zap,
+  Menu,
+  X,
 } from "lucide-react";
+import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
-const navigation = [
-  { name: "ダッシュボード", href: "/", icon: LayoutDashboard },
-  { name: "マイ分析", href: "/analysis", icon: BarChart2 },
-  { name: "仕分け結果", href: "/results", icon: ListChecks },
-  { name: "データ同期", href: "/sync", icon: RefreshCw },
-  { name: "Chatwork送信", href: "/send", icon: Send },
-  { name: "実行履歴", href: "/history", icon: History },
-  { name: "設定", href: "/settings", icon: Settings },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface NavCategory {
+  category: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: NavItem[];
+}
+
+const navigation: NavCategory[] = [
+  {
+    category: "データ分析",
+    icon: PieChart,
+    items: [
+      { name: "デイリーレポート", href: "/analysis", icon: BarChart3 },
+      { name: "CPN診断", href: "/", icon: Zap },
+      { name: "判断結果", href: "/results", icon: ListChecks },
+    ],
+  },
+  {
+    category: "操作",
+    icon: Send,
+    items: [
+      { name: "Chatwork送信", href: "/send", icon: MessageSquare },
+      { name: "データ同期", href: "/sync", icon: RefreshCw },
+    ],
+  },
+  {
+    category: "システム",
+    icon: Settings,
+    items: [
+      { name: "実行履歴", href: "/history", icon: History },
+      { name: "設定", href: "/settings", icon: Settings },
+    ],
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // ページ遷移時にメニューを閉じる
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
+  // メニューが開いている時はスクロールを無効化
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900">
-      <div className="flex h-16 items-center px-6">
-        <h1 className="text-xl font-bold text-white">
-          CPN仕分けシステム
-        </h1>
-      </div>
-      <nav className="mt-6 px-3">
-        <ul className="space-y-1">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <li key={item.name}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-indigo-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-      <div className="absolute bottom-0 left-0 right-0 p-4">
-        <div className="rounded-lg bg-slate-800 p-3">
-          <p className="text-xs text-slate-400">ログインユーザー</p>
-          <p className="text-sm font-medium text-white">中田悠太</p>
+    <>
+      {/* モバイルヘッダー */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-[#3f0e40] flex items-center justify-between px-4 border-b border-white/10">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="p-2 -ml-2 rounded-lg hover:bg-white/10 transition-colors"
+        >
+          <Menu className="h-6 w-6 text-white" />
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center">
+            <Zap className="h-4 w-4 text-white" />
+          </div>
+          <span className="text-white font-bold">AdPilot</span>
         </div>
+        <DarkModeToggle />
       </div>
-    </aside>
+
+      {/* オーバーレイ（モバイル） */}
+      {isOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* サイドバー */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-72 lg:w-64 bg-[#3f0e40] flex flex-col transition-transform duration-300 ease-in-out",
+          "lg:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between h-14 px-4 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center shadow-lg">
+              <Zap className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-[15px] font-bold text-white tracking-tight">AdPilot</h1>
+              <p className="text-[10px] text-white/50 -mt-0.5">Campaign Intelligence</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="hidden lg:block">
+              <DarkModeToggle />
+            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              <X className="h-5 w-5 text-white" />
+            </button>
+          </div>
+        </div>
+
+        {/* ナビゲーション */}
+        <nav className="flex-1 overflow-y-auto py-4 px-2">
+          {navigation.map((category) => (
+            <div key={category.category} className="mb-5">
+              {/* カテゴリヘッダー */}
+              <div className="flex items-center gap-1.5 px-3 py-1 text-white/60 hover:text-white/90 cursor-pointer group">
+                <ChevronDown className="h-3 w-3 transition-transform" />
+                <span className="text-[13px] font-medium tracking-wide">
+                  {category.category}
+                </span>
+              </div>
+              
+              {/* アイテム */}
+              <ul className="mt-1 space-y-0.5">
+                {category.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-md px-3 py-2.5 lg:py-1.5 text-[15px] transition-all",
+                          isActive
+                            ? "bg-[#1164a3] text-white font-medium"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                        )}
+                      >
+                        <Icon className={cn(
+                          "h-5 w-5 lg:h-4 lg:w-4",
+                          isActive ? "text-white" : "text-white/50"
+                        )} />
+                        {item.name}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        {/* フッター - ユーザー情報 */}
+        <div className="p-3 border-t border-white/10">
+          <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-white/10 cursor-pointer">
+            <div className="relative">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center text-white font-bold text-sm">
+                悠
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#2eb67d] rounded-full border-2 border-[#3f0e40]"></div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">中田悠太</p>
+              <p className="text-xs text-white/50 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-[#2eb67d] rounded-full"></span>
+                アクティブ
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
-

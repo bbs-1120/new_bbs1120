@@ -4,102 +4,78 @@ import { Header } from "@/components/layout/header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { JudgmentBadge } from "@/components/ui/badge";
-import { useState } from "react";
-import { Search, Filter, Download } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Search, Download, RefreshCw } from "lucide-react";
 
-// 仮のデータ
-const mockResults = [
-  {
-    id: "1",
-    cpnKey: "営業_田中_化粧品A_初回_Meta_001_20241218_01_キャンペーンA",
-    cpnName: "キャンペーンA",
-    media: "Meta",
-    judgment: "停止",
-    todayProfit: -15000,
-    profit7Days: -45000,
-    roas7Days: 95,
-    consecutiveLossDays: 3,
-    reasons: ["連続赤字(3日)", "ROAS基準未達(95%)"],
-    recommendedAction: "広告配信を停止してください",
-    isRe: true,
-    isSendTarget: true,
-  },
-  {
-    id: "2",
-    cpnKey: "営業_佐藤_健康食品B_定期_TikTok_002_20241218_02_キャンペーンB",
-    cpnName: "キャンペーンB_Re",
-    media: "TikTok",
-    judgment: "継続",
-    todayProfit: 8500,
-    profit7Days: 32000,
-    roas7Days: 125,
-    consecutiveLossDays: 0,
-    reasons: ["7日間黒字", "ROAS基準達成(125%)"],
-    recommendedAction: "現状維持で継続してください",
-    isRe: true,
-    isSendTarget: false,
-  },
-  {
-    id: "3",
-    cpnKey: "営業_鈴木_美容C_お試し_YouTube_003_20241218_03_キャンペーンC",
-    cpnName: "キャンペーンC",
-    media: "YouTube",
-    judgment: "作り替え",
-    todayProfit: -5000,
-    profit7Days: -28000,
-    roas7Days: 102,
-    consecutiveLossDays: 4,
-    reasons: ["連続赤字(4日)"],
-    recommendedAction: "クリエイティブの作り替えを検討してください",
-    isRe: false,
-    isSendTarget: true,
-  },
-  {
-    id: "4",
-    cpnKey: "営業_山田_食品D_限定_LINE_004_20241218_04_キャンペーンD",
-    cpnName: "キャンペーンD",
-    media: "LINE",
-    judgment: "要確認",
-    todayProfit: 0,
-    profit7Days: -5000,
-    roas7Days: 108,
-    consecutiveLossDays: 1,
-    reasons: ["条件不一致"],
-    recommendedAction: "個別に状況を確認してください",
-    isRe: false,
-    isSendTarget: false,
-  },
-  {
-    id: "5",
-    cpnKey: "営業_高橋_サプリE_通常_Pangle_005_20241218_05_キャンペーンE",
-    cpnName: "キャンペーンE",
-    media: "Pangle",
-    judgment: "継続",
-    todayProfit: 12000,
-    profit7Days: 55000,
-    roas7Days: 135,
-    consecutiveLossDays: 0,
-    reasons: ["7日間黒字", "当日黒字", "ROAS基準達成(135%)"],
-    recommendedAction: "現状維持で継続してください",
-    isRe: false,
-    isSendTarget: false,
-  },
-];
+interface JudgmentResult {
+  cpnKey: string;
+  cpnName: string;
+  media: string;
+  judgment: string;
+  todayProfit: number;
+  profit7Days: number;
+  roas7Days: number;
+  consecutiveLossDays: number;
+  reasons: string[];
+  isRe: boolean;
+}
 
-const mediaOptions = ["全て", "Meta", "TikTok", "YouTube", "Pangle", "LINE"];
-const judgmentOptions = ["全て", "停止", "作り替え", "継続", "要確認"];
+const judgmentOptions = ["全て", "停止", "作り替え", "継続", "エラー"];
 
 export default function ResultsPage() {
+  const [results, setResults] = useState<JudgmentResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMedia, setSelectedMedia] = useState("全て");
   const [selectedJudgment, setSelectedJudgment] = useState("全て");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
-  const filteredResults = mockResults.filter((result) => {
+  // データを取得
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch("/api/judgment");
+        const data = await response.json();
+        
+        if (data.success) {
+          setResults(data.results);
+        }
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // 媒体リストを動的に取得（TikTok/Pangleは統合）
+  const mediaList = useMemo(() => {
+    const mediaSet = new Set(results.map(r => {
+      if (r.media === "TikTok" || r.media === "Pangle") return "TikTok/Pangle";
+      return r.media;
+    }));
+    return ["全て", ...Array.from(mediaSet).sort()];
+  }, [results]);
+
+  // 媒体別のカウント
+  const mediaCounts = useMemo(() => {
+    const counts: Record<string, number> = { "全て": results.length };
+    results.forEach(r => {
+      const mediaKey = (r.media === "TikTok" || r.media === "Pangle") ? "TikTok/Pangle" : r.media;
+      counts[mediaKey] = (counts[mediaKey] || 0) + 1;
+    });
+    return counts;
+  }, [results]);
+
+  const filteredResults = results.filter((result) => {
     const matchesSearch =
       result.cpnName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       result.cpnKey.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesMedia = selectedMedia === "全て" || result.media === selectedMedia;
+    const matchesMedia = selectedMedia === "全て" || 
+      (selectedMedia === "TikTok/Pangle" && (result.media === "TikTok" || result.media === "Pangle")) ||
+      result.media === selectedMedia;
     const matchesJudgment =
       selectedJudgment === "全て" || result.judgment === selectedJudgment;
     return matchesSearch && matchesMedia && matchesJudgment;
@@ -107,29 +83,94 @@ export default function ResultsPage() {
 
   const formatCurrency = (value: number) => {
     const sign = value < 0 ? "" : "+";
-    return `${sign}¥${value.toLocaleString("ja-JP")}`;
+    return `${sign}¥${Math.floor(value).toLocaleString("ja-JP")}`;
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+  const toggleSelect = (key: string) => {
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filteredResults.length) {
-      setSelectedIds([]);
+    if (selectedKeys.length === filteredResults.length) {
+      setSelectedKeys([]);
     } else {
-      setSelectedIds(filteredResults.map((r) => r.id));
+      setSelectedKeys(filteredResults.map((r) => r.cpnKey));
     }
   };
+
+  // 赤字日数の表示
+  const formatLossDays = (result: JudgmentResult) => {
+    if (result.todayProfit >= 0) {
+      return <span className="text-green-600 font-medium text-sm">当日プラス</span>;
+    } else if (result.consecutiveLossDays === 1) {
+      return <span className="text-red-600 font-medium text-sm">当日マイナス</span>;
+    } else if (result.consecutiveLossDays >= 2) {
+      return <span className="text-red-600 font-medium text-sm">マイナス{result.consecutiveLossDays}日</span>;
+    }
+    return <span className="text-slate-400">-</span>;
+  };
+
+  // 媒体のスタイル
+  const getMediaStyle = (media: string) => {
+    switch (media) {
+      case "Meta": return "bg-blue-100 text-blue-700 border-blue-200";
+      case "TikTok": return "bg-pink-100 text-pink-700 border-pink-200";
+      case "Pangle": return "bg-orange-100 text-orange-700 border-orange-200";
+      case "TikTok/Pangle": return "bg-gradient-to-r from-pink-100 to-orange-100 text-pink-700 border-pink-200";
+      case "YouTube": return "bg-red-100 text-red-700 border-red-200";
+      case "LINE": return "bg-green-100 text-green-700 border-green-200";
+      default: return "bg-slate-100 text-slate-700 border-slate-200";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <>
+        <Header title="判断結果" description="CPNの自動判定結果一覧" />
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
+          <span className="ml-3 text-slate-500">読み込み中...</span>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <Header
         title="仕分け結果"
-        description="CPN仕分け結果の一覧表示・フィルタ・手修正"
+        description={`CPN仕分け結果の一覧表示（${results.length}件）`}
       />
+
+      {/* 媒体タブ */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {mediaList.map((media) => (
+          <button
+            key={media}
+            onClick={() => setSelectedMedia(media)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+              selectedMedia === media
+                ? media === "全て"
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : getMediaStyle(media).replace("100", "600").replace("700", "white") + " bg-opacity-100"
+                : media === "全て"
+                  ? "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  : `${getMediaStyle(media)} hover:opacity-80`
+            }`}
+          >
+            {media}
+            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+              selectedMedia === media
+                ? "bg-white/20"
+                : "bg-black/10"
+            }`}>
+              {mediaCounts[media] || 0}
+            </span>
+          </button>
+        ))}
+      </div>
 
       {/* フィルターバー */}
       <Card className="mb-6">
@@ -145,32 +186,17 @@ export default function ResultsPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-slate-400" />
-            <select
-              value={selectedMedia}
-              onChange={(e) => setSelectedMedia(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {mediaOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === "全て" ? "媒体: 全て" : option}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedJudgment}
-              onChange={(e) => setSelectedJudgment(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {judgmentOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === "全て" ? "判定: 全て" : option}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedJudgment}
+            onChange={(e) => setSelectedJudgment(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {judgmentOptions.map((option) => (
+              <option key={option} value={option}>
+                {option === "全て" ? "判定: 全て" : option}
+              </option>
+            ))}
+          </select>
 
           <Button variant="secondary" size="sm">
             <Download className="mr-2 h-4 w-4" />
@@ -180,10 +206,10 @@ export default function ResultsPage() {
       </Card>
 
       {/* 選択アクション */}
-      {selectedIds.length > 0 && (
+      {selectedKeys.length > 0 && (
         <div className="mb-4 p-4 bg-indigo-50 rounded-lg flex items-center justify-between">
           <span className="text-sm text-indigo-700">
-            {selectedIds.length}件選択中
+            {selectedKeys.length}件選択中
           </span>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary">
@@ -198,6 +224,14 @@ export default function ResultsPage() {
 
       {/* 結果テーブル */}
       <Card>
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="font-medium text-slate-900">
+            {selectedMedia === "全て" ? "全媒体" : selectedMedia}
+            <span className="ml-2 text-slate-500 font-normal">
+              ({filteredResults.length}件)
+            </span>
+          </h3>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -206,7 +240,7 @@ export default function ResultsPage() {
                   <input
                     type="checkbox"
                     checked={
-                      selectedIds.length === filteredResults.length &&
+                      selectedKeys.length === filteredResults.length &&
                       filteredResults.length > 0
                     }
                     onChange={toggleSelectAll}
@@ -216,8 +250,13 @@ export default function ResultsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                   CPN名
                 </th>
+                {(selectedMedia === "全て" || selectedMedia === "TikTok/Pangle") && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                    媒体
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                  媒体
+                  Re
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                   判定
@@ -237,39 +276,53 @@ export default function ResultsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                   理由
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">
-                  送信
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredResults.map((result) => (
                 <tr
-                  key={result.id}
+                  key={result.cpnKey}
                   className={`hover:bg-slate-50 ${
-                    selectedIds.includes(result.id) ? "bg-indigo-50" : ""
+                    selectedKeys.includes(result.cpnKey) ? "bg-indigo-50" : ""
                   }`}
                 >
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(result.id)}
-                      onChange={() => toggleSelect(result.id)}
+                      checked={selectedKeys.includes(result.cpnKey)}
+                      onChange={() => toggleSelect(result.cpnKey)}
                       className="rounded border-slate-300"
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {result.cpnName}
-                      </p>
-                      <p className="text-xs text-slate-500 truncate max-w-[200px]">
-                        {result.cpnKey}
-                      </p>
-                    </div>
+                    <p className="text-sm font-medium text-slate-900">
+                      {result.cpnName}
+                    </p>
                   </td>
+                  {(selectedMedia === "全て" || selectedMedia === "TikTok/Pangle") && (
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        result.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                        result.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                        result.media === "Pangle" ? "bg-orange-100 text-orange-700" :
+                        result.media === "YouTube" ? "bg-red-100 text-red-700" :
+                        result.media === "LINE" ? "bg-green-100 text-green-700" :
+                        "bg-slate-100 text-slate-700"
+                      }`}>
+                        {result.media}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-4 py-3">
-                    <span className="text-sm text-slate-600">{result.media}</span>
+                    <span
+                      className={`text-xs font-medium px-2 py-1 rounded ${
+                        result.isRe
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {result.isRe ? "Re" : "-"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <JudgmentBadge judgment={result.judgment} />
@@ -294,19 +347,11 @@ export default function ResultsPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <span className="text-sm text-slate-600">
-                      {result.roas7Days}%
+                      {result.roas7Days.toFixed(1)}%
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span
-                      className={`text-sm font-medium ${
-                        result.consecutiveLossDays > 0
-                          ? "text-red-600"
-                          : "text-slate-600"
-                      }`}
-                    >
-                      {result.consecutiveLossDays}日
-                    </span>
+                    {formatLossDays(result)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -325,14 +370,6 @@ export default function ResultsPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={result.isSendTarget}
-                      onChange={() => {}}
-                      className="rounded border-slate-300"
-                    />
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -348,4 +385,3 @@ export default function ResultsPage() {
     </>
   );
 }
-
