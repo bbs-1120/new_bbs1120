@@ -109,6 +109,7 @@ export default function AnalysisPage() {
           cpnName: cpn.cpnName,
           media: cpn.media,
           campaignId: cpn.campaignId,
+          accountName: cpn.accountName, // 広告アカウント名を追加
           newBudget: budgetValue,
         }),
       });
@@ -155,6 +156,7 @@ export default function AnalysisPage() {
           cpnName: cpn.cpnName,
           media: cpn.media,
           campaignId: cpn.campaignId,
+          accountName: cpn.accountName, // 広告アカウント名を追加
           status: newStatus,
         }),
       });

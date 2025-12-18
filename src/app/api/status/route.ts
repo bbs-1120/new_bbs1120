@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
+import { getAdvertiserIdByAccountName } from "@/lib/advertiserMapping";
 
 interface StatusChangeRequest {
   cpnKey: string;
   cpnName: string;
   media: string;
   campaignId?: string;
+  accountName?: string;
   status: "active" | "paused"; // ON = active, OFF = paused
 }
 
 export async function POST(request: Request) {
   try {
     const body: StatusChangeRequest = await request.json();
-    const { cpnName, media, campaignId, status } = body;
+    const { cpnName, media, campaignId, accountName, status } = body;
 
-    console.log("Status change request:", { cpnName, media, campaignId, status });
+    console.log("Status change request:", { cpnName, media, campaignId, accountName, status });
 
     // 対象媒体かチェック
     if (!["Meta", "TikTok", "Pangle"].includes(media)) {
@@ -23,6 +25,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // 広告アカウント名から広告主IDを特定（TikTok/Pangle用）
+    let advertiserId: string | null = null;
+    if (accountName && (media === "TikTok" || media === "Pangle")) {
+      advertiserId = getAdvertiserIdByAccountName(accountName);
+      console.log(`Account name mapping: ${accountName} -> ${advertiserId}`);
+    }
+
     // 媒体別のAPI呼び出し
     let result;
     switch (media) {
@@ -30,10 +39,10 @@ export async function POST(request: Request) {
         result = await updateMetaStatus(campaignId, status);
         break;
       case "TikTok":
-        result = await updateTikTokStatus(campaignId, status);
+        result = await updateTikTokStatus(campaignId, status, advertiserId);
         break;
       case "Pangle":
-        result = await updatePangleStatus(campaignId, status);
+        result = await updatePangleStatus(campaignId, status, advertiserId);
         break;
       default:
         return NextResponse.json(
@@ -125,10 +134,11 @@ async function updateMetaStatus(
   return { success: false, error: lastError };
 }
 
-// TikTok Ads API - キャンペーンステータス変更 + Smart Performance Campaign対応
+// TikTok Ads API - キャンペーンステータス変更 + 広告アカウント名マッピング対応
 async function updateTikTokStatus(
   campaignId: string | undefined,
-  status: "active" | "paused"
+  status: "active" | "paused",
+  knownAdvertiserId: string | null = null
 ): Promise<{ success: boolean; error?: string }> {
   const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
   
@@ -143,9 +153,16 @@ async function updateTikTokStatus(
   // TikTok APIのステータス値: ENABLE = ON, DISABLE = OFF
   const tiktokStatus = status === "active" ? "ENABLE" : "DISABLE";
 
-  // 広告主IDリストを取得
-  const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
-  const advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
+  // 広告主IDリストを準備（knownAdvertiserIdがあれば先頭に）
+  let advertiserIds: string[] = [];
+  
+  if (knownAdvertiserId) {
+    advertiserIds = [knownAdvertiserId];
+    console.log("Using known advertiser ID from account name mapping");
+  } else {
+    const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+  }
 
   if (advertiserIds.length === 0) {
     return { success: false, error: "広告主IDが設定されていません" };
@@ -153,8 +170,9 @@ async function updateTikTokStatus(
 
   let lastError = "広告主IDが見つかりませんでした";
   
-  for (const advertiserId of advertiserIds) {
-    // 1. まず通常のステータス更新APIを試す
+  for (let i = 0; i < advertiserIds.length; i++) {
+    const advertiserId = advertiserIds[i].trim();
+    
     try {
       const response = await fetch(
         "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
@@ -165,7 +183,7 @@ async function updateTikTokStatus(
             "Access-Token": accessToken,
           },
           body: JSON.stringify({
-            advertiser_id: advertiserId.trim(),
+            advertiser_id: advertiserId,
             campaign_ids: [campaignId],
             opt_status: tiktokStatus,
           }),
@@ -179,17 +197,15 @@ async function updateTikTokStatus(
       } else {
         lastError = data.message || "TikTok APIエラー";
         
-        // Smart Performance Campaignエラーの場合はSPC APIを試す
         if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
-          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId.trim(), campaignId, tiktokStatus);
+          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, tiktokStatus);
           if (spcResult.success) {
             return { success: true };
           }
           lastError = spcResult.error || lastError;
         }
         
-        // 権限エラーやキャンペーンが見つからない場合は次の広告主IDを試す
-        if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
+        if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
           continue;
         }
       }
@@ -239,10 +255,11 @@ async function updateTikTokSpcStatus(
   }
 }
 
-// Pangle Ads API - キャンペーンステータス変更 + Smart Performance Campaign対応
+// Pangle Ads API - キャンペーンステータス変更 + 広告アカウント名マッピング対応
 async function updatePangleStatus(
   campaignId: string | undefined,
-  status: "active" | "paused"
+  status: "active" | "paused",
+  knownAdvertiserId: string | null = null
 ): Promise<{ success: boolean; error?: string }> {
   const accessToken = process.env.PANGLE_ACCESS_TOKEN || process.env.TIKTOK_ACCESS_TOKEN;
   
@@ -256,9 +273,15 @@ async function updatePangleStatus(
 
   const pangleStatus = status === "active" ? "ENABLE" : "DISABLE";
 
-  // 広告主IDリストを取得
-  const advertiserIdsStr = process.env.PANGLE_ADVERTISER_IDS || process.env.TIKTOK_ADVERTISER_IDS || "";
-  const advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
+  // 広告主IDリストを準備（knownAdvertiserIdがあれば先頭に）
+  let advertiserIds: string[] = [];
+  
+  if (knownAdvertiserId) {
+    advertiserIds = [knownAdvertiserId];
+  } else {
+    const advertiserIdsStr = process.env.PANGLE_ADVERTISER_IDS || process.env.TIKTOK_ADVERTISER_IDS || "";
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+  }
 
   if (advertiserIds.length === 0) {
     return { success: false, error: "広告主IDが設定されていません" };
@@ -266,8 +289,9 @@ async function updatePangleStatus(
 
   let lastError = "広告主IDが見つかりませんでした";
   
-  for (const advertiserId of advertiserIds) {
-    // 1. まず通常のステータス更新APIを試す
+  for (let i = 0; i < advertiserIds.length; i++) {
+    const advertiserId = advertiserIds[i].trim();
+    
     try {
       const response = await fetch(
         "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
@@ -278,7 +302,7 @@ async function updatePangleStatus(
             "Access-Token": accessToken,
           },
           body: JSON.stringify({
-            advertiser_id: advertiserId.trim(),
+            advertiser_id: advertiserId,
             campaign_ids: [campaignId],
             opt_status: pangleStatus,
           }),
@@ -292,16 +316,15 @@ async function updatePangleStatus(
       } else {
         lastError = data.message || "Pangle APIエラー";
         
-        // Smart Performance Campaignエラーの場合はSPC APIを試す
         if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
-          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId.trim(), campaignId, pangleStatus);
+          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, pangleStatus);
           if (spcResult.success) {
             return { success: true };
           }
           lastError = spcResult.error || lastError;
         }
         
-        if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
+        if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
           continue;
         }
       }
