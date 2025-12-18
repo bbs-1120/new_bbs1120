@@ -1,0 +1,291 @@
+"use client";
+
+import { Header } from "@/components/layout/header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { JudgmentBadge } from "@/components/ui/badge";
+import {
+  StopCircle,
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
+  PlayCircle,
+  Send,
+} from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+
+interface SummaryData {
+  stop: number;
+  replace: number;
+  continue: number;
+  check: number;
+  total: number;
+}
+
+interface JudgmentResult {
+  id: string;
+  cpnName: string;
+  media: { name: string };
+  judgment: string;
+  todayProfit: number;
+  reasons: string[];
+}
+
+export default function DashboardPage() {
+  const [summary, setSummary] = useState<SummaryData>({
+    stop: 0,
+    replace: 0,
+    continue: 0,
+    check: 0,
+    total: 0,
+  });
+  const [recentResults, setRecentResults] = useState<JudgmentResult[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // データを取得
+  const fetchData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/judgment");
+      const data = await response.json();
+      
+      if (data.success) {
+        setSummary(data.summary);
+        setRecentResults(data.results.slice(0, 10));
+      }
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // 仕分け実行
+  const handleExecute = async () => {
+    setIsExecuting(true);
+    setMessage(null);
+    
+    try {
+      const response = await fetch("/api/judgment", { method: "POST" });
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessage({ type: "success", text: `${data.count}件のCPNを仕分けしました` });
+        await fetchData();
+      } else {
+        setMessage({ type: "error", text: data.error || "仕分け処理に失敗しました" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "通信エラーが発生しました" });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  // データ同期
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setMessage(null);
+    
+    try {
+      const response = await fetch("/api/sync", { method: "POST" });
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessage({ 
+          type: "success", 
+          text: `${data.totalRows}件のデータを同期しました（新規: ${data.inserted}, 更新: ${data.updated}）` 
+        });
+      } else {
+        setMessage({ type: "error", text: data.error || "同期処理に失敗しました" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "通信エラーが発生しました" });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const formatCurrency = (value: number | { toNumber?: () => number }) => {
+    const num = typeof value === "number" ? value : (value?.toNumber?.() ?? 0);
+    const sign = num < 0 ? "-" : "+";
+    const absValue = Math.abs(num).toLocaleString("ja-JP");
+    return `${sign}¥${absValue}`;
+  };
+
+  return (
+    <>
+      <Header
+        title="ダッシュボード"
+        description="CPN仕分け結果のサマリーと最新状況"
+      />
+
+      {/* メッセージ表示 */}
+      {message && (
+        <div
+          className={`mb-6 p-4 rounded-lg ${
+            message.type === "success"
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-red-50 text-red-700 border border-red-200"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
+      {/* アクションボタン */}
+      <div className="flex gap-4 mb-8">
+        <Button size="lg" onClick={handleExecute} loading={isExecuting}>
+          <PlayCircle className="mr-2 h-5 w-5" />
+          仕分け実行
+        </Button>
+        <Button size="lg" variant="secondary" onClick={handleSync} loading={isSyncing}>
+          <RefreshCw className="mr-2 h-5 w-5" />
+          データ同期
+        </Button>
+        <Button size="lg" variant="secondary" onClick={() => window.location.href = "/send"}>
+          <Send className="mr-2 h-5 w-5" />
+          Chatwork送信
+        </Button>
+      </div>
+
+      {/* サマリーカード */}
+      <div className="grid grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">停止</p>
+                <p className="text-3xl font-bold text-red-600">{summary.stop}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                <StopCircle className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">作り替え</p>
+                <p className="text-3xl font-bold text-orange-600">{summary.replace}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                <RefreshCw className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">継続</p>
+                <p className="text-3xl font-bold text-green-600">{summary.continue}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">要確認</p>
+                <p className="text-3xl font-bold text-yellow-600">{summary.check}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-yellow-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 最新の仕分け結果 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>最新の仕分け結果（{summary.total}件）</CardTitle>
+        </CardHeader>
+        {recentResults.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    CPN名
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    媒体
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    判定
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    当日利益
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    理由
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {recentResults.map((result) => (
+                  <tr key={result.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-medium text-slate-900 truncate max-w-xs">
+                        {result.cpnName}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-slate-600">{result.media.name}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <JudgmentBadge judgment={result.judgment} />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span
+                        className={`text-sm font-medium ${
+                          Number(result.todayProfit) >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {formatCurrency(result.todayProfit)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {result.reasons.map((reason, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600"
+                          >
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <CardContent>
+            <p className="text-center text-slate-500 py-8">
+              まだ仕分け結果がありません。「データ同期」→「仕分け実行」の順に操作してください。
+            </p>
+          </CardContent>
+        )}
+      </Card>
+    </>
+  );
+}
