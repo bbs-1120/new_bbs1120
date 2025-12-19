@@ -90,40 +90,38 @@ function normalizeMediaName(media: string): string {
 }
 
 /**
- * CSV_当日精査用 シートからデータを取得
+ * 突き合わせ_当日CPN一覧 シートからデータを取得
  * 「新規グロース部_悠太」を含む行のみ抽出
  * 
- * カラム構成:
- * B(1): 日付+キャンペーン名
- * C(2): 日付
- * D(3): キャンペーン名
- * E(4): Cost
- * F(5): Imp.
- * G(6): Clicks
- * H(7): Clicks(YT)
- * I(8): MCV
- * J(9): CV
- * K(10): 当日単価
- * L(11): (空)
- * M(12): 媒体名
- * N(13): 所属TM
- * O(14): 担当者名
- * P(15): 案件名
- * Q(16): 案件名_オファー名
- * R(17): 売上
- * S(18): アカウント名
- * T(19): CampaignBudget
- * U(20): Status
- * V(21): CPID
- * W(22): 予算スケジューリング
+ * カラム構成（H列から開始）:
+ * H(7): Today（日付）
+ * I(8): campaign_name（キャンペーン名）
+ * J(9): Cost（消化）
+ * K(10): Imp.
+ * L(11): Clicks
+ * M(12): Clicks(YT)
+ * N(13): 予算スケジューリング
+ * O(14): アカウント名
+ * P(15): 日予算
+ * Q(16): CPNステータス
+ * R(17): CPID
+ * T(19): 所属TM
+ * U(20): 担当者名
+ * V(21): 案件名
+ * W(22): オファー名
+ * X(23): 媒体名
+ * AU(46): 当日単価
+ * AY(50): 売上
+ * BB(53): MCV
+ * BC(54): CV
  */
 export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[]> {
   const sheets = getGoogleSheetsClient();
 
-  // CSV_当日精査用シートからデータを取得
+  // 突き合わせ_当日CPN一覧シートからデータを取得
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: "CSV_当日精査用!A:W",
+    range: "突き合わせ_当日CPN一覧!A:CH",
   });
 
   const rows = response.data.values;
@@ -136,45 +134,46 @@ export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[
   // ヘッダー行をスキップ（1行目）
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || row.length < 10) continue;
+    if (!row || row.length < 55) continue; // BC列(54)まで必要
 
-    const cpnName = parseValue(row[3]); // D列: キャンペーン名
+    const cpnName = parseValue(row[8]); // I列: campaign_name
     
     // 「新規グロース部_悠太」を含む行のみ抽出
     if (!cpnName.includes("新規グロース部_悠太")) continue;
 
-    const media = parseValue(row[12]); // M列: 媒体名
-    const spend = parseNumber(row[4]); // E列: Cost
-    const revenue = parseNumber(row[17]); // R列: 売上（シートの値を直接使用）
-    const profit = revenue - spend; // 利益 = 売上 - Cost（シンプルで正確）
-    const cv = Math.round(parseNumber(row[9])); // J列: CV（実成果）
-    const unitPrice = parseNumber(row[10]); // K列: 当日単価
+    const media = parseValue(row[23]); // X列: 媒体名
+    const spend = parseNumber(row[9]); // J列: Cost（消化）
+    const revenue = parseNumber(row[50]); // AY列: 売上
+    const profit = revenue - spend; // 利益 = 売上 - Cost
+    const cv = Math.round(parseNumber(row[54])); // BC列: CV（実成果）
+    const mcv = Math.round(parseNumber(row[53])); // BB列: MCV
+    const unitPrice = parseNumber(row[46]); // AU列: 当日単価
 
     data.push({
       media: normalizeMediaName(media),
-      cpnKey: parseValue(row[1]), // B列: 日付+キャンペーン名
+      cpnKey: `${parseValue(row[7])}_${cpnName}`, // 日付+キャンペーン名
       cpnName,
-      date: parseDate(row[2]), // C列: 日付
+      date: parseDate(row[7]), // H列: Today（日付）
       spend,
       revenue,
       profit,
       roas: spend > 0 ? (revenue / spend) * 100 : 0,
-      cv, // J列: CV（実成果）
-      mcv: Math.round(parseNumber(row[8])), // I列: MCV
-      impressions: Math.round(parseNumber(row[5])), // F列: Imp.
-      clicks: Math.round(parseNumber(row[6])), // G列: Clicks
+      cv,
+      mcv,
+      impressions: Math.round(parseNumber(row[10])), // K列: Imp.
+      clicks: Math.round(parseNumber(row[11])), // L列: Clicks
       cpm: 0,
       cpc: 0,
-      unitPrice, // K列: 当日単価
-      teamName: parseValue(row[13]), // N列: 所属TM
-      personName: parseValue(row[14]), // O列: 担当者名
-      projectName: parseValue(row[15]), // P列: 案件名
-      projectOfferName: parseValue(row[16]), // Q列: 案件名_オファー名
-      accountName: parseValue(row[18]), // S列: アカウント名
-      campaignBudget: parseValue(row[19]), // T列: CampaignBudget
-      status: parseValue(row[20]), // U列: Status
-      campaignId: parseValue(row[21]), // V列: CPID（キャンペーンID）
-      budgetSchedule: parseValue(row[22]), // W列: 予算スケジューリング
+      unitPrice,
+      teamName: parseValue(row[19]), // T列: 所属TM
+      personName: parseValue(row[20]), // U列: 担当者名
+      projectName: parseValue(row[21]), // V列: 案件名
+      projectOfferName: parseValue(row[22]), // W列: オファー名
+      accountName: parseValue(row[14]), // O列: アカウント名
+      campaignBudget: parseValue(row[15]), // P列: 日予算
+      status: parseValue(row[16]), // Q列: CPNステータス
+      campaignId: parseValue(row[17]), // R列: CPID
+      budgetSchedule: parseValue(row[13]), // N列: 予算スケジューリング
     });
   }
 
