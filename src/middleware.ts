@@ -6,9 +6,10 @@ export default auth((req) => {
   const isLoginPage = req.nextUrl.pathname === "/login";
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
   const isPublicApi = req.nextUrl.pathname.startsWith("/api/status");
+  const isScheduledApi = req.nextUrl.pathname.startsWith("/api/scheduled-send");
 
-  // 認証APIとステータスAPIは常に許可
-  if (isAuthApi || isPublicApi) {
+  // 認証API、ステータスAPI、スケジュール送信APIは常に許可
+  if (isAuthApi || isPublicApi || isScheduledApi) {
     return NextResponse.next();
   }
 
