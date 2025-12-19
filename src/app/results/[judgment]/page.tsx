@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { JudgmentBadge } from "@/components/ui/badge";
 import { useState, useEffect, use } from "react";
-import { ArrowLeft, Download, RefreshCw } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Copy, Check } from "lucide-react";
 import Link from "next/link";
 
 interface JudgmentResult {
@@ -19,6 +19,7 @@ interface JudgmentResult {
   consecutiveLossDays: number;
   reasons: string[];
   isRe: boolean;
+  accountName?: string;
 }
 
 const judgmentConfig: Record<string, { title: string; description: string; color: string }> = {
@@ -58,6 +59,42 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
 
   const config = judgmentConfig[judgment] || judgmentConfig.error;
   const judgmentLabel = judgmentMap[judgment] || "エラー";
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // コピー機能
+  const handleCopy = async (result: JudgmentResult, type: "account" | "cpn" | "both") => {
+    let text = "";
+    if (type === "account") {
+      text = result.accountName || "";
+    } else if (type === "cpn") {
+      text = result.cpnName;
+    } else {
+      text = `${result.accountName || ""}\t${result.cpnName}`;
+    }
+    
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(`${result.cpnKey}-${type}`);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  // 全件コピー機能
+  const handleCopyAll = async () => {
+    const text = results
+      .map((r) => `${r.accountName || ""}\t${r.cpnName}`)
+      .join("\n");
+    
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey("all");
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy all:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -132,10 +169,29 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
             </Button>
           </Link>
         </div>
-        <Button variant="secondary" size="sm">
-          <Download className="mr-2 h-4 w-4" />
-          CSV出力
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="secondary" 
+            size="sm"
+            onClick={handleCopyAll}
+          >
+            {copiedKey === "all" ? (
+              <>
+                <Check className="mr-2 h-4 w-4 text-green-600" />
+                コピー完了
+              </>
+            ) : (
+              <>
+                <Copy className="mr-2 h-4 w-4" />
+                全件コピー
+              </>
+            )}
+          </Button>
+          <Button variant="secondary" size="sm">
+            <Download className="mr-2 h-4 w-4" />
+            CSV出力
+          </Button>
+        </div>
       </div>
 
       {/* 結果テーブル */}
@@ -145,6 +201,12 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">
+                    コピー
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                    アカウント名
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                     CPN名
                   </th>
@@ -174,6 +236,28 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
               <tbody className="divide-y divide-slate-200">
                 {results.map((result) => (
                   <tr key={result.cpnKey} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleCopy(result, "both")}
+                          className={`p-1.5 rounded transition-colors ${
+                            copiedKey === `${result.cpnKey}-both`
+                              ? "bg-green-100 text-green-600"
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                          }`}
+                          title="アカウント名とCPN名をコピー"
+                        >
+                          {copiedKey === `${result.cpnKey}-both` ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-sm text-slate-600">{result.accountName || "-"}</p>
+                    </td>
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-slate-900">{result.cpnName}</p>
                     </td>

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       // マイ分析と同じデータソースからデータを取得
       const analysisData = await getFullAnalysisData();
 
-      // CPN データを判定用の形式に変換
+      // CPN データを判定用の形式に変換（accountName追加）
       const cpnList: AnalysisCpnData[] = analysisData.map((cpn: {
         cpnKey: string;
         cpnName: string;
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
         profit7Days: number;
         roas7Days: number;
         consecutiveLoss: number;
+        accountName?: string;
       }) => ({
         cpnKey: cpn.cpnKey,
         cpnName: cpn.cpnName,
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
         profit7Days: cpn.profit7Days,
         roas7Days: cpn.roas7Days,
         consecutiveLoss: cpn.consecutiveLoss,
+        accountName: cpn.accountName || "",
       }));
 
       // 判定実行
@@ -83,7 +85,7 @@ export async function POST() {
     // マイ分析と同じデータソースからデータを取得
     const analysisData = await getFullAnalysisData();
 
-    // CPN データを判定用の形式に変換
+    // CPN データを判定用の形式に変換（accountName追加）
     const cpnList: AnalysisCpnData[] = analysisData.map((cpn: {
       cpnKey: string;
       cpnName: string;
@@ -92,6 +94,7 @@ export async function POST() {
       profit7Days: number;
       roas7Days: number;
       consecutiveLoss: number;
+      accountName?: string;
     }) => ({
       cpnKey: cpn.cpnKey,
       cpnName: cpn.cpnName,
@@ -100,6 +103,7 @@ export async function POST() {
       profit7Days: cpn.profit7Days,
       roas7Days: cpn.roas7Days,
       consecutiveLoss: cpn.consecutiveLoss,
+      accountName: cpn.accountName || "",
     }));
 
     // 判定実行

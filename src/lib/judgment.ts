@@ -30,6 +30,7 @@ export interface AnalysisCpnData {
   profit7Days: number;   // 7日間利益
   roas7Days: number;     // 7日間ROAS
   consecutiveLoss: number; // 連続赤字日数
+  accountName?: string;  // アカウント名
 }
 
 // 判定結果型
@@ -44,6 +45,7 @@ export interface JudgmentResultData {
   judgment: JudgmentType;
   reasons: string[];
   isRe: boolean;
+  accountName?: string;  // アカウント名
 }
 
 /**
@@ -187,6 +189,7 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
       judgment: stopResult.judgment,
       reasons: stopResult.reasons,
       isRe,
+      accountName: cpnData.accountName,
     };
   }
 
@@ -209,6 +212,7 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
       judgment: JUDGMENT.REPLACE,
       reasons,
       isRe,
+      accountName: cpnData.accountName,
     };
   }
 
@@ -226,6 +230,7 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
       judgment: continueResult.judgment,
       reasons: continueResult.reasons,
       isRe,
+      accountName: cpnData.accountName,
     };
   }
 
@@ -243,6 +248,7 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
       judgment: replaceResult.judgment,
       reasons: replaceResult.reasons,
       isRe,
+      accountName: cpnData.accountName,
     };
   }
 
@@ -258,6 +264,7 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
     judgment: JUDGMENT.ERROR,
     reasons: [REASON.NO_MATCH],
     isRe,
+    accountName: cpnData.accountName,
   };
 }
 
