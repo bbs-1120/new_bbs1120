@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 媒体マスタ
+model Media {
+  id        String   @id @default(uuid())
+  name      String   @unique // Meta, TikTok, YouTube, Pangle, LINE
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cpnDailyData    CpnDailyData[]
+  judgmentResults JudgmentResult[]
+
+  @@map("media")
+}
+
+// CPN日次データ
+model CpnDailyData {
+  id        String   @id @default(uuid())
+  cpnKey    String   @map("cpn_key")
+  cpnName   String   @map("cpn_name")
+  mediaId   String   @map("media_id")
+  media     Media    @relation(fields: [mediaId], references: [id])
+  date      DateTime @db.Date
+  spend     Decimal  @db.Decimal(12, 2) // 消化金額
+  revenue   Decimal  @db.Decimal(12, 2) // 売上
+  profit    Decimal  @db.Decimal(12, 2) // 利益
+  roas      Decimal  @db.Decimal(8, 2)  // ROAS
+  cv        Int      @default(0)        // CV数
+  mcv       Int      @default(0)        // MCV数
+  cpm       Decimal  @db.Decimal(10, 2) // CPM
+  cpc       Decimal  @db.Decimal(10, 2) // CPC
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([cpnKey, date])
+  @@index([cpnKey])
+  @@index([date])
+  @@index([mediaId])
+  @@map("cpn_daily_data")
+}
+
+// 判定結果
+model JudgmentResult {
+  id                   String   @id @default(uuid())
+  cpnKey               String   @map("cpn_key")
+  cpnName              String   @map("cpn_name")
+  mediaId              String   @map("media_id")
+  media                Media    @relation(fields: [mediaId], references: [id])
+  judgmentDate         DateTime @db.Date @map("judgment_date")
+  todayProfit          Decimal  @db.Decimal(12, 2) @map("today_profit")
+  profit7Days          Decimal  @db.Decimal(12, 2) @map("profit_7days")
+  roas7Days            Decimal  @db.Decimal(8, 2) @map("roas_7days")
+  consecutiveLossDays  Int      @map("consecutive_loss_days")
+  judgment             String   // 停止, 作り替え, 継続, 要確認
+  reasons              String[] // 理由タグ
+  recommendedAction    String   @map("recommended_action")
+  manualOverride       String?  @map("manual_override") // 手修正結果
+  isSendTarget         Boolean  @default(false) @map("is_send_target")
+  isRe                 Boolean  @map("is_re") // Reあり/なし
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([cpnKey, judgmentDate])
+  @@index([judgmentDate])
+  @@index([judgment])
+  @@map("judgment_results")
+}
+
+// 設定
+model Setting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+// 実行履歴
+model ExecutionLog {
+  id           String   @id @default(uuid())
+  executedAt   DateTime @default(now()) @map("executed_at")
+  executedBy   String   @map("executed_by")
+  actionType   String   @map("action_type") // sync, judgment, send
+  targetCount  Int      @map("target_count")
+  ruleVersion  String   @map("rule_version")
+  status       String   // success, error
+  errorMessage String?  @map("error_message")
+
+  @@index([executedAt])
+  @@map("execution_logs")
+}
