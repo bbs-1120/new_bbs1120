@@ -124,7 +124,7 @@ async function updateMetaBudget(
   for (const accessToken of tokens) {
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${campaignId}`,
+        `https://graph.facebook.com/v22.0/${campaignId}`,
         {
           method: "POST",
           headers: {

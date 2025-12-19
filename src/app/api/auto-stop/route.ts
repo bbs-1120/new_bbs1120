@@ -5,7 +5,7 @@ import { getFullAnalysisData } from "@/lib/googleSheets";
 async function stopMetaCampaign(campaignId: string, accessToken: string): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${campaignId}`,
+      `https://graph.facebook.com/v22.0/${campaignId}`,
       {
         method: "POST",
         headers: {
