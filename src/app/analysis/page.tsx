@@ -146,7 +146,37 @@ export default function AnalysisPage() {
   } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [nextRefreshIn, setNextRefreshIn] = useState(20 * 60); // 秒
+  const [nextRefreshIn, setNextRefreshIn] = useState(5 * 60); // 5分に変更
+  
+  // リアルタイム速報用state
+  const [realtimeData, setRealtimeData] = useState<{
+    spend: number;
+    revenue: number;
+    profit: number;
+    roas: number;
+    mcv: number;
+    cv: number;
+    cpnCount: number;
+  } | null>(null);
+  const [realtimeUpdatedAt, setRealtimeUpdatedAt] = useState<string | null>(null);
+  const [realtimeLoading, setRealtimeLoading] = useState(false);
+
+  // リアルタイム速報を取得
+  const fetchRealtimeData = async () => {
+    setRealtimeLoading(true);
+    try {
+      const response = await fetch("/api/realtime");
+      const data = await response.json();
+      if (data.success) {
+        setRealtimeData(data.realtime);
+        setRealtimeUpdatedAt(data.updatedAt);
+      }
+    } catch (err) {
+      console.error("Failed to fetch realtime data:", err);
+    } finally {
+      setRealtimeLoading(false);
+    }
+  };
 
   // 比較データを取得
   const fetchComparisonData = async () => {
@@ -455,7 +485,7 @@ export default function AnalysisPage() {
         
         // 最終更新時刻を記録
         setLastUpdated(new Date());
-        setNextRefreshIn(20 * 60); // 次の更新までリセット
+        setNextRefreshIn(5 * 60); // 5分に変更
       } else {
         setError(data.error || "データの取得に失敗しました");
       }
@@ -481,13 +511,23 @@ export default function AnalysisPage() {
           : fetchData(), // キャッシュがない場合はローディング表示
         fetchGptAdvice(),
         fetchComparisonData(),
+        fetchRealtimeData(), // リアルタイム速報も取得
       ]);
     };
     
     loadAllData();
   }, []);
 
-  // 20分ごとの自動更新
+  // 1分ごとにリアルタイム速報を更新
+  useEffect(() => {
+    const realtimeInterval = setInterval(() => {
+      fetchRealtimeData();
+    }, 60 * 1000); // 1分ごと
+
+    return () => clearInterval(realtimeInterval);
+  }, []);
+
+  // 5分ごとの自動更新
   useEffect(() => {
     if (!autoRefreshEnabled) return;
 
@@ -497,7 +537,8 @@ export default function AnalysisPage() {
         if (prev <= 1) {
           // 0になったらデータを更新
           fetchData(true);
-          return 20 * 60; // 20分にリセット
+          fetchRealtimeData(); // リアルタイムも更新
+          return 5 * 60; // 5分にリセット
         }
         return prev - 1;
       });
@@ -674,6 +715,70 @@ export default function AnalysisPage() {
           </div>
         </div>
       </div>
+
+      {/* 🔴 リアルタイム速報セクション */}
+      {realtimeData && (
+        <div className="mb-4 lg:mb-6">
+          <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-xl p-4 lg:p-6 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
+                <h3 className="font-bold text-lg lg:text-xl">📡 リアルタイム速報</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs lg:text-sm opacity-80">
+                  {realtimeUpdatedAt && `最終更新: ${realtimeUpdatedAt}`}
+                </span>
+                <button
+                  onClick={fetchRealtimeData}
+                  disabled={realtimeLoading}
+                  className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-medium transition-colors"
+                >
+                  {realtimeLoading ? "更新中..." : "更新"}
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+              {/* 当日利益 */}
+              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
+                <div className="text-xs lg:text-sm opacity-80 mb-1">当日利益</div>
+                <div className={`text-xl lg:text-2xl font-bold ${realtimeData.profit >= 0 ? "text-green-300" : "text-red-200"}`}>
+                  {realtimeData.profit >= 0 ? "+" : ""}{formatCurrency(realtimeData.profit)}
+                </div>
+              </div>
+              
+              {/* 消化 */}
+              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
+                <div className="text-xs lg:text-sm opacity-80 mb-1">消化</div>
+                <div className="text-xl lg:text-2xl font-bold">
+                  {formatCurrency(realtimeData.spend)}
+                </div>
+              </div>
+              
+              {/* ROAS */}
+              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
+                <div className="text-xs lg:text-sm opacity-80 mb-1">ROAS</div>
+                <div className="text-xl lg:text-2xl font-bold">
+                  {realtimeData.roas.toFixed(1)}%
+                </div>
+              </div>
+              
+              {/* MCV */}
+              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
+                <div className="text-xs lg:text-sm opacity-80 mb-1">MCV / CV</div>
+                <div className="text-xl lg:text-2xl font-bold">
+                  {realtimeData.mcv} / {realtimeData.cv}
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-3 text-xs opacity-70 text-center">
+              ※ 1分ごとに自動更新 | 稼働CPN: {realtimeData.cpnCount}件
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Meta利益アラート */}
       {mediaList.length > 0 && (
