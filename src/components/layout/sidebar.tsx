@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   ListChecks,
@@ -19,6 +20,7 @@ import {
   Menu,
   X,
   Clock,
+  LogOut,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -104,6 +106,69 @@ function SidebarClock() {
       <div className="text-xs text-white/50 mt-0.5">
         {date}
       </div>
+    </div>
+  );
+}
+
+// ユーザープロフィールコンポーネント
+function UserProfile() {
+  const { data: session } = useSession();
+  const [showLogout, setShowLogout] = useState(false);
+
+  if (!session?.user) {
+    return (
+      <div className="p-3 border-t border-white/10">
+        <div className="flex items-center gap-3 rounded-md px-2 py-2">
+          <div className="w-9 h-9 rounded-lg bg-white/10 animate-pulse"></div>
+          <div className="flex-1">
+            <div className="h-4 bg-white/10 rounded animate-pulse mb-1"></div>
+            <div className="h-3 bg-white/10 rounded animate-pulse w-1/2"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const userName = session.user.name || session.user.email?.split("@")[0] || "ユーザー";
+  const userInitial = userName.charAt(0).toUpperCase();
+
+  return (
+    <div className="p-3 border-t border-white/10">
+      <div 
+        className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-white/10 cursor-pointer"
+        onClick={() => setShowLogout(!showLogout)}
+      >
+        <div className="relative">
+          {session.user.image ? (
+            <img
+              src={session.user.image}
+              alt={userName}
+              className="w-9 h-9 rounded-lg object-cover"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center text-white font-bold text-sm">
+              {userInitial}
+            </div>
+          )}
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#2eb67d] rounded-full border-2 border-[#3f0e40]"></div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white truncate">{userName}</p>
+          <p className="text-xs text-white/50 truncate">
+            {session.user.email}
+          </p>
+        </div>
+      </div>
+      
+      {showLogout && (
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          ログアウト
+        </button>
+      )}
     </div>
   );
 }
@@ -234,23 +299,7 @@ export function Sidebar() {
         </nav>
 
         {/* フッター - ユーザー情報 */}
-        <div className="p-3 border-t border-white/10">
-          <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-white/10 cursor-pointer">
-            <div className="relative">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center text-white font-bold text-sm">
-                悠
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#2eb67d] rounded-full border-2 border-[#3f0e40]"></div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">中田悠太</p>
-              <p className="text-xs text-white/50 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-[#2eb67d] rounded-full"></span>
-                アクティブ
-              </p>
-            </div>
-          </div>
-        </div>
+        <UserProfile />
       </aside>
     </>
   );

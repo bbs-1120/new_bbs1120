@@ -3,6 +3,7 @@ import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { DataProvider } from "@/components/providers/data-provider";
+import { SessionProvider } from "@/components/providers/session-provider";
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
@@ -45,14 +46,16 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={`${notoSansJP.variable} font-sans antialiased bg-[#f8f8f8]`}>
-        <DataProvider>
-          <Sidebar />
-          <main className="lg:pl-64">
-            <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
-              {children}
-            </div>
-          </main>
-        </DataProvider>
+        <SessionProvider>
+          <DataProvider>
+            <Sidebar />
+            <main className="lg:pl-64">
+              <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
+                {children}
+              </div>
+            </main>
+          </DataProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,37 +7,91 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 媒体マスタ
-model Media {
-  id        String   @id @default(uuid())
-  name      String   @unique // Meta, TikTok, YouTube, Pangle, LINE
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+// ========== NextAuth 認証用テーブル ==========
 
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  role          String    @default("user") // user, admin
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ========== アプリケーション用テーブル ==========
+
+model Media {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
   cpnDailyData    CpnDailyData[]
   judgmentResults JudgmentResult[]
 
   @@map("media")
 }
 
-// CPN日次データ
 model CpnDailyData {
   id        String   @id @default(uuid())
   cpnKey    String   @map("cpn_key")
   cpnName   String   @map("cpn_name")
   mediaId   String   @map("media_id")
-  media     Media    @relation(fields: [mediaId], references: [id])
   date      DateTime @db.Date
-  spend     Decimal  @db.Decimal(12, 2) // 消化金額
-  revenue   Decimal  @db.Decimal(12, 2) // 売上
-  profit    Decimal  @db.Decimal(12, 2) // 利益
-  roas      Decimal  @db.Decimal(8, 2)  // ROAS
-  cv        Int      @default(0)        // CV数
-  mcv       Int      @default(0)        // MCV数
-  cpm       Decimal  @db.Decimal(10, 2) // CPM
-  cpc       Decimal  @db.Decimal(10, 2) // CPC
+  spend     Decimal  @db.Decimal(12, 2)
+  revenue   Decimal  @db.Decimal(12, 2)
+  profit    Decimal  @db.Decimal(12, 2)
+  roas      Decimal  @db.Decimal(8, 2)
+  cv        Int      @default(0)
+  mcv       Int      @default(0)
+  cpm       Decimal  @db.Decimal(10, 2)
+  cpc       Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  media     Media    @relation(fields: [mediaId], references: [id])
 
   @@unique([cpnKey, date])
   @@index([cpnKey])
@@ -49,26 +100,25 @@ model CpnDailyData {
   @@map("cpn_daily_data")
 }
 
-// 判定結果
 model JudgmentResult {
-  id                   String   @id @default(uuid())
-  cpnKey               String   @map("cpn_key")
-  cpnName              String   @map("cpn_name")
-  mediaId              String   @map("media_id")
-  media                Media    @relation(fields: [mediaId], references: [id])
-  judgmentDate         DateTime @db.Date @map("judgment_date")
-  todayProfit          Decimal  @db.Decimal(12, 2) @map("today_profit")
-  profit7Days          Decimal  @db.Decimal(12, 2) @map("profit_7days")
-  roas7Days            Decimal  @db.Decimal(8, 2) @map("roas_7days")
-  consecutiveLossDays  Int      @map("consecutive_loss_days")
-  judgment             String   // 停止, 作り替え, 継続, 要確認
-  reasons              String[] // 理由タグ
-  recommendedAction    String   @map("recommended_action")
-  manualOverride       String?  @map("manual_override") // 手修正結果
-  isSendTarget         Boolean  @default(false) @map("is_send_target")
-  isRe                 Boolean  @map("is_re") // Reあり/なし
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  cpnKey              String   @map("cpn_key")
+  cpnName             String   @map("cpn_name")
+  mediaId             String   @map("media_id")
+  judgmentDate        DateTime @map("judgment_date") @db.Date
+  todayProfit         Decimal  @map("today_profit") @db.Decimal(12, 2)
+  profit7Days         Decimal  @map("profit_7days") @db.Decimal(12, 2)
+  roas7Days           Decimal  @map("roas_7days") @db.Decimal(8, 2)
+  consecutiveLossDays Int      @map("consecutive_loss_days")
+  judgment            String
+  reasons             String[]
+  recommendedAction   String   @map("recommended_action")
+  manualOverride      String?  @map("manual_override")
+  isSendTarget        Boolean  @default(false) @map("is_send_target")
+  isRe                Boolean  @map("is_re")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  media               Media    @relation(fields: [mediaId], references: [id])
 
   @@unique([cpnKey, judgmentDate])
   @@index([judgmentDate])
@@ -76,7 +126,6 @@ model JudgmentResult {
   @@map("judgment_results")
 }
 
-// 設定
 model Setting {
   id          String   @id @default(uuid())
   key         String   @unique
@@ -87,15 +136,14 @@ model Setting {
   @@map("settings")
 }
 
-// 実行履歴
 model ExecutionLog {
   id           String   @id @default(uuid())
   executedAt   DateTime @default(now()) @map("executed_at")
   executedBy   String   @map("executed_by")
-  actionType   String   @map("action_type") // sync, judgment, send
+  actionType   String   @map("action_type")
   targetCount  Int      @map("target_count")
   ruleVersion  String   @map("rule_version")
-  status       String   // success, error
+  status       String
   errorMessage String?  @map("error_message")
 
   @@index([executedAt])
