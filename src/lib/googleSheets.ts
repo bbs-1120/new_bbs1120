@@ -145,14 +145,10 @@ export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[
 
     const media = parseValue(row[12]); // M列: 媒体名
     const spend = parseNumber(row[4]); // E列: Cost
+    const revenue = parseNumber(row[17]); // R列: 売上（シートの値を直接使用）
+    const profit = revenue - spend; // 利益 = 売上 - Cost（シンプルで正確）
     const cv = Math.round(parseNumber(row[9])); // J列: CV（実成果）
     const unitPrice = parseNumber(row[10]); // K列: 当日単価
-    const sheetRevenue = parseNumber(row[17]); // R列: 売上（フォールバック用）
-    
-    // 利益計算: CV × 当日単価 - Cost（より正確な計算）
-    // 当日単価が0の場合はシートの売上を使用
-    const revenue = unitPrice > 0 ? cv * unitPrice : sheetRevenue;
-    const profit = revenue - spend;
 
     data.push({
       media: normalizeMediaName(media),
@@ -251,14 +247,11 @@ export async function fetchHistoricalData(spreadsheetId: string): Promise<RawRow
 
     const media = parseValue(row[12]); // M列: 媒体名
     const spend = parseNumber(row[4]); // E列: Cost
+    const revenue = parseNumber(row[17]); // R列: 売上（シートの値を直接使用）
     const cv = Math.round(parseNumber(row[9])); // J列: CV（実成果）
     const unitPrice = parseNumber(row[10]); // K列: 前日単価
-    const sheetRevenue = parseNumber(row[17]); // R列: 売上（フォールバック用）
 
-    // 売上計算: CV × 単価（より正確）、単価が0ならシートの売上を使用
-    const revenue = unitPrice > 0 ? cv * unitPrice : sheetRevenue;
-
-    // 利益・ロアスは検出した列から取得、なければCV×単価ベースで計算
+    // 利益・ロアスは検出した列から取得、なければシートの売上ベースで計算
     let profit = 0;
     let roas = 0;
 
