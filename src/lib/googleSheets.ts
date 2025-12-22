@@ -91,6 +91,7 @@ function normalizeMediaName(media: string): string {
 
 /**
  * 突き合わせ_当日CPN一覧 シートからデータを取得
+ * Updated: 2024-12-22
  * 「新規グロース部_悠太」を含む行のみ抽出
  * 
  * カラム構成（H列から開始）:
