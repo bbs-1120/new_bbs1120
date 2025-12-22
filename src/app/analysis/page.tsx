@@ -147,36 +147,6 @@ export default function AnalysisPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [nextRefreshIn, setNextRefreshIn] = useState(5 * 60); // 5分に変更
-  
-  // リアルタイム速報用state
-  const [realtimeData, setRealtimeData] = useState<{
-    spend: number;
-    revenue: number;
-    profit: number;
-    roas: number;
-    mcv: number;
-    cv: number;
-    cpnCount: number;
-  } | null>(null);
-  const [realtimeUpdatedAt, setRealtimeUpdatedAt] = useState<string | null>(null);
-  const [realtimeLoading, setRealtimeLoading] = useState(false);
-
-  // リアルタイム速報を取得
-  const fetchRealtimeData = async () => {
-    setRealtimeLoading(true);
-    try {
-      const response = await fetch("/api/realtime");
-      const data = await response.json();
-      if (data.success) {
-        setRealtimeData(data.realtime);
-        setRealtimeUpdatedAt(data.updatedAt);
-      }
-    } catch (err) {
-      console.error("Failed to fetch realtime data:", err);
-    } finally {
-      setRealtimeLoading(false);
-    }
-  };
 
   // 比較データを取得
   const fetchComparisonData = async () => {
@@ -511,20 +481,10 @@ export default function AnalysisPage() {
           : fetchData(), // キャッシュがない場合はローディング表示
         fetchGptAdvice(),
         fetchComparisonData(),
-        fetchRealtimeData(), // リアルタイム速報も取得
       ]);
     };
     
     loadAllData();
-  }, []);
-
-  // 1分ごとにリアルタイム速報を更新
-  useEffect(() => {
-    const realtimeInterval = setInterval(() => {
-      fetchRealtimeData();
-    }, 60 * 1000); // 1分ごと
-
-    return () => clearInterval(realtimeInterval);
   }, []);
 
   // 5分ごとの自動更新
@@ -537,7 +497,6 @@ export default function AnalysisPage() {
         if (prev <= 1) {
           // 0になったらデータを更新
           fetchData(true);
-          fetchRealtimeData(); // リアルタイムも更新
           return 5 * 60; // 5分にリセット
         }
         return prev - 1;
@@ -668,14 +627,14 @@ export default function AnalysisPage() {
       <Header title="デイリーレポート" description="本日の広告パフォーマンス" />
 
       {/* 自動更新バー - モバイル対応 */}
-      <div className="mb-4 p-2 lg:p-3 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+      <div className="mb-4 p-2 lg:p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
         {/* モバイル: 縦積み / デスクトップ: 横並び */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
           {/* ステータス表示 */}
           <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
             <div className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? "bg-green-500 animate-pulse" : "bg-slate-400"}`} />
-              <span className="text-slate-600 dark:text-slate-300">
+              <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+              <span className="text-slate-600">
                 {autoRefreshEnabled ? "自動更新ON" : "OFF"}
               </span>
             </div>
@@ -696,8 +655,8 @@ export default function AnalysisPage() {
               onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
               className={`px-2 lg:px-3 py-1 text-xs font-medium rounded-full transition-colors ${
                 autoRefreshEnabled 
-                  ? "bg-green-100 text-green-700 hover:bg-green-200" 
-                  : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" 
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
               {autoRefreshEnabled ? "停止" : "開始"}
@@ -715,70 +674,6 @@ export default function AnalysisPage() {
           </div>
         </div>
       </div>
-
-      {/* 🔴 リアルタイム速報セクション */}
-      {realtimeData && (
-        <div className="mb-4 lg:mb-6">
-          <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-xl p-4 lg:p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
-                <h3 className="font-bold text-lg lg:text-xl">📡 リアルタイム速報</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs lg:text-sm opacity-80">
-                  {realtimeUpdatedAt && `最終更新: ${realtimeUpdatedAt}`}
-                </span>
-                <button
-                  onClick={fetchRealtimeData}
-                  disabled={realtimeLoading}
-                  className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-medium transition-colors"
-                >
-                  {realtimeLoading ? "更新中..." : "更新"}
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-              {/* 当日利益 */}
-              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
-                <div className="text-xs lg:text-sm opacity-80 mb-1">当日利益</div>
-                <div className={`text-xl lg:text-2xl font-bold ${realtimeData.profit >= 0 ? "text-green-300" : "text-red-200"}`}>
-                  {realtimeData.profit >= 0 ? "+" : ""}{formatCurrency(realtimeData.profit)}
-                </div>
-              </div>
-              
-              {/* 消化 */}
-              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
-                <div className="text-xs lg:text-sm opacity-80 mb-1">消化</div>
-                <div className="text-xl lg:text-2xl font-bold">
-                  {formatCurrency(realtimeData.spend)}
-                </div>
-              </div>
-              
-              {/* ROAS */}
-              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
-                <div className="text-xs lg:text-sm opacity-80 mb-1">ROAS</div>
-                <div className="text-xl lg:text-2xl font-bold">
-                  {realtimeData.roas.toFixed(1)}%
-                </div>
-              </div>
-              
-              {/* MCV */}
-              <div className="bg-white/10 rounded-lg p-3 lg:p-4">
-                <div className="text-xs lg:text-sm opacity-80 mb-1">MCV / CV</div>
-                <div className="text-xl lg:text-2xl font-bold">
-                  {realtimeData.mcv} / {realtimeData.cv}
-                </div>
-              </div>
-            </div>
-            
-            <div className="mt-3 text-xs opacity-70 text-center">
-              ※ 1分ごとに自動更新 | 稼働CPN: {realtimeData.cpnCount}件
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Meta利益アラート */}
       {mediaList.length > 0 && (
@@ -860,9 +755,9 @@ export default function AnalysisPage() {
             label="12月目標" 
           />
 
-          {/* 前日比・前週比 比較カード */}
+          {/* メインサマリーカード（前日比・前週比あり） */}
           {comparisonData && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-4">
               <ComparisonCard
                 title="本日利益"
                 value={comparisonData.today.profit}
@@ -870,7 +765,27 @@ export default function AnalysisPage() {
                 change={comparisonData.dayOverDay.profit}
                 weekChange={comparisonData.weekOverWeek.profit}
                 format="currency"
-                colorClass={comparisonData.today.profit >= 0 ? "from-green-600 to-emerald-700" : "from-red-600 to-rose-700"}
+                colorClass={comparisonData.today.profit >= 0 ? "from-emerald-500 to-green-600" : "from-red-500 to-rose-600"}
+              />
+              <ComparisonCard
+                title="12月累計利益"
+                value={displaySummary.monthlyProfit}
+                previousValue={0}
+                change={0}
+                weekChange={0}
+                format="currency"
+                colorClass={displaySummary.monthlyProfit >= 0 ? "from-indigo-500 to-blue-600" : "from-orange-500 to-red-600"}
+                hideComparison={true}
+                showMonthlyNote={true}
+              />
+              <ComparisonCard
+                title="ROAS"
+                value={comparisonData.today.roas}
+                previousValue={comparisonData.yesterday.roas}
+                change={comparisonData.today.roas - comparisonData.yesterday.roas}
+                weekChange={comparisonData.today.roas - comparisonData.lastWeek.roas}
+                format="percent"
+                colorClass={comparisonData.today.roas >= 100 ? "from-teal-500 to-emerald-600" : "from-amber-500 to-orange-600"}
               />
               <ComparisonCard
                 title="消化金額"
@@ -879,7 +794,7 @@ export default function AnalysisPage() {
                 change={comparisonData.dayOverDay.spend}
                 weekChange={comparisonData.weekOverWeek.spend}
                 format="currency"
-                colorClass="from-blue-600 to-indigo-700"
+                colorClass="from-blue-500 to-indigo-600"
               />
               <ComparisonCard
                 title="MCV"
@@ -888,7 +803,7 @@ export default function AnalysisPage() {
                 change={comparisonData.dayOverDay.mcv}
                 weekChange={comparisonData.weekOverWeek.mcv}
                 format="number"
-                colorClass="from-purple-600 to-violet-700"
+                colorClass="from-purple-500 to-violet-600"
               />
               <ComparisonCard
                 title="CV"
@@ -897,38 +812,77 @@ export default function AnalysisPage() {
                 change={comparisonData.dayOverDay.cv}
                 weekChange={comparisonData.weekOverWeek.cv}
                 format="number"
-                colorClass="from-amber-600 to-orange-700"
+                colorClass="from-amber-500 to-orange-600"
               />
             </div>
           )}
 
-          {/* 当日サマリーカード */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
-            <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-              <CardContent className="pt-4 pb-4 lg:pt-6 lg:pb-6">
-                <p className="text-xs lg:text-sm text-blue-100">消化金額</p>
-                <p className="text-lg lg:text-2xl font-bold">{formatCurrency(displaySummary.spend)}</p>
-              </CardContent>
-            </Card>
-            <Card className={`bg-gradient-to-br ${displaySummary.profit >= 0 ? "from-green-500 to-green-600" : "from-red-500 to-red-600"} text-white`}>
-              <CardContent className="pt-4 pb-4 lg:pt-6 lg:pb-6">
-                <p className={`text-xs lg:text-sm ${displaySummary.profit >= 0 ? "text-green-100" : "text-red-100"}`}>本日利益</p>
-                <p className="text-lg lg:text-2xl font-bold">{formatCurrency(displaySummary.profit)}</p>
-              </CardContent>
-            </Card>
-            <Card className={`bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-indigo-500 to-indigo-600" : "from-orange-500 to-orange-600"} text-white`}>
-              <CardContent className="pt-4 pb-4 lg:pt-6 lg:pb-6">
-                <p className={`text-xs lg:text-sm ${displaySummary.monthlyProfit >= 0 ? "text-indigo-100" : "text-orange-100"}`}>12月累計</p>
-                <p className="text-lg lg:text-2xl font-bold">{formatCurrency(displaySummary.monthlyProfit)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-              <CardContent className="pt-4 pb-4 lg:pt-6 lg:pb-6">
-                <p className="text-xs lg:text-sm text-purple-100">ROAS</p>
-                <p className="text-lg lg:text-2xl font-bold">{displaySummary.roas.toFixed(1)}%</p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* 好調だがOFFのCPN一覧 */}
+          {(() => {
+            const goodButOffCpns = cpnList.filter(cpn => {
+              const noSpendToday = cpn.spend === 0; // 当日消化0円
+              const isGood = cpn.profit7Days >= 50000 || cpn.roas7Days >= 150; // 7日利益5万円以上 または ROAS150%以上
+              return noSpendToday && isGood;
+            }).sort((a, b) => b.profit7Days - a.profit7Days);
+
+            if (goodButOffCpns.length === 0) {
+              return (
+                <Card className="border-emerald-200 bg-emerald-50">
+                  <CardContent className="py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <CheckCircle className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-emerald-800">本日好調なCPNは全て出稿されています</p>
+                        <p className="text-xs text-emerald-600">7日利益5万円以上 or ROAS150%以上のCPNは全て配信中です</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            return (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base lg:text-lg flex items-center gap-2 text-amber-800">
+                    <Lightbulb className="h-5 w-5 text-amber-500" />
+                    好調だが本日未配信のCPN（{goodButOffCpns.length}件）
+                  </CardTitle>
+                  <p className="text-xs text-amber-600">7日間利益5万円以上 or ROAS150%以上で、本日消化0円のCPNです</p>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {goodButOffCpns.map((cpn) => (
+                      <div key={cpn.cpnKey} className="flex items-center justify-between bg-white rounded-lg p-3 border border-amber-200">
+                        <div className="flex-1 min-w-0 mr-3">
+                          <p className="text-sm font-medium text-slate-800 truncate">{cpn.cpnName}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              cpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                              cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                              "bg-slate-100 text-slate-700"
+                            }`}>{cpn.media}</span>
+                            <span className="text-xs text-emerald-600 font-medium">7日利益: +¥{cpn.profit7Days.toLocaleString()}</span>
+                            <span className="text-xs text-slate-500">ROAS: {cpn.roas7Days.toFixed(0)}%</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleStatusToggle(cpn)}
+                          disabled={statusUpdating[cpn.cpnKey]}
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <Power className="h-3 w-3" />
+                          {statusUpdating[cpn.cpnKey] ? "..." : "ONにする"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* グラフセクション */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">

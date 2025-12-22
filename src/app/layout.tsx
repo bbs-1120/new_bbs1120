@@ -47,14 +47,14 @@ export default function RootLayout({
     <html lang="ja">
       <body className={`${notoSansJP.variable} font-sans antialiased bg-[#f8f8f8]`}>
         <SessionProvider>
-          <DataProvider>
-            <Sidebar />
-            <main className="lg:pl-64">
-              <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
-                {children}
-              </div>
-            </main>
-          </DataProvider>
+        <DataProvider>
+          <Sidebar />
+          <main className="lg:pl-64">
+            <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
+              {children}
+            </div>
+          </main>
+        </DataProvider>
         </SessionProvider>
       </body>
     </html>

@@ -49,7 +49,7 @@ function generateContinueMessages(
 
     const displayMedia = getMediaDisplayName(media);
     
-    let message = `[To:9952259]自動送信犬さん\n`;
+  let message = `[To:9952259]自動送信犬さん\n`;
     message += `媒体：${displayMedia}\n`;
     message += `処理：追加\n`;
     message += `CP名：\n`;
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     // 認証チェック（Cloud Schedulerからの呼び出し用）
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
-
+    
     // Cloud Schedulerからの呼び出しの場合は認証をチェック
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       // 手動実行の場合は認証不要
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     const results: { media: string; success: boolean; messageId?: string; error?: string }[] = [];
     
     for (const { media, message } of messages) {
-      const result = await sendToChatwork(apiToken, roomId, message);
+    const result = await sendToChatwork(apiToken, roomId, message);
       results.push({
         media,
         success: result.success,

@@ -27,6 +27,7 @@ export async function GET(request: Request) {
         profit7Days: number;
         roas7Days: number;
         consecutiveLoss: number;
+        consecutiveProfit: number;
         accountName?: string;
       }) => ({
         cpnKey: cpn.cpnKey,
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
         profit7Days: cpn.profit7Days,
         roas7Days: cpn.roas7Days,
         consecutiveLoss: cpn.consecutiveLoss,
+        consecutiveProfit: cpn.consecutiveProfit || 0,
         accountName: cpn.accountName || "",
       }));
 
@@ -64,11 +66,16 @@ export async function GET(request: Request) {
     // サマリーを計算
     const summary = getJudgmentSummary(results);
 
+    // キャッシュヘッダー付きレスポンス
     return NextResponse.json({
       success: true,
       date: new Date().toISOString().split("T")[0],
       summary,
       results: filteredResults,
+    }, {
+      headers: {
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+      },
     });
   } catch (error) {
     console.error("Get judgment results error:", error);
@@ -94,6 +101,7 @@ export async function POST() {
       profit7Days: number;
       roas7Days: number;
       consecutiveLoss: number;
+      consecutiveProfit: number;
       accountName?: string;
     }) => ({
       cpnKey: cpn.cpnKey,
@@ -103,6 +111,7 @@ export async function POST() {
       profit7Days: cpn.profit7Days,
       roas7Days: cpn.roas7Days,
       consecutiveLoss: cpn.consecutiveLoss,
+      consecutiveProfit: cpn.consecutiveProfit || 0,
       accountName: cpn.accountName || "",
     }));
 

@@ -93,20 +93,20 @@ export function Header({ title, description }: HeaderProps) {
       {/* トップバー - デスクトップのみ表示 */}
       <div className="hidden lg:flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm w-80">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm w-80">
             <Search className="h-4 w-4 text-slate-400" />
             <input 
               type="text" 
               placeholder="検索..." 
-              className="flex-1 bg-transparent text-sm text-slate-600 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none"
             />
-            <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600">
+            <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 bg-slate-100 rounded border border-slate-200">
               ⌘K
             </kbd>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+          <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
             <HelpCircle className="h-5 w-5" />
           </button>
           
@@ -117,7 +117,7 @@ export function Header({ title, description }: HeaderProps) {
                 setShowNotifications(!showNotifications);
                 if (!showNotifications) markAllAsRead();
               }}
-              className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
             >
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
@@ -134,9 +134,9 @@ export function Header({ title, description }: HeaderProps) {
                   className="fixed inset-0 z-40" 
                   onClick={() => setShowNotifications(false)}
                 />
-                <div className="absolute right-0 top-12 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
-                  <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+                  <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
                       <Bell className="h-4 w-4" />
                       通知
                     </h3>
@@ -144,14 +144,14 @@ export function Header({ title, description }: HeaderProps) {
                       {notifications.length > 0 && (
                         <button 
                           onClick={clearAll}
-                          className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                          className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-100"
                         >
                           クリア
                         </button>
                       )}
                       <button 
                         onClick={() => setShowNotifications(false)}
-                        className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -161,23 +161,23 @@ export function Header({ title, description }: HeaderProps) {
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
                       <div className="p-8 text-center">
-                        <Bell className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                        <Bell className="h-10 w-10 mx-auto text-slate-300 mb-2" />
                         <p className="text-sm text-slate-500">通知はありません</p>
                       </div>
                     ) : (
-                      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                      <div className="divide-y divide-slate-100">
                         {notifications.map((notif) => (
                           <div 
                             key={notif.id}
-                            className={`p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 ${
-                              !notif.read ? "bg-blue-50/50 dark:bg-blue-900/10" : ""
+                            className={`p-3 hover:bg-slate-50 ${
+                              !notif.read ? "bg-emerald-50/50" : ""
                             }`}
                           >
                             <div className="flex items-start gap-2">
                               <div className={`p-1 rounded ${
-                                notif.type === "success" ? "bg-green-100 text-green-600" :
+                                notif.type === "success" ? "bg-emerald-100 text-emerald-600" :
                                 notif.type === "error" ? "bg-red-100 text-red-600" :
-                                notif.type === "warning" ? "bg-yellow-100 text-yellow-600" :
+                                notif.type === "warning" ? "bg-amber-100 text-amber-600" :
                                 "bg-blue-100 text-blue-600"
                               }`}>
                                 {notif.type === "success" ? <CheckCircle className="h-3 w-3" /> :
@@ -185,7 +185,7 @@ export function Header({ title, description }: HeaderProps) {
                                  <History className="h-3 w-3" />}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-slate-900 dark:text-white">{notif.title}</p>
+                                <p className="text-xs font-medium text-slate-900">{notif.title}</p>
                                 <p className="text-xs text-slate-500 truncate">{notif.message}</p>
                                 <p className="text-[10px] text-slate-400 mt-1">{formatTimeAgo(notif.timestamp)}</p>
                               </div>
@@ -205,9 +205,9 @@ export function Header({ title, description }: HeaderProps) {
       {/* タイトル */}
       <div className="flex items-center gap-3">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{title}</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-slate-800 tracking-tight">{title}</h1>
           {description && (
-            <p className="text-xs lg:text-sm text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
+            <p className="text-xs lg:text-sm text-slate-500 mt-0.5">{description}</p>
           )}
         </div>
       </div>

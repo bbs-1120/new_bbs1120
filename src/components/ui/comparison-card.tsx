@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "./card";
-import { TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface ComparisonCardProps {
   title: string;
@@ -12,6 +12,8 @@ interface ComparisonCardProps {
   format?: "currency" | "number" | "percent";
   icon?: React.ReactNode;
   colorClass?: string;
+  hideComparison?: boolean;
+  showMonthlyNote?: boolean;
 }
 
 export function ComparisonCard({
@@ -23,6 +25,8 @@ export function ComparisonCard({
   format = "currency",
   icon,
   colorClass = "from-slate-700 to-slate-800",
+  hideComparison = false,
+  showMonthlyNote = false,
 }: ComparisonCardProps) {
   const formatValue = (val: number) => {
     switch (format) {
@@ -38,7 +42,7 @@ export function ComparisonCard({
   };
 
   const getTrendIcon = (changeVal: number | undefined) => {
-    if (changeVal === undefined) return null;
+    if (changeVal === undefined || hideComparison) return null;
     if (changeVal > 5) return <TrendingUp className="h-4 w-4 text-green-400" />;
     if (changeVal < -5) return <TrendingDown className="h-4 w-4 text-red-400" />;
     return <Minus className="h-4 w-4 text-gray-400" />;
@@ -46,6 +50,12 @@ export function ComparisonCard({
 
   const getTrendColor = (changeVal: number | undefined, isProfit: boolean = true) => {
     if (changeVal === undefined) return "text-gray-400";
+    if (format === "percent") {
+      // ROAS: 上がったら良い
+      if (changeVal > 0) return "text-green-400";
+      if (changeVal < 0) return "text-red-400";
+      return "text-gray-400";
+    }
     if (isProfit) {
       if (changeVal > 0) return "text-green-400";
       if (changeVal < 0) return "text-red-400";
@@ -59,11 +69,16 @@ export function ComparisonCard({
 
   const formatChange = (changeVal: number | undefined) => {
     if (changeVal === undefined) return "-";
+    if (format === "percent") {
+      // ROASはpt差で表示
+      const sign = changeVal > 0 ? "+" : "";
+      return `${sign}${changeVal.toFixed(1)}pt`;
+    }
     const sign = changeVal > 0 ? "+" : "";
     return `${sign}${changeVal.toFixed(1)}%`;
   };
 
-  const isProfit = title.includes("利益") || title.includes("売上") || title.includes("MCV") || title.includes("CV");
+  const isProfit = title.includes("利益") || title.includes("売上") || title.includes("MCV") || title.includes("CV") || title.includes("ROAS");
 
   return (
     <Card className={`bg-gradient-to-br ${colorClass} text-white overflow-hidden`}>
@@ -79,28 +94,34 @@ export function ComparisonCard({
         <div className="text-lg lg:text-2xl font-bold mb-2 lg:mb-3">{formatValue(value)}</div>
         
         {/* 比較セクション */}
-        <div className="flex gap-2 lg:gap-4 text-[10px] lg:text-xs">
-          {/* 前日比 */}
-          <div className="flex-1 bg-white/10 rounded-lg p-1.5 lg:p-2">
-            <div className="text-white/60 mb-0.5 lg:mb-1">前日比</div>
-            <div className={`font-semibold ${getTrendColor(change, isProfit)}`}>
-              {formatChange(change)}
-            </div>
-            {previousValue !== undefined && (
-              <div className="hidden lg:block text-white/40 text-[10px] mt-0.5">
-                ({formatValue(previousValue)})
+        {!hideComparison ? (
+          <div className="flex gap-2 lg:gap-4 text-[10px] lg:text-xs">
+            {/* 前日比 */}
+            <div className="flex-1 bg-white/10 rounded-lg p-1.5 lg:p-2">
+              <div className="text-white/60 mb-0.5 lg:mb-1">前日比</div>
+              <div className={`font-semibold ${getTrendColor(change, isProfit)}`}>
+                {formatChange(change)}
               </div>
-            )}
-          </div>
-          
-          {/* 前週比 */}
-          <div className="flex-1 bg-white/10 rounded-lg p-1.5 lg:p-2">
-            <div className="text-white/60 mb-0.5 lg:mb-1">前週比</div>
-            <div className={`font-semibold ${getTrendColor(weekChange, isProfit)}`}>
-              {formatChange(weekChange)}
+              {previousValue !== undefined && format !== "percent" && (
+                <div className="hidden lg:block text-white/40 text-[10px] mt-0.5">
+                  ({formatValue(previousValue)})
+                </div>
+              )}
+            </div>
+            
+            {/* 前週比 */}
+            <div className="flex-1 bg-white/10 rounded-lg p-1.5 lg:p-2">
+              <div className="text-white/60 mb-0.5 lg:mb-1">前週比</div>
+              <div className={`font-semibold ${getTrendColor(weekChange, isProfit)}`}>
+                {formatChange(weekChange)}
+              </div>
             </div>
           </div>
-        </div>
+        ) : showMonthlyNote ? (
+          <div className="text-[10px] lg:text-xs text-white/60 bg-white/10 rounded-lg p-1.5 lg:p-2">
+            今月の累計利益
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

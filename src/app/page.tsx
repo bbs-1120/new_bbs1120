@@ -1,21 +1,17 @@
 "use client";
 
-import { Header } from "@/components/layout/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { JudgmentBadge } from "@/components/ui/badge";
-import {
-  StopCircle,
-  RefreshCw,
-  CheckCircle,
-  AlertTriangle,
-  PlayCircle,
-  Send,
-  ChevronRight,
-} from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { getRoasColorClass } from "@/lib/utils";
+import { 
+  ArrowRight, 
+  TrendingUp, 
+  TrendingDown,
+  BarChart3,
+  Stethoscope,
+  MessageSquare,
+  Settings,
+  RefreshCw,
+} from "lucide-react";
 
 interface SummaryData {
   stop: number;
@@ -25,401 +21,287 @@ interface SummaryData {
   total: number;
 }
 
-interface JudgmentResult {
-  cpnKey: string;
-  cpnName: string;
-  media: string;
-  judgment: string;
-  todayProfit: number;
-  profit7Days: number;
-  roas7Days: number;
-  consecutiveLossDays: number;
-  reasons: string[];
-  isRe: boolean;
+interface TodaySummary {
+  spend: number;
+  revenue: number;
+  profit: number;
+  roas: number;
+  cv: number;
+  mcv: number;
+  monthlyProfit: number;
 }
 
-export default function DashboardPage() {
-  const [summary, setSummary] = useState<SummaryData>({
-    stop: 0,
-    replace: 0,
-    continue: 0,
-    error: 0,
-    total: 0,
-  });
-  const [recentResults, setRecentResults] = useState<JudgmentResult[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [sortKey, setSortKey] = useState<string>("todayProfit");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+const CACHE_KEY = "home_data_cache";
+const CACHE_DURATION = 3 * 60 * 1000; // 3分
 
-  // データを取得
-  const fetchData = useCallback(async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
+export default function HomePage() {
+  const [summary, setSummary] = useState<SummaryData>({
+    stop: 0, replace: 0, continue: 0, error: 0, total: 0,
+  });
+  const [todaySummary, setTodaySummary] = useState<TodaySummary>({
+    spend: 0, revenue: 0, profit: 0, roas: 0, cv: 0, mcv: 0, monthlyProfit: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasCache, setHasCache] = useState(false);
+
+  // 時刻はuseMemoで計算（毎回再計算しない）
+  const currentTime = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    });
+  }, []);
+
+  // ローカルキャッシュから読み込み
+  const loadFromCache = useCallback(() => {
+    if (typeof window === "undefined") return false;
     try {
-      const response = await fetch("/api/judgment");
-      const data = await response.json();
-      
-      if (data.success) {
-        setSummary(data.summary);
-        setRecentResults(data.results.slice(0, 15));
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // キャッシュが有効期間内なら使用
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setSummary(data.summary);
+          setTodaySummary(data.todaySummary);
+          setHasCache(true);
+          setIsLoading(false);
+          return true;
+        }
       }
+    } catch {}
+    return false;
+  }, []);
+
+  // キャッシュに保存
+  const saveToCache = useCallback((data: { summary: SummaryData; todaySummary: TodaySummary }) => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch {}
+  }, []);
+
+  // データを取得（並列リクエスト）
+  const fetchData = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒タイムアウト
+
+      const [judgmentRes, analysisRes] = await Promise.all([
+        fetch("/api/judgment", { signal: controller.signal }),
+        fetch("/api/analysis", { signal: controller.signal }),
+      ]);
+      clearTimeout(timeoutId);
+      
+      const [judgmentData, analysisData] = await Promise.all([
+        judgmentRes.json(),
+        analysisRes.json(),
+      ]);
+      
+      const newSummary = judgmentData.success ? judgmentData.summary : summary;
+      const newTodaySummary = analysisData.success ? {
+        spend: analysisData.summary.spend,
+        revenue: analysisData.summary.revenue,
+        profit: analysisData.summary.profit,
+        roas: analysisData.summary.roas,
+        cv: analysisData.summary.cv,
+        mcv: analysisData.summary.mcv,
+        monthlyProfit: analysisData.summary.monthlyProfit || 0,
+      } : todaySummary;
+
+      setSummary(newSummary);
+      setTodaySummary(newTodaySummary);
+      
+      // キャッシュに保存
+      saveToCache({ summary: newSummary, todaySummary: newTodaySummary });
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
       setIsLoading(false);
     }
+  }, [summary, todaySummary, saveToCache]);
+
+  // 初回読み込み
+  useEffect(() => {
+    const hasCachedData = loadFromCache();
+    // キャッシュがあってもバックグラウンドで更新
+    fetchData();
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // データ再取得（キャッシュクリア）
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setMessage(null);
-    
-    try {
-      const response = await fetch("/api/judgment", { method: "POST" });
-      const data = await response.json();
-      
-      if (data.success) {
-        setMessage({ type: "success", text: `${data.count}件のCPNを判定しました` });
-        setSummary(data.summary);
-        setRecentResults(data.results.slice(0, 15));
-      } else {
-        setMessage({ type: "error", text: data.error || "判定処理に失敗しました" });
-      }
-    } catch (error) {
-      setMessage({ type: "error", text: "通信エラーが発生しました" });
-    } finally {
-      setIsRefreshing(false);
+  const formatCurrency = (value: number, short = false) => {
+    const sign = value >= 0 ? "+" : "";
+    const absValue = Math.abs(value);
+    // モバイルでは万単位で表示（オプション）
+    if (short && absValue >= 10000) {
+      return `${sign}${(value / 10000).toFixed(1)}万`;
     }
-  };
-
-  const formatCurrency = (value: number) => {
-    const sign = value < 0 ? "" : "+";
     return `${sign}¥${Math.floor(value).toLocaleString("ja-JP")}`;
   };
 
-  // ソート処理
-  const handleSort = (key: string) => {
-    if (sortKey === key) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  };
+  const menuItems = [
+    {
+      title: "マイ分析",
+      description: "詳細なCPN分析・日別推移",
+      href: "/analysis",
+      icon: BarChart3,
+    },
+    {
+      title: "CPN診断",
+      description: "停止・作り替え・継続の判定",
+      href: "/results/stop",
+      icon: Stethoscope,
+    },
+    {
+      title: "Chatwork",
+      description: "レポート送信",
+      href: "/send",
+      icon: MessageSquare,
+    },
+    {
+      title: "設定",
+      description: "目標・通知設定",
+      href: "/settings",
+      icon: Settings,
+    },
+  ];
 
-  const sortedResults = [...recentResults].sort((a, b) => {
-    let aVal: number | string = 0;
-    let bVal: number | string = 0;
-
-    switch (sortKey) {
-      case "cpnName": aVal = a.cpnName; bVal = b.cpnName; break;
-      case "todayProfit": aVal = a.todayProfit; bVal = b.todayProfit; break;
-      case "profit7Days": aVal = a.profit7Days; bVal = b.profit7Days; break;
-      case "roas7Days": aVal = a.roas7Days; bVal = b.roas7Days; break;
-      case "consecutiveLossDays": aVal = a.consecutiveLossDays; bVal = b.consecutiveLossDays; break;
-      default: aVal = a.todayProfit; bVal = b.todayProfit;
-    }
-
-    if (typeof aVal === "string") {
-      return sortDir === "asc" ? aVal.localeCompare(bVal as string) : (bVal as string).localeCompare(aVal);
-    }
-    return sortDir === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
-  });
-
-  const SortIcon = ({ columnKey }: { columnKey: string }) => {
-    if (sortKey !== columnKey) return <span className="text-slate-300 ml-1">↕</span>;
-    return <span className="text-indigo-600 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
-  };
-
-  // メンテナンス時間チェック（0:00〜0:30）
-  const isMaintenanceTime = () => {
-    const now = new Date();
-    const jstHour = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" })).getHours();
-    const jstMinute = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" })).getMinutes();
-    return jstHour === 0 && jstMinute < 30;
-  };
-
-  if (isMaintenanceTime()) {
+  // スケルトンUI（キャッシュがない場合のみ表示）
+  if (isLoading && !hasCache) {
     return (
-      <>
-        <Header title="CPN診断" description="自動判定によるCPN分析結果" />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center p-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200 shadow-lg max-w-md">
-            <div className="text-5xl mb-4">🔧</div>
-            <h2 className="text-xl font-bold text-amber-800 mb-2">メンテナンス中</h2>
-            <p className="text-amber-700 mb-4">
-              毎日 0:00〜0:30 の間はデータ更新のため<br />
-              一時的にご利用いただけません。
-            </p>
-            <div className="text-sm text-amber-600 bg-amber-100 px-4 py-2 rounded-lg">
-              0:30以降に再度アクセスしてください
-            </div>
+      <div className="min-h-screen bg-slate-50">
+        <section className="bg-white border-b border-slate-200 -mx-4 lg:-mx-8 -mt-4 lg:-mt-6 px-4 lg:px-8 pt-6 lg:pt-8 pb-8 lg:pb-10">
+          <div className="h-4 w-24 bg-slate-200 rounded animate-pulse mb-2" />
+          <div className="h-8 w-48 bg-slate-200 rounded animate-pulse mb-6" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl p-3 lg:p-4">
+                <div className="h-3 w-12 bg-slate-200 rounded animate-pulse mb-2" />
+                <div className="h-6 w-20 bg-slate-200 rounded animate-pulse" />
+              </div>
+            ))}
           </div>
-        </div>
-      </>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <>
-        <Header title="CPN診断" description="自動判定によるCPN分析結果" />
-        <div className="flex items-center justify-center py-20">
-          <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
-          <span className="ml-3 text-slate-500">読み込み中...</span>
-        </div>
-      </>
+        </section>
+        <section className="py-4 lg:py-8">
+          <div className="h-5 w-32 bg-slate-200 rounded animate-pulse mb-4" />
+          <div className="grid grid-cols-4 gap-1.5 lg:gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white border border-slate-200 rounded-lg lg:rounded-xl p-2 lg:p-4 text-center">
+                <div className="h-8 w-8 mx-auto bg-slate-200 rounded animate-pulse mb-1" />
+                <div className="h-3 w-10 mx-auto bg-slate-200 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     );
   }
 
   return (
-    <>
-      <Header
-        title="ダッシュボード"
-        description="CPN仕分け結果のサマリーと最新状況"
-      />
+    <div className="min-h-screen bg-slate-50">
+      {/* ヘッダーセクション */}
+      <section className="bg-white border-b border-slate-200 -mx-4 lg:-mx-8 -mt-4 lg:-mt-6 px-4 lg:px-8 pt-6 lg:pt-8 pb-8 lg:pb-10">
+        <p className="text-slate-500 text-sm mb-1">{currentTime}</p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight mb-6">
+          ダッシュボード
+        </h1>
 
-      {/* メッセージ表示 */}
-      {message && (
-        <div
-          className={`mb-6 p-4 rounded-lg ${
-            message.type === "success"
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-red-50 text-red-700 border border-red-200"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
-      {/* アクションボタン - スマホ対応 */}
-      <div className="flex flex-wrap gap-2 lg:gap-4 mb-6 lg:mb-8">
-        <Button size="sm" className="text-xs lg:text-sm px-3 lg:px-4 py-2" onClick={handleRefresh} loading={isRefreshing}>
-          <PlayCircle className="mr-1 lg:mr-2 h-4 w-4 lg:h-5 lg:w-5" />
-          判定実行
-        </Button>
-        <Button size="sm" className="text-xs lg:text-sm px-3 lg:px-4 py-2" variant="secondary" onClick={() => window.location.href = "/analysis"}>
-          <RefreshCw className="mr-1 lg:mr-2 h-4 w-4 lg:h-5 lg:w-5" />
-          マイ分析
-        </Button>
-        <Button size="sm" className="text-xs lg:text-sm px-3 lg:px-4 py-2" variant="secondary" onClick={() => window.location.href = "/send"}>
-          <Send className="mr-1 lg:mr-2 h-4 w-4 lg:h-5 lg:w-5" />
-          Chatwork
-        </Button>
-      </div>
-
-      {/* サマリーカード - クリック可能・スマホ対応 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-6 lg:mb-8">
-        <Link href="/results/stop">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-red-300">
-            <CardContent className="p-3 lg:pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs lg:text-sm text-slate-500">停止</p>
-                  <p className="text-xl lg:text-3xl font-bold text-red-600">{summary.stop}</p>
-                </div>
-                <div className="h-8 w-8 lg:h-12 lg:w-12 rounded-full bg-red-100 flex items-center justify-center">
-                  <StopCircle className="h-4 w-4 lg:h-6 lg:w-6 text-red-600" />
-                </div>
-              </div>
-              <div className="mt-2 lg:mt-4 flex items-center text-[10px] lg:text-sm text-slate-500">
-                <span>詳細</span>
-                <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4 ml-0.5" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/results/replace">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-orange-300">
-            <CardContent className="p-3 lg:pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs lg:text-sm text-slate-500">作り替え</p>
-                  <p className="text-xl lg:text-3xl font-bold text-orange-600">{summary.replace}</p>
-                </div>
-                <div className="h-8 w-8 lg:h-12 lg:w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                  <RefreshCw className="h-4 w-4 lg:h-6 lg:w-6 text-orange-600" />
-                </div>
-              </div>
-              <div className="mt-2 lg:mt-4 flex items-center text-[10px] lg:text-sm text-slate-500">
-                <span>詳細</span>
-                <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4 ml-0.5" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/results/continue">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-green-300">
-            <CardContent className="p-3 lg:pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs lg:text-sm text-slate-500">継続</p>
-                  <p className="text-xl lg:text-3xl font-bold text-green-600">{summary.continue}</p>
-                </div>
-                <div className="h-8 w-8 lg:h-12 lg:w-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="h-4 w-4 lg:h-6 lg:w-6 text-green-600" />
-                </div>
-              </div>
-              <div className="mt-2 lg:mt-4 flex items-center text-[10px] lg:text-sm text-slate-500">
-                <span>詳細</span>
-                <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4 ml-0.5" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/results/error">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-yellow-300">
-            <CardContent className="p-3 lg:pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs lg:text-sm text-slate-500">エラー</p>
-                  <p className="text-xl lg:text-3xl font-bold text-yellow-600">{summary.error}</p>
-                </div>
-                <div className="h-8 w-8 lg:h-12 lg:w-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                  <AlertTriangle className="h-4 w-4 lg:h-6 lg:w-6 text-yellow-600" />
-                </div>
-              </div>
-              <div className="mt-2 lg:mt-4 flex items-center text-[10px] lg:text-sm text-slate-500">
-                <span>詳細</span>
-                <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4 ml-0.5" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      {/* 最新の仕分け結果 */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between p-3 lg:p-6">
-          <CardTitle className="text-sm lg:text-lg">判定結果（{summary.total}件）</CardTitle>
-          <Link href="/results">
-            <Button variant="ghost" size="sm" className="text-xs lg:text-sm">
-              すべて見る
-              <ChevronRight className="h-3 w-3 lg:h-4 lg:w-4 ml-1" />
-            </Button>
-          </Link>
-        </CardHeader>
-        {recentResults.length > 0 ? (
-          <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th 
-                    onClick={() => handleSort("cpnName")}
-                    className="px-2 lg:px-4 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 whitespace-nowrap"
-                  >
-                    CPN名 <SortIcon columnKey="cpnName" />
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                    媒体
-                  </th>
-                  <th className="px-2 lg:px-4 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                    判定
-                  </th>
-                  <th 
-                    onClick={() => handleSort("todayProfit")}
-                    className="px-2 lg:px-4 py-2 lg:py-3 text-right text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 whitespace-nowrap"
-                  >
-                    当日利益 <SortIcon columnKey="todayProfit" />
-                  </th>
-                  <th 
-                    onClick={() => handleSort("profit7Days")}
-                    className="hidden lg:table-cell px-2 lg:px-4 py-2 lg:py-3 text-right text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 whitespace-nowrap"
-                  >
-                    7日利益 <SortIcon columnKey="profit7Days" />
-                  </th>
-                  <th 
-                    onClick={() => handleSort("roas7Days")}
-                    className="px-2 lg:px-4 py-2 lg:py-3 text-right text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 whitespace-nowrap"
-                  >
-                    ROAS <SortIcon columnKey="roas7Days" />
-                  </th>
-                  <th className="hidden lg:table-cell px-2 lg:px-4 py-2 lg:py-3 text-left text-[10px] lg:text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                    理由
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {sortedResults.map((result) => (
-                  <tr key={result.cpnKey} className="hover:bg-slate-50">
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 min-w-[120px] lg:min-w-[200px]">
-                      <p className="text-[10px] lg:text-sm font-medium text-slate-900 break-all line-clamp-2" title={result.cpnName}>
-                        {result.cpnName}
-                      </p>
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-1.5 lg:px-2 py-0.5 lg:py-1 text-[9px] lg:text-xs font-medium rounded-full ${
-                        result.media === "Meta" ? "bg-blue-100 text-blue-700" :
-                        result.media === "TikTok" ? "bg-pink-100 text-pink-700" :
-                        result.media === "Pangle" ? "bg-orange-100 text-orange-700" :
-                        "bg-slate-100 text-slate-700"
-                      }`}>
-                        {result.media}
-                      </span>
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 whitespace-nowrap">
-                      <JudgmentBadge judgment={result.judgment} />
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right whitespace-nowrap">
-                      <span
-                        className={`text-[10px] lg:text-sm font-medium ${
-                          result.todayProfit >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {formatCurrency(result.todayProfit)}
-                      </span>
-                    </td>
-                    <td className="hidden lg:table-cell px-2 lg:px-4 py-2 lg:py-3 text-right whitespace-nowrap">
-                      <span
-                        className={`text-[10px] lg:text-sm font-medium ${
-                          result.profit7Days >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {formatCurrency(result.profit7Days)}
-                      </span>
-                    </td>
-                    <td className="px-2 lg:px-4 py-2 lg:py-3 text-right whitespace-nowrap">
-                      <span className={`text-[10px] lg:text-sm font-medium ${getRoasColorClass(result.roas7Days)}`}>
-                        {result.roas7Days.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="hidden lg:table-cell px-2 lg:px-4 py-2 lg:py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {result.reasons.slice(0, 2).map((reason, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-1.5 lg:px-2 py-0.5 rounded text-[9px] lg:text-xs bg-slate-100 text-slate-600"
-                          >
-                            {reason}
-                          </span>
-                        ))}
-                        {result.reasons.length > 2 && (
-                          <span className="text-[9px] lg:text-xs text-slate-400">+{result.reasons.length - 2}</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* メイン指標 */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 lg:p-4">
+            <p className="text-slate-500 text-[10px] lg:text-xs mb-1">当日利益</p>
+            <div className="flex items-center gap-1 lg:gap-2">
+              {todaySummary.profit >= 0 ? (
+                <TrendingUp className="h-3 w-3 lg:h-4 lg:w-4 text-emerald-500 flex-shrink-0" />
+              ) : (
+                <TrendingDown className="h-3 w-3 lg:h-4 lg:w-4 text-red-500 flex-shrink-0" />
+              )}
+              <span className={`text-base lg:text-2xl font-bold ${todaySummary.profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                <span className="lg:hidden">{formatCurrency(todaySummary.profit, true)}</span>
+                <span className="hidden lg:inline">{formatCurrency(todaySummary.profit)}</span>
+              </span>
+            </div>
           </div>
-        ) : (
-          <CardContent>
-            <p className="text-center text-slate-500 py-8">
-              まだ判定結果がありません。「判定実行」をクリックしてください。
-            </p>
-          </CardContent>
-        )}
-      </Card>
-    </>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 lg:p-4">
+            <p className="text-slate-500 text-[10px] lg:text-xs mb-1">12月累計</p>
+            <span className={`text-base lg:text-2xl font-bold ${todaySummary.monthlyProfit >= 0 ? "text-slate-800" : "text-red-600"}`}>
+              <span className="lg:hidden">{formatCurrency(todaySummary.monthlyProfit, true)}</span>
+              <span className="hidden lg:inline">{formatCurrency(todaySummary.monthlyProfit)}</span>
+            </span>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 lg:p-4">
+            <p className="text-slate-500 text-[10px] lg:text-xs mb-1">当日ROAS</p>
+            <span className={`text-base lg:text-2xl font-bold ${todaySummary.roas >= 100 ? "text-emerald-600" : "text-red-600"}`}>
+              {todaySummary.roas.toFixed(0)}%
+            </span>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 lg:p-4">
+            <p className="text-slate-500 text-[10px] lg:text-xs mb-1">当日CV</p>
+            <span className="text-base lg:text-2xl font-bold text-slate-800">
+              {todaySummary.cv}<span className="text-xs lg:text-sm ml-1 font-normal text-slate-500">件</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* CPN判定結果 */}
+      <section className="py-4 lg:py-8">
+        <div className="flex items-center justify-between mb-3 lg:mb-4">
+          <h2 className="text-base lg:text-lg font-bold text-slate-900">CPN判定結果</h2>
+          <Link href="/results" className="text-xs lg:text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+            すべて見る <ArrowRight className="h-3 w-3 lg:h-4 lg:w-4" />
+          </Link>
+        </div>
+        
+        <div className="grid grid-cols-4 gap-1.5 lg:gap-3">
+          <Link href="/results/stop" className="group">
+            <div className="bg-white border border-slate-200 rounded-lg lg:rounded-xl p-2 lg:p-4 text-center hover:border-red-300 hover:shadow-sm transition-all">
+              <p className="text-xl lg:text-3xl font-bold text-red-500">{summary.stop}</p>
+              <p className="text-[10px] lg:text-xs text-slate-500 mt-0.5 lg:mt-1">停止</p>
+            </div>
+          </Link>
+          <Link href="/results/replace" className="group">
+            <div className="bg-white border border-slate-200 rounded-lg lg:rounded-xl p-2 lg:p-4 text-center hover:border-amber-300 hover:shadow-sm transition-all">
+              <p className="text-xl lg:text-3xl font-bold text-amber-500">{summary.replace}</p>
+              <p className="text-[10px] lg:text-xs text-slate-500 mt-0.5 lg:mt-1">作り替え</p>
+            </div>
+          </Link>
+          <Link href="/results/continue" className="group">
+            <div className="bg-white border border-slate-200 rounded-lg lg:rounded-xl p-2 lg:p-4 text-center hover:border-emerald-300 hover:shadow-sm transition-all">
+              <p className="text-xl lg:text-3xl font-bold text-emerald-500">{summary.continue}</p>
+              <p className="text-[10px] lg:text-xs text-slate-500 mt-0.5 lg:mt-1">継続</p>
+            </div>
+          </Link>
+          <Link href="/results/error" className="group">
+            <div className="bg-white border border-slate-200 rounded-lg lg:rounded-xl p-2 lg:p-4 text-center hover:border-slate-300 hover:shadow-sm transition-all">
+              <p className="text-xl lg:text-3xl font-bold text-slate-400">{summary.error}</p>
+              <p className="text-[10px] lg:text-xs text-slate-500 mt-0.5 lg:mt-1">エラー</p>
+            </div>
+          </Link>
+        </div>
+      </section>
+
+      {/* メニュー */}
+      <section className="pb-6 lg:pb-8">
+        <h2 className="text-base lg:text-lg font-bold text-slate-900 mb-3 lg:mb-4">メニュー</h2>
+        <div className="grid grid-cols-2 gap-2 lg:gap-3">
+          {menuItems.map((item) => (
+            <Link key={item.href} href={item.href} className="group">
+              <div className="bg-white border border-slate-200 rounded-lg lg:rounded-xl p-3 lg:p-4 hover:border-emerald-300 hover:shadow-sm transition-all h-full active:scale-[0.98]">
+                <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-emerald-50 flex items-center justify-center mb-2 lg:mb-3 group-hover:bg-emerald-100 transition-colors">
+                  <item.icon className="h-4 w-4 lg:h-5 lg:w-5 text-emerald-600" />
+                </div>
+                <h3 className="font-bold text-sm lg:text-base text-slate-800 mb-0.5 lg:mb-1">{item.title}</h3>
+                <p className="text-[10px] lg:text-xs text-slate-500">{item.description}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }

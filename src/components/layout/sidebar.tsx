@@ -21,6 +21,8 @@ import {
   X,
   Clock,
   LogOut,
+  Home,
+  Stethoscope,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -38,12 +40,19 @@ interface NavCategory {
 
 const navigation: NavCategory[] = [
   {
+    category: "メイン",
+    icon: Home,
+    items: [
+      { name: "ホーム", href: "/", icon: Home },
+    ],
+  },
+  {
     category: "データ分析",
     icon: PieChart,
     items: [
-      { name: "デイリーレポート", href: "/analysis", icon: BarChart3 },
-      { name: "CPN診断", href: "/", icon: Zap },
-      { name: "判断結果", href: "/results", icon: ListChecks },
+      { name: "マイ分析", href: "/analysis", icon: BarChart3 },
+      { name: "CPN診断", href: "/results/stop", icon: Stethoscope },
+      { name: "判定結果一覧", href: "/results", icon: ListChecks },
     ],
   },
   {
@@ -95,15 +104,15 @@ function SidebarClock() {
   }, []);
 
   return (
-    <div className="mx-2 mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
+    <div className="mx-2 mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200">
       <div className="flex items-center gap-2 mb-1">
-        <Clock className="h-4 w-4 text-[#36c5f0]" />
-        <span className="text-xs text-white/60">日本時間</span>
+        <Clock className="h-4 w-4 text-emerald-600" />
+        <span className="text-xs text-slate-500">日本時間</span>
       </div>
-      <div className="text-2xl font-mono font-bold text-white tracking-wider">
+      <div className="text-2xl font-mono font-bold text-slate-800 tracking-wider">
         {time}
       </div>
-      <div className="text-xs text-white/50 mt-0.5">
+      <div className="text-xs text-slate-500 mt-0.5">
         {date}
       </div>
     </div>
@@ -117,12 +126,12 @@ function UserProfile() {
 
   if (!session?.user) {
     return (
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-slate-200">
         <div className="flex items-center gap-3 rounded-md px-2 py-2">
-          <div className="w-9 h-9 rounded-lg bg-white/10 animate-pulse"></div>
+          <div className="w-9 h-9 rounded-lg bg-slate-200 animate-pulse"></div>
           <div className="flex-1">
-            <div className="h-4 bg-white/10 rounded animate-pulse mb-1"></div>
-            <div className="h-3 bg-white/10 rounded animate-pulse w-1/2"></div>
+            <div className="h-4 bg-slate-200 rounded animate-pulse mb-1"></div>
+            <div className="h-3 bg-slate-200 rounded animate-pulse w-1/2"></div>
           </div>
         </div>
       </div>
@@ -133,9 +142,9 @@ function UserProfile() {
   const userInitial = userName.charAt(0).toUpperCase();
 
   return (
-    <div className="p-3 border-t border-white/10">
+    <div className="p-3 border-t border-slate-200">
       <div 
-        className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-white/10 cursor-pointer"
+        className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-slate-100 cursor-pointer"
         onClick={() => setShowLogout(!showLogout)}
       >
         <div className="relative">
@@ -146,15 +155,15 @@ function UserProfile() {
               className="w-9 h-9 rounded-lg object-cover"
             />
           ) : (
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center text-white font-bold text-sm">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm">
               {userInitial}
             </div>
           )}
-          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#2eb67d] rounded-full border-2 border-[#3f0e40]"></div>
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white truncate">{userName}</p>
-          <p className="text-xs text-white/50 truncate">
+          <p className="text-sm font-medium text-slate-800 truncate">{userName}</p>
+          <p className="text-xs text-slate-500 truncate">
             {session.user.email}
           </p>
         </div>
@@ -163,7 +172,7 @@ function UserProfile() {
       {showLogout && (
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm transition-colors"
+          className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-100 hover:bg-red-200 text-red-600 text-sm transition-colors"
         >
           <LogOut className="h-4 w-4" />
           ログアウト
@@ -197,18 +206,18 @@ export function Sidebar() {
   return (
     <>
       {/* モバイルヘッダー */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-[#3f0e40] flex items-center justify-between px-4 border-b border-white/10">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-white flex items-center justify-between px-4 border-b border-slate-200 shadow-sm">
         <button
           onClick={() => setIsOpen(true)}
-          className="p-2 -ml-2 rounded-lg hover:bg-white/10 transition-colors"
+          className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
         >
-          <Menu className="h-6 w-6 text-white" />
+          <Menu className="h-6 w-6 text-slate-700" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
             <Zap className="h-4 w-4 text-white" />
           </div>
-          <span className="text-white font-bold">GrowthDeck</span>
+          <span className="text-slate-800 font-bold">GrowthDeck</span>
         </div>
         <DarkModeToggle />
       </div>
@@ -224,20 +233,20 @@ export function Sidebar() {
       {/* サイドバー */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 lg:w-64 bg-[#3f0e40] flex flex-col transition-transform duration-300 ease-in-out",
+          "fixed inset-y-0 left-0 z-50 w-72 lg:w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out shadow-lg lg:shadow-none",
           "lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* ヘッダー */}
-        <div className="flex items-center justify-between h-14 px-4 border-b border-white/10">
+        <div className="flex items-center justify-between h-14 px-4 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#36c5f0] to-[#2eb67d] flex items-center justify-center shadow-lg">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
               <Zap className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-[15px] font-bold text-white tracking-tight">GrowthDeck</h1>
-              <p className="text-[10px] text-white/50 -mt-0.5">広告運用ダッシュボード</p>
+              <h1 className="text-[15px] font-bold text-slate-800 tracking-tight">GrowthDeck</h1>
+              <p className="text-[10px] text-slate-500 -mt-0.5">広告運用ダッシュボード</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -246,9 +255,9 @@ export function Sidebar() {
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
             >
-              <X className="h-5 w-5 text-white" />
+              <X className="h-5 w-5 text-slate-700" />
             </button>
           </div>
         </div>
@@ -261,7 +270,7 @@ export function Sidebar() {
           {navigation.map((category) => (
             <div key={category.category} className="mb-5">
               {/* カテゴリヘッダー */}
-              <div className="flex items-center gap-1.5 px-3 py-1 text-white/60 hover:text-white/90 cursor-pointer group">
+              <div className="flex items-center gap-1.5 px-3 py-1 text-slate-500 hover:text-slate-700 cursor-pointer group">
                 <ChevronDown className="h-3 w-3 transition-transform" />
                 <span className="text-[13px] font-medium tracking-wide">
                   {category.category}
@@ -280,13 +289,13 @@ export function Sidebar() {
                         className={cn(
                           "flex items-center gap-2.5 rounded-md px-3 py-2.5 lg:py-1.5 text-[15px] transition-all",
                           isActive
-                            ? "bg-[#1164a3] text-white font-medium"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                            ? "bg-emerald-500 text-white font-medium shadow-sm"
+                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                         )}
                       >
                         <Icon className={cn(
                           "h-5 w-5 lg:h-4 lg:w-4",
-                          isActive ? "text-white" : "text-white/50"
+                          isActive ? "text-white" : "text-slate-400"
                         )} />
                         {item.name}
                       </Link>
