@@ -1,14 +1,26 @@
-# Cloud Build設定（最小構成）
+# Cloud Build設定（手動デプロイ用）
+# GitHub Actions CI/CDが設定済み - mainブランチへのpushで自動デプロイ
+#
+# 手動デプロイ:
+#   gcloud builds submit --config=cloudbuild.yaml --project=adpilot-prod-1218
+
 steps:
   # Dockerイメージをビルド
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-t'
+      - 'gcr.io/$PROJECT_ID/adpilot:$SHORT_SHA'
+      - '-t'
       - 'gcr.io/$PROJECT_ID/adpilot:latest'
       - '.'
 
   # Container Registryにプッシュ
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/adpilot:$SHORT_SHA'
+
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
@@ -22,7 +34,7 @@ steps:
       - 'deploy'
       - 'adpilot'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/adpilot:latest'
+      - 'gcr.io/$PROJECT_ID/adpilot:$SHORT_SHA'
       - '--region'
       - 'asia-northeast1'
       - '--platform'
@@ -40,6 +52,7 @@ steps:
       - 'DATABASE_URL=DATABASE_URL:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,CHATWORK_API_TOKEN=CHATWORK_API_TOKEN:latest,CHATWORK_ROOM_ID=CHATWORK_ROOM_ID:latest,CHATWORK_ERROR_ROOM_ID=CHATWORK_ERROR_ROOM_ID:latest,GOOGLE_SHEETS_CLIENT_EMAIL=GOOGLE_SHEETS_CLIENT_EMAIL:latest,GOOGLE_SHEETS_PRIVATE_KEY=GOOGLE_SHEETS_PRIVATE_KEY:latest,GOOGLE_SHEETS_SPREADSHEET_ID=GOOGLE_SHEETS_SPREADSHEET_ID:latest,META_ACCESS_TOKEN=META_ACCESS_TOKEN:latest,TIKTOK_ACCESS_TOKEN=TIKTOK_ACCESS_TOKEN:latest,TIKTOK_ADVERTISER_IDS=TIKTOK_ADVERTISER_IDS:latest,META_TOKEN_BUSINESS01=META_TOKEN_BUSINESS01:latest,META_TOKEN_BUSINESS03=META_TOKEN_BUSINESS03:latest,META_TOKEN_BUSINESS08=META_TOKEN_BUSINESS08:latest,META_TOKEN_BUSINESS11=META_TOKEN_BUSINESS11:latest,META_TOKEN_BUSINESS13=META_TOKEN_BUSINESS13:latest,META_TOKEN_BUSINESS14=META_TOKEN_BUSINESS14:latest'
 
 images:
+  - 'gcr.io/$PROJECT_ID/adpilot:$SHORT_SHA'
   - 'gcr.io/$PROJECT_ID/adpilot:latest'
 
 timeout: '1200s'

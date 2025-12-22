@@ -25,6 +25,7 @@ function generateContinueMessages(
       profit7Days: cpn.profit7Days,
       roas7Days: cpn.roas7Days,
       consecutiveLoss: cpn.consecutiveLoss,
+      consecutiveProfit: cpn.consecutiveProfit || 0,
     })
   );
 

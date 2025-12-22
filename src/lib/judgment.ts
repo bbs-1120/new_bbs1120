@@ -135,24 +135,33 @@ function checkContinue(
 
 /**
  * 作り替え条件をチェック
- * 1. _Reあり + 過去3日連続赤字（当日含む）
- * 2. 停止でも継続でもないもの
+ * 1. _Reあり + 過去3日連続赤字（当日含む） + 7日利益プラス
+ * 2. _Reなし + 過去3日連続赤字（当日含む）
+ * 3. 停止でも継続でもないもの
  */
 function checkReplace(
   isRe: boolean,
   consecutiveLoss: number,
   todayProfit: number,
+  profit7Days: number,
   isStopOrContinue: boolean
 ): { judgment: JudgmentType; reasons: string[] } | null {
   const reasons: string[] = [];
 
-  // 条件1: _Reあり + 過去3日連続赤字（当日含む）
-  // 当日が赤字 かつ 過去の赤字日数が2日以上 = 3日連続赤字とみなす
-  if (isRe && todayProfit < 0 && consecutiveLoss >= 2) {
-    reasons.push(REASON.RE_CONSECUTIVE_LOSS_3DAYS);
+  // 3日連続赤字かどうか（当日が赤字 かつ 過去の赤字日数が2日以上）
+  const isConsecutiveLoss3Days = todayProfit < 0 && consecutiveLoss >= 2;
+
+  // 条件1: _Reあり + 3日連続赤字 + 7日利益プラス
+  if (isRe && isConsecutiveLoss3Days && profit7Days > 0) {
+    reasons.push(REASON.RE_CONSECUTIVE_LOSS_3DAYS_7DAYS_PLUS);
   }
 
-  // 条件2: 停止でも継続でもないもの
+  // 条件2: _Reなし + 3日連続赤字
+  if (!isRe && isConsecutiveLoss3Days) {
+    reasons.push(REASON.NO_RE_CONSECUTIVE_LOSS_3DAYS);
+  }
+
+  // 条件3: 停止でも継続でもないもの
   if (!isStopOrContinue && reasons.length === 0) {
     reasons.push(REASON.NOT_STOP_NOT_CONTINUE);
   }
@@ -261,7 +270,7 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
   }
 
   // 4. 作り替え条件をチェック（停止・継続以外）
-  const replaceResult = checkReplace(isRe, consecutiveLoss, todayProfit, false);
+  const replaceResult = checkReplace(isRe, consecutiveLoss, todayProfit, profit7Days, false);
   if (replaceResult) {
     return {
       cpnKey: cpnData.cpnKey,
