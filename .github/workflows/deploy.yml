@@ -6,10 +6,10 @@ on:
   workflow_dispatch:  # 手動実行も可能
 
 env:
-  PROJECT_ID: adpilot-prod-1218
+  PROJECT_ID: phonic-envoy-481605-b1
   SERVICE_NAME: adpilot
   REGION: asia-northeast1
-  IMAGE_NAME: gcr.io/adpilot-prod-1218/adpilot
+  IMAGE_NAME: gcr.io/phonic-envoy-481605-b1/adpilot
 
 jobs:
   deploy:
