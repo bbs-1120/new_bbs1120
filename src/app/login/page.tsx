@@ -23,20 +23,31 @@ function LoginContent() {
     setLoginError(null);
 
     try {
+      console.log("ログイン試行:", { email });
+      
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
 
+      console.log("ログイン結果:", result);
+
       if (result?.error) {
+        console.error("ログインエラー:", result.error);
         setLoginError("メールアドレスまたはパスワードが正しくありません");
+        setLoading(false);
+      } else if (result?.ok) {
+        console.log("ログイン成功、リダイレクト先:", callbackUrl);
+        // router.pushの代わりにwindow.locationを使用して確実にリダイレクト
+        window.location.href = callbackUrl;
       } else {
-        router.push(callbackUrl);
+        setLoginError("ログインに失敗しました");
+        setLoading(false);
       }
-    } catch {
+    } catch (error) {
+      console.error("ログイン例外:", error);
       setLoginError("ログインに失敗しました");
-    } finally {
       setLoading(false);
     }
   };
