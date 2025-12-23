@@ -3,57 +3,70 @@ import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import type { Provider } from "next-auth/providers";
 
 const prisma = new PrismaClient();
 
 // 許可するメールドメイン
 const ALLOWED_DOMAINS = ["shibuya-ad.com"];
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
+// プロバイダーを動的に構築
+const providers: Provider[] = [];
+
+// Google OAuth（環境変数が設定されている場合のみ）
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    Credentials({
-      name: "credentials",
-      credentials: {
-        email: { label: "メールアドレス", type: "email" },
-        password: { label: "パスワード", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
+}
 
-        const email = credentials.email as string;
-        const password = credentials.password as string;
+// Credentials（メール/パスワード）- 常に有効
+providers.push(
+  Credentials({
+    name: "credentials",
+    credentials: {
+      email: { label: "メールアドレス", type: "email" },
+      password: { label: "パスワード", type: "password" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) {
+        return null;
+      }
 
-        // ユーザーを検索
-        const user = await prisma.user.findUnique({
-          where: { email },
-        });
+      const email = credentials.email as string;
+      const password = credentials.password as string;
 
-        if (!user || !user.password) {
-          return null;
-        }
+      // ユーザーを検索
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
 
-        // パスワード検証
-        const isValid = await bcrypt.compare(password, user.password);
-        if (!isValid) {
-          return null;
-        }
+      if (!user || !user.password) {
+        return null;
+      }
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          teamName: user.teamName,
-        };
-      },
-    }),
-  ],
+      // パスワード検証
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return null;
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        teamName: user.teamName,
+      };
+    },
+  })
+);
+
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  providers,
   pages: {
     signIn: "/login",
     error: "/login",
