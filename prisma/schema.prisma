@@ -7,35 +7,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ========== NextAuth 認証用テーブル ==========
-
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String    @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
-  role          String    @default("member") // admin, member
-  teamName      String?   @map("team_name") // CPN担当者名（例：悠太、祐輝、圭市、正弥）
-  password      String?   // ハッシュ化されたパスワード
-  accounts      Account[]
-  sessions      Session[]
+  role          String    @default("member")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+  password      String?
+  teamName      String?   @map("team_name")
+  accounts      Account[]
+  sessions      Session[]
 
   @@map("users")
 }
 
-// 招待トークン
 model Invite {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  token     String   @unique
-  role      String   @default("member") // admin, member
-  teamName  String?  @map("team_name") // CPN担当者名
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(cuid())
+  email     String    @unique
+  token     String    @unique
+  role      String    @default("member")
+  teamName  String?   @map("team_name")
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([token])
   @@map("invites")
@@ -47,12 +44,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String  @map("provider_account_id")
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -78,8 +75,6 @@ model VerificationToken {
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
-
-// ========== アプリケーション用テーブル ==========
 
 model Media {
   id              String           @id @default(uuid())
@@ -167,15 +162,14 @@ model ExecutionLog {
   @@map("execution_logs")
 }
 
-// ステータス変更の永続化（デバイス間共有用）
 model StatusOverride {
-  id         String   @id @default(uuid())
-  cpnKey     String   @unique @map("cpn_key")
-  cpnName    String   @map("cpn_name")
-  media      String
-  status     String   // ACTIVE or PAUSED
-  changedAt  DateTime @default(now()) @map("changed_at")
-  expiresAt  DateTime @map("expires_at") // 有効期限（24時間後）
+  id        String   @id @default(uuid())
+  cpnKey    String   @unique @map("cpn_key")
+  cpnName   String   @map("cpn_name")
+  media     String
+  status    String
+  changedAt DateTime @default(now()) @map("changed_at")
+  expiresAt DateTime @map("expires_at")
 
   @@index([cpnKey])
   @@index([expiresAt])
