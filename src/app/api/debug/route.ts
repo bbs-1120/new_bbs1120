@@ -3,7 +3,7 @@ import { google } from "googleapis";
 
 export async function GET() {
   try {
-    const historicalSpreadsheetId = process.env.GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID;
+    const historicalSpreadsheetId = process.env.GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID?.trim();
     const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n");
     const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
     

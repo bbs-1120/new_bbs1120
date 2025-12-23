@@ -206,8 +206,8 @@ export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[
 export async function fetchHistoricalData(_spreadsheetId: string): Promise<RawRowData[]> {
   const sheets = getGoogleSheetsClient();
   
-  // CSV保管シートのスプレッドシートID
-  const historicalSpreadsheetId = process.env.GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID;
+  // CSV保管シートのスプレッドシートID（末尾の改行を除去）
+  const historicalSpreadsheetId = process.env.GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID?.trim();
   if (!historicalSpreadsheetId) {
     console.warn("GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID is not configured");
     return [];
