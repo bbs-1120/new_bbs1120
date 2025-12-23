@@ -149,3 +149,18 @@ model ExecutionLog {
   @@index([executedAt])
   @@map("execution_logs")
 }
+
+// ステータス変更の永続化（デバイス間共有用）
+model StatusOverride {
+  id         String   @id @default(uuid())
+  cpnKey     String   @unique @map("cpn_key")
+  cpnName    String   @map("cpn_name")
+  media      String
+  status     String   // ACTIVE or PAUSED
+  changedAt  DateTime @default(now()) @map("changed_at")
+  expiresAt  DateTime @map("expires_at") // 有効期限（24時間後）
+
+  @@index([cpnKey])
+  @@index([expiresAt])
+  @@map("status_overrides")
+}

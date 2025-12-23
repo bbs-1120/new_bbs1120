@@ -108,42 +108,21 @@ interface AIAdvice {
 // グラフの色
 const COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
 
-// ステータス変更を保存するキー
-const STATUS_OVERRIDE_KEY = "cpn_status_overrides";
-
-// ステータスオーバーライドを保存
-function saveStatusOverride(cpnKey: string, status: string) {
+// ステータスオーバーライドをサーバーに保存
+async function saveStatusOverrideToServer(cpnKey: string, cpnName: string, media: string, status: string) {
   try {
-    const overrides = JSON.parse(localStorage.getItem(STATUS_OVERRIDE_KEY) || "{}");
-    overrides[cpnKey] = { status, timestamp: Date.now() };
-    localStorage.setItem(STATUS_OVERRIDE_KEY, JSON.stringify(overrides));
-  } catch {}
-}
-
-// ステータスオーバーライドを読み込み（24時間以内のもののみ）
-function loadStatusOverrides(): Record<string, string> {
-  try {
-    const overrides = JSON.parse(localStorage.getItem(STATUS_OVERRIDE_KEY) || "{}");
-    const now = Date.now();
-    const validOverrides: Record<string, string> = {};
-    
-    for (const [key, value] of Object.entries(overrides)) {
-      const { status, timestamp } = value as { status: string; timestamp: number };
-      // 24時間以内のオーバーライドのみ有効
-      if (now - timestamp < 24 * 60 * 60 * 1000) {
-        validOverrides[key] = status;
-      }
-    }
-    
-    return validOverrides;
-  } catch {
-    return {};
+    await fetch("/api/status-override", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cpnKey, cpnName, media, status }),
+    });
+  } catch (error) {
+    console.error("Failed to save status override:", error);
   }
 }
 
 // CPNリストにステータスオーバーライドを適用
-function applyStatusOverrides(cpnList: CpnData[]): CpnData[] {
-  const overrides = loadStatusOverrides();
+function applyStatusOverrides(cpnList: CpnData[], overrides: Record<string, string>): CpnData[] {
   return cpnList.map(cpn => {
     if (overrides[cpn.cpnKey]) {
       return { ...cpn, status: overrides[cpn.cpnKey] };
@@ -346,8 +325,8 @@ export default function AnalysisPage() {
             ? { ...c, status: newStatusValue }
             : c
         ));
-        // ステータス変更をlocalStorageに保存（リロード後も反映）
-        saveStatusOverride(cpn.cpnKey, newStatusValue);
+        // ステータス変更をサーバーに保存（デバイス間共有）
+        saveStatusOverrideToServer(cpn.cpnKey, cpn.cpnName, cpn.media, newStatusValue);
         // 変更履歴を追加
         addChangeRecord({
           type: "status",
@@ -425,15 +404,23 @@ export default function AnalysisPage() {
   const CACHE_DURATION = 30 * 60 * 1000; // 30分
 
   // ローカルキャッシュから即座にデータを読み込み
-  const loadFromLocalCache = () => {
+  const loadFromLocalCache = async () => {
     if (typeof window === "undefined") return false;
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_DURATION) {
+          // サーバーからステータスオーバーライドを取得
+          let statusOverrides: Record<string, string> = {};
+          try {
+            const overrideResponse = await fetch("/api/status-override");
+            const overrideData = await overrideResponse.json();
+            statusOverrides = overrideData.overrides || {};
+          } catch {}
+          
           setSummary(data.summary);
-          setCpnList(applyStatusOverrides(data.cpnList || []));
+          setCpnList(applyStatusOverrides(data.cpnList || [], statusOverrides));
           setProjectList(data.projectList || []);
           setMediaList(data.mediaList || []);
           setDailyTrend(data.dailyTrend || []);
@@ -473,18 +460,23 @@ export default function AnalysisPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       
-      const response = await fetch(url, { 
-        signal: controller.signal,
-        // キャッシュを活用
-        cache: refresh ? "no-store" : "default",
-      });
+      // データとステータスオーバーライドを並列取得
+      const [response, overrideResponse] = await Promise.all([
+        fetch(url, { 
+          signal: controller.signal,
+          cache: refresh ? "no-store" : "default",
+        }),
+        fetch("/api/status-override", { signal: controller.signal }).catch(() => null),
+      ]);
       clearTimeout(timeoutId);
       
       const data = await response.json();
+      const overrideData = overrideResponse ? await overrideResponse.json().catch(() => ({ overrides: {} })) : { overrides: {} };
+      const statusOverrides = overrideData.overrides || {};
 
       if (data.success) {
         setSummary(data.summary);
-        setCpnList(applyStatusOverrides(data.cpnList || []));
+        setCpnList(applyStatusOverrides(data.cpnList || [], statusOverrides));
         setProjectList(data.projectList || []);
         setMediaList(data.mediaList || []);
         setDailyTrend(data.dailyTrend || []);
@@ -518,12 +510,13 @@ export default function AnalysisPage() {
   };
 
   useEffect(() => {
-    // まずローカルキャッシュから読み込み（即座に表示）
-    const hasCachedData = loadFromLocalCache();
     setDashboardWidgets(getWidgetConfig()); // ダッシュボード設定を読み込み
     
     // すべてのデータを並列で取得（高速化）
     const loadAllData = async () => {
+      // まずローカルキャッシュから読み込み（即座に表示）
+      const hasCachedData = await loadFromLocalCache();
+      
       await Promise.all([
         hasCachedData 
           ? fetchData().catch(() => {}) // キャッシュがある場合は静かに更新
