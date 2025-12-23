@@ -124,9 +124,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // 日時をUnixタイムスタンプに変換
-    const startTime = Math.floor(new Date(startDateTime).getTime() / 1000);
-    const endTime = Math.floor(new Date(endDateTime).getTime() / 1000);
+    // 日時をUnixタイムスタンプに変換（JST → UTC）
+    // 入力された日時はJST（日本時間）として扱う
+    // サーバーがUTCで動作している場合でも、正しいタイムスタンプになるように変換
+    const parseJstToTimestamp = (dateTimeStr: string): number => {
+      // 入力形式: "2024-12-24T10:00:00"
+      // JSTとして解釈し、Unixタイムスタンプを返す
+      const [datePart, timePart] = dateTimeStr.split("T");
+      const [year, month, day] = datePart.split("-").map(Number);
+      const [hour, minute] = timePart.split(":").map(Number);
+      
+      // JST（UTC+9）として計算
+      // Date.UTC()はUTC時刻を返すので、9時間引いてJSTからUTCに変換
+      const utcTimestamp = Date.UTC(year, month - 1, day, hour - 9, minute, 0, 0);
+      return Math.floor(utcTimestamp / 1000);
+    };
+
+    const startTime = parseJstToTimestamp(startDateTime);
+    const endTime = parseJstToTimestamp(endDateTime);
     const now = Math.floor(Date.now() / 1000);
 
     // 開始時刻のチェック
