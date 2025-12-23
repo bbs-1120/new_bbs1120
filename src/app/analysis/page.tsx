@@ -1496,6 +1496,7 @@ export default function AnalysisPage() {
                   >
                     現在予算<SortIcon columnKey="dailyBudget" />
                   </th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">予算スケ</th>
                   <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">変更後</th>
                   <th 
                     className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
@@ -1621,6 +1622,14 @@ export default function AnalysisPage() {
                     </td>
                     {/* 現在予算 */}
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{cpn.dailyBudget}</td>
+                    {/* 予算スケジュール（Metaのみ） */}
+                    <td className="px-2 py-2 text-center whitespace-nowrap">
+                      {cpn.media === "Meta" && cpn.budgetSchedule ? (
+                        <span className="text-xs text-slate-600">{cpn.budgetSchedule}</span>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </td>
                     {/* 変更後予算 */}
                     <td className="px-2 py-2">
                       {isTargetMedia ? (
