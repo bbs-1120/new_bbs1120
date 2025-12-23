@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power, Lightbulb, AlertTriangle, CheckCircle, Info, History } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power, Lightbulb, AlertTriangle, CheckCircle, Info, History, Calendar, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
 import { GoalProgress } from "@/components/ui/goal-progress";
 import { ComparisonCard, ComparisonBadge } from "@/components/ui/comparison-card";
@@ -172,6 +172,94 @@ export default function AnalysisPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [nextRefreshIn, setNextRefreshIn] = useState(5 * 60); // 5分に変更
+  
+  // 予算スケジュールモーダル用
+  const [showBudgetScheduleModal, setShowBudgetScheduleModal] = useState(false);
+  const [budgetScheduleCpn, setBudgetScheduleCpn] = useState<CpnData | null>(null);
+  const [budgetScheduleForm, setBudgetScheduleForm] = useState({
+    startDate: "",
+    startTime: "",
+    endDate: "",
+    endTime: "",
+    budgetAmount: "",
+  });
+  const [budgetScheduleSubmitting, setBudgetScheduleSubmitting] = useState(false);
+  const [budgetScheduleMessage, setBudgetScheduleMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // 予算スケジュールモーダルを開く
+  const openBudgetScheduleModal = (cpn: CpnData) => {
+    // デフォルト値を設定（今日から明日）
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    setBudgetScheduleCpn(cpn);
+    setBudgetScheduleForm({
+      startDate: now.toISOString().split("T")[0],
+      startTime: "10:00",
+      endDate: tomorrow.toISOString().split("T")[0],
+      endTime: "23:59",
+      budgetAmount: "",
+    });
+    setBudgetScheduleMessage(null);
+    setShowBudgetScheduleModal(true);
+  };
+
+  // 予算スケジュールを送信
+  const submitBudgetSchedule = async () => {
+    if (!budgetScheduleCpn) return;
+
+    const { startDate, startTime, endDate, endTime, budgetAmount } = budgetScheduleForm;
+    
+    if (!startDate || !startTime || !endDate || !endTime || !budgetAmount) {
+      setBudgetScheduleMessage({ type: "error", text: "すべての項目を入力してください" });
+      return;
+    }
+
+    const amount = parseInt(budgetAmount.replace(/[¥,]/g, ""), 10);
+    if (isNaN(amount) || amount <= 0) {
+      setBudgetScheduleMessage({ type: "error", text: "予算は正の数値で入力してください" });
+      return;
+    }
+
+    setBudgetScheduleSubmitting(true);
+    setBudgetScheduleMessage(null);
+
+    try {
+      const startDateTime = `${startDate}T${startTime}:00`;
+      const endDateTime = `${endDate}T${endTime}:00`;
+
+      const response = await fetch("/api/budget-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cpnName: budgetScheduleCpn.cpnName,
+          campaignId: budgetScheduleCpn.campaignId,
+          accountName: budgetScheduleCpn.accountName,
+          startDateTime,
+          endDateTime,
+          budgetAmount: amount,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setBudgetScheduleMessage({ type: "success", text: "予算スケジュールを設定しました" });
+        // 成功したら3秒後にモーダルを閉じる
+        setTimeout(() => {
+          setShowBudgetScheduleModal(false);
+          setBudgetScheduleCpn(null);
+        }, 2000);
+      } else {
+        setBudgetScheduleMessage({ type: "error", text: result.error || "設定に失敗しました" });
+      }
+    } catch {
+      setBudgetScheduleMessage({ type: "error", text: "通信エラーが発生しました" });
+    } finally {
+      setBudgetScheduleSubmitting(false);
+    }
+  };
 
   // 比較データを取得
   const fetchComparisonData = async () => {
@@ -1622,10 +1710,17 @@ export default function AnalysisPage() {
                     </td>
                     {/* 現在予算 */}
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{cpn.dailyBudget}</td>
-                    {/* 予算スケジュール（Metaのみ） */}
+                    {/* 予算スケジュール（Metaのみ設定可能） */}
                     <td className="px-2 py-2 text-center whitespace-nowrap">
-                      {cpn.media === "Meta" && cpn.budgetSchedule ? (
-                        <span className="text-xs text-slate-600">{cpn.budgetSchedule}</span>
+                      {cpn.media === "Meta" ? (
+                        <button
+                          onClick={() => openBudgetScheduleModal(cpn)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md transition-colors"
+                          title="予算スケジュールを設定"
+                        >
+                          <Calendar className="h-3 w-3" />
+                          設定
+                        </button>
                       ) : (
                         <span className="text-xs text-slate-400">-</span>
                       )}
@@ -2165,6 +2260,127 @@ export default function AnalysisPage() {
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* 予算スケジュールモーダル */}
+      {showBudgetScheduleModal && budgetScheduleCpn && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                <h3 className="font-bold text-lg">予算スケジュール設定</h3>
+              </div>
+              <button
+                onClick={() => setShowBudgetScheduleModal(false)}
+                className="p-1 hover:bg-slate-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {/* CPN名 */}
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-xs text-blue-600 mb-1">対象CPN</p>
+                <p className="text-sm font-medium text-blue-900 break-all">
+                  {budgetScheduleCpn.cpnName}
+                </p>
+              </div>
+
+              {/* 開始日時 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">開始日</label>
+                  <input
+                    type="date"
+                    value={budgetScheduleForm.startDate}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">開始時刻</label>
+                  <input
+                    type="time"
+                    value={budgetScheduleForm.startTime}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, startTime: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* 終了日時 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">終了日</label>
+                  <input
+                    type="date"
+                    value={budgetScheduleForm.endDate}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">終了時刻</label>
+                  <input
+                    type="time"
+                    value={budgetScheduleForm.endTime}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, endTime: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* 追加予算 */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">追加予算（円）</label>
+                <input
+                  type="text"
+                  placeholder="例: 10000"
+                  value={budgetScheduleForm.budgetAmount}
+                  onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, budgetAmount: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">指定期間中の追加予算額を入力</p>
+              </div>
+
+              {/* メッセージ */}
+              {budgetScheduleMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  budgetScheduleMessage.type === "success" 
+                    ? "bg-green-50 text-green-700" 
+                    : "bg-red-50 text-red-700"
+                }`}>
+                  {budgetScheduleMessage.text}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-2">
+              <button
+                onClick={() => setShowBudgetScheduleModal(false)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={submitBudgetSchedule}
+                disabled={budgetScheduleSubmitting}
+                className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
+              >
+                {budgetScheduleSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    設定中...
+                  </>
+                ) : (
+                  "スケジュール設定"
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
