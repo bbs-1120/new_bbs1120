@@ -2,21 +2,34 @@ import { NextResponse } from "next/server";
 import { getFullAnalysisData } from "@/lib/googleSheets";
 import { judgeAllCpns, getJudgmentSummary, AnalysisCpnData, JUDGMENT } from "@/lib/judgment";
 import { getCache, setCache } from "@/lib/cache";
+import { auth } from "@/lib/auth";
 
 const CACHE_KEY = "judgment_results";
 
 // GET: 判定結果を取得
 export async function GET(request: Request) {
   try {
+    // ユーザーセッションを取得
+    const session = await auth();
+    const userRole = session?.user?.role || "member";
+    const userTeamName = session?.user?.teamName || null;
+
     const { searchParams } = new URL(request.url);
     const judgment = searchParams.get("judgment"); // フィルター用
 
-    // キャッシュをチェック
-    let results = getCache<ReturnType<typeof judgeAllCpns>>(CACHE_KEY);
+    // キャッシュをチェック（ユーザー別キャッシュ）
+    const cacheKeyWithUser = userRole === "admin" ? CACHE_KEY : `${CACHE_KEY}_${userTeamName || "all"}`;
+    let results = getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
 
     if (!results) {
       // マイ分析と同じデータソースからデータを取得
-      const analysisData = await getFullAnalysisData();
+      let analysisData = await getFullAnalysisData();
+
+      // メンバーの場合、担当者名でCPNをフィルタリング
+      if (userRole !== "admin" && userTeamName) {
+        const filterPattern = `新規グロース部_${userTeamName}_`;
+        analysisData = analysisData.filter(row => row.cpnName?.includes(filterPattern));
+      }
 
       // CPN データを判定用の形式に変換（accountName追加）
       const cpnList: AnalysisCpnData[] = analysisData.map((cpn: {
@@ -44,8 +57,8 @@ export async function GET(request: Request) {
       // 判定実行
       results = judgeAllCpns(cpnList);
 
-      // キャッシュに保存（3分）
-      setCache(CACHE_KEY, results, 30 * 60 * 1000); // 30分
+      // キャッシュに保存（30分）
+      setCache(cacheKeyWithUser, results, 30 * 60 * 1000);
     }
 
     // フィルター適用

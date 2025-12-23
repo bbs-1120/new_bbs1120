@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Bell, HelpCircle, X, History, AlertTriangle, CheckCircle } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import Link from "next/link";
+import { Search, Bell, HelpCircle, X, History, AlertTriangle, CheckCircle, User, LogOut, Users, ChevronDown } from "lucide-react";
 
 interface HeaderProps {
   title: string;
@@ -18,7 +20,9 @@ interface Notification {
 }
 
 export function Header({ title, description }: HeaderProps) {
+  const { data: session } = useSession();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
@@ -199,6 +203,66 @@ export function Header({ title, description }: HeaderProps) {
               </>
             )}
           </div>
+
+          {/* ユーザーメニュー */}
+          {session?.user && (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+              >
+                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-indigo-600" />
+                </div>
+                <div className="text-left hidden lg:block">
+                  <p className="text-sm font-medium text-slate-700 truncate max-w-[100px]">
+                    {session.user.name || session.user.email?.split("@")[0]}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {session.user.role === "admin" ? "管理者" : session.user.teamName || "メンバー"}
+                  </p>
+                </div>
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              </button>
+
+              {showUserMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                  <div className="absolute right-0 top-12 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden py-1">
+                    <div className="px-3 py-2 border-b border-slate-100">
+                      <p className="text-sm font-medium text-slate-900">{session.user.name}</p>
+                      <p className="text-xs text-slate-500">{session.user.email}</p>
+                      {session.user.teamName && (
+                        <p className="text-xs text-blue-600 mt-1">担当: {session.user.teamName}</p>
+                      )}
+                    </div>
+
+                    {session.user.role === "admin" && (
+                      <Link
+                        href="/admin/members"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <Users className="h-4 w-4" />
+                        メンバー管理
+                      </Link>
+                    )}
+
+                    <button
+                      onClick={() => signOut({ callbackUrl: "/login" })}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      ログアウト
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

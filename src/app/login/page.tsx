@@ -1,14 +1,45 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 function LoginContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const error = searchParams.get("error");
   const message = searchParams.get("message");
   const callbackUrl = searchParams.get("callbackUrl") || "/";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleCredentialsLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setLoginError(null);
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setLoginError("メールアドレスまたはパスワードが正しくありません");
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch {
+      setLoginError("ログインに失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460]">
@@ -30,7 +61,7 @@ function LoginContent() {
               />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">GrowthDeck</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">AdPilot</h1>
           <p className="text-gray-400">広告運用ダッシュボード</p>
         </div>
 
@@ -41,17 +72,65 @@ function LoginContent() {
           </h2>
 
           {/* エラーメッセージ */}
-          {error && (
+          {(error || loginError) && (
             <div className="mb-6 p-4 rounded-lg bg-red-500/20 border border-red-500/50">
               <p className="text-red-200 text-sm text-center">
-                {message
-                  ? decodeURIComponent(message)
+                {loginError || message
+                  ? loginError || decodeURIComponent(message || "")
                   : error === "AccessDenied"
                   ? "アクセスが拒否されました"
                   : "ログインに失敗しました"}
               </p>
             </div>
           )}
+
+          {/* メール・パスワードフォーム */}
+          <form onSubmit={handleCredentialsLogin} className="space-y-4 mb-6">
+            <div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="メールアドレス"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="パスワード"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  ログイン中...
+                </>
+              ) : (
+                "ログイン"
+              )}
+            </button>
+          </form>
+
+          {/* 区切り線 */}
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/20"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-transparent text-gray-400">または</span>
+            </div>
+          </div>
 
           {/* Googleログインボタン */}
           <button
@@ -81,14 +160,13 @@ function LoginContent() {
 
           {/* 注意書き */}
           <p className="mt-6 text-center text-gray-400 text-sm">
-            <span className="text-emerald-400">@shibuya-ad.com</span>{" "}
-            のメールアドレスでログインしてください
+            招待されたメンバーのみログイン可能です
           </p>
         </div>
 
         {/* フッター */}
         <p className="mt-8 text-center text-gray-500 text-xs">
-          © 2025 GrowthDeck. All rights reserved.
+          © 2025 AdPilot. All rights reserved.
         </p>
       </div>
     </div>
@@ -108,4 +186,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-

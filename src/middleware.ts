@@ -3,20 +3,38 @@ import { NextResponse } from "next/server";
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname === "/login";
-  const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-  const isPublicApi = req.nextUrl.pathname.startsWith("/api/status");
-  const isScheduledApi = req.nextUrl.pathname.startsWith("/api/scheduled-send");
+  const pathname = req.nextUrl.pathname;
+  
+  // 公開ページ・API
+  const isLoginPage = pathname === "/login";
+  const isSetupPage = pathname === "/setup";
+  const isRegisterPage = pathname === "/register";
+  const isAuthApi = pathname.startsWith("/api/auth");
+  const isPublicApi = pathname.startsWith("/api/status");
+  const isScheduledApi = pathname.startsWith("/api/scheduled-send");
+  const isSetupApi = pathname.startsWith("/api/admin/setup");
+  const isRegisterApi = pathname.startsWith("/api/register");
 
-  // 認証API、ステータスAPI、スケジュール送信APIは常に許可
-  if (isAuthApi || isPublicApi || isScheduledApi) {
+  // 公開API・ページは常に許可
+  if (isAuthApi || isPublicApi || isScheduledApi || isSetupApi || isRegisterApi) {
     return NextResponse.next();
   }
 
-  // ログインページへのアクセス
-  if (isLoginPage) {
-    if (isLoggedIn) {
+  // ログイン・登録・セットアップページへのアクセス
+  if (isLoginPage || isSetupPage || isRegisterPage) {
+    if (isLoggedIn && isLoginPage) {
       // ログイン済みならダッシュボードへリダイレクト
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // 管理者専用ページのチェック
+  if (pathname.startsWith("/admin")) {
+    if (!isLoggedIn) {
+      return NextResponse.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(pathname)}`, req.url));
+    }
+    if (req.auth?.user?.role !== "admin") {
       return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next();
@@ -24,7 +42,7 @@ export default auth((req) => {
 
   // 未ログインなら認証ページへリダイレクト
   if (!isLoggedIn) {
-    const callbackUrl = encodeURIComponent(req.nextUrl.pathname);
+    const callbackUrl = encodeURIComponent(pathname);
     return NextResponse.redirect(
       new URL(`/login?callbackUrl=${callbackUrl}`, req.url)
     );

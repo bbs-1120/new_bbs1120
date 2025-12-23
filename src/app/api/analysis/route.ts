@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getFullAnalysisData, getMonthlyProfit, getDailyTrendData, getProjectMonthlyData } from "@/lib/googleSheets";
 import { getCache, setCache } from "@/lib/cache";
+import { auth } from "@/lib/auth";
 
 const CACHE_KEY = "analysis_data";
 const CACHE_TTL = 5 * 60 * 1000; // 5分間キャッシュ（高速レスポンス）
@@ -179,12 +180,18 @@ function generateAIAdvice(
 
 export async function GET(request: Request) {
   try {
+    // ユーザーセッションを取得
+    const session = await auth();
+    const userRole = session?.user?.role || "member";
+    const userTeamName = session?.user?.teamName || null;
+
     // URLパラメータでキャッシュをスキップできる
     const { searchParams } = new URL(request.url);
     const skipCache = searchParams.get("refresh") === "true";
 
-    // キャッシュからデータを取得
-    let cachedData = skipCache ? null : getCache<CachedData>(CACHE_KEY);
+    // キャッシュからデータを取得（管理者と一般ユーザーで別キャッシュ）
+    const cacheKeyWithUser = userRole === "admin" ? CACHE_KEY : `${CACHE_KEY}_${userTeamName || "all"}`;
+    let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
 
     if (!cachedData) {
       // キャッシュがない場合はスプレッドシートから取得
@@ -196,10 +203,17 @@ export async function GET(request: Request) {
       ]);
 
       cachedData = { sheetData, monthlyProfit, dailyTrend, projectMonthly };
-      setCache(CACHE_KEY, cachedData, CACHE_TTL);
+      setCache(cacheKeyWithUser, cachedData, CACHE_TTL);
     }
 
-    const { sheetData, monthlyProfit, dailyTrend, projectMonthly } = cachedData;
+    let { sheetData, monthlyProfit, dailyTrend, projectMonthly } = cachedData;
+
+    // メンバーの場合、担当者名でCPNをフィルタリング
+    // CPN名に「新規グロース部_{担当者名}_」が含まれるもののみ表示
+    if (userRole !== "admin" && userTeamName) {
+      const filterPattern = `新規グロース部_${userTeamName}_`;
+      sheetData = sheetData.filter(row => row.cpnName?.includes(filterPattern));
+    }
 
     // 1. 当日合計を計算
     let totalClicks = 0;
