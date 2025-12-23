@@ -108,6 +108,50 @@ interface AIAdvice {
 // グラフの色
 const COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
 
+// ステータス変更を保存するキー
+const STATUS_OVERRIDE_KEY = "cpn_status_overrides";
+
+// ステータスオーバーライドを保存
+function saveStatusOverride(cpnKey: string, status: string) {
+  try {
+    const overrides = JSON.parse(localStorage.getItem(STATUS_OVERRIDE_KEY) || "{}");
+    overrides[cpnKey] = { status, timestamp: Date.now() };
+    localStorage.setItem(STATUS_OVERRIDE_KEY, JSON.stringify(overrides));
+  } catch {}
+}
+
+// ステータスオーバーライドを読み込み（24時間以内のもののみ）
+function loadStatusOverrides(): Record<string, string> {
+  try {
+    const overrides = JSON.parse(localStorage.getItem(STATUS_OVERRIDE_KEY) || "{}");
+    const now = Date.now();
+    const validOverrides: Record<string, string> = {};
+    
+    for (const [key, value] of Object.entries(overrides)) {
+      const { status, timestamp } = value as { status: string; timestamp: number };
+      // 24時間以内のオーバーライドのみ有効
+      if (now - timestamp < 24 * 60 * 60 * 1000) {
+        validOverrides[key] = status;
+      }
+    }
+    
+    return validOverrides;
+  } catch {
+    return {};
+  }
+}
+
+// CPNリストにステータスオーバーライドを適用
+function applyStatusOverrides(cpnList: CpnData[]): CpnData[] {
+  const overrides = loadStatusOverrides();
+  return cpnList.map(cpn => {
+    if (overrides[cpn.cpnKey]) {
+      return { ...cpn, status: overrides[cpn.cpnKey] };
+    }
+    return cpn;
+  });
+}
+
 export default function AnalysisPage() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [cpnList, setCpnList] = useState<CpnData[]>([]);
@@ -291,6 +335,7 @@ export default function AnalysisPage() {
       const result = await response.json();
 
       if (result.success) {
+        const newStatusValue = newStatus === "active" ? "ACTIVE" : "PAUSED";
         setStatusMessages(prev => ({ 
           ...prev, 
           [cpn.cpnKey]: { type: "success", text: newStatus === "active" ? "ONにしました" : "OFFにしました" } 
@@ -298,9 +343,11 @@ export default function AnalysisPage() {
         // ステータスを更新
         setCpnList(prev => prev.map(c => 
           c.cpnKey === cpn.cpnKey 
-            ? { ...c, status: newStatus === "active" ? "ACTIVE" : "PAUSED" }
+            ? { ...c, status: newStatusValue }
             : c
         ));
+        // ステータス変更をlocalStorageに保存（リロード後も反映）
+        saveStatusOverride(cpn.cpnKey, newStatusValue);
         // 変更履歴を追加
         addChangeRecord({
           type: "status",
@@ -386,7 +433,7 @@ export default function AnalysisPage() {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_DURATION) {
           setSummary(data.summary);
-          setCpnList(data.cpnList || []);
+          setCpnList(applyStatusOverrides(data.cpnList || []));
           setProjectList(data.projectList || []);
           setMediaList(data.mediaList || []);
           setDailyTrend(data.dailyTrend || []);
@@ -437,7 +484,7 @@ export default function AnalysisPage() {
 
       if (data.success) {
         setSummary(data.summary);
-        setCpnList(data.cpnList || []);
+        setCpnList(applyStatusOverrides(data.cpnList || []));
         setProjectList(data.projectList || []);
         setMediaList(data.mediaList || []);
         setDailyTrend(data.dailyTrend || []);
