@@ -92,7 +92,7 @@ function normalizeMediaName(media: string): string {
 /**
  * 突き合わせ_当日CPN一覧 シートからデータを取得
  * Updated: 2024-12-22
- * 「新規グロース部_悠太」を含む行のみ抽出
+ * 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
  * 
  * カラム構成（H列から開始）:
  * H(7): Today（日付）
@@ -139,8 +139,8 @@ export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[
 
     const cpnName = parseValue(row[8]); // I列: campaign_name
     
-    // 「新規グロース部_悠太」を含む行のみ抽出
-    if (!cpnName.includes("新規グロース部_悠太")) continue;
+    // 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
+    if (!cpnName.includes("新規グロース部_")) continue;
 
     const media = parseValue(row[23]); // X列: 媒体名
     const spend = parseNumber(row[9]); // J列: Cost（消化）
@@ -183,7 +183,7 @@ export async function fetchTodayData(spreadsheetId: string): Promise<RawRowData[
 
 /**
  * CSV保管シートから過去データを取得
- * 「新規グロース部_悠太」を含む行のみ抽出
+ * 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
  * 
  * カラム構成:
  * B(1): 日付+キャンペーン名
@@ -240,8 +240,8 @@ export async function fetchHistoricalData(_spreadsheetId: string): Promise<RawRo
 
       const cpnName = parseValue(row[3]); // D列: キャンペーン名
       
-      // 「新規グロース部_悠太」を含む行のみ抽出
-      if (!cpnName.includes("新規グロース部_悠太")) continue;
+      // 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
+      if (!cpnName.includes("新規グロース部_")) continue;
 
       const media = parseValue(row[12]); // M列: 媒体名
       const spend = parseNumber(row[4]); // E列: Cost
