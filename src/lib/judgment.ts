@@ -148,8 +148,8 @@ function checkReplace(
 ): { judgment: JudgmentType; reasons: string[] } | null {
   const reasons: string[] = [];
 
-  // 3日連続赤字かどうか（当日が赤字 かつ 過去の赤字日数が2日以上）
-  const isConsecutiveLoss3Days = todayProfit < 0 && consecutiveLoss >= 2;
+  // 3日連続赤字かどうか（consecutiveLossは当日を含む連続赤字日数）
+  const isConsecutiveLoss3Days = consecutiveLoss >= 3;
 
   // 条件1: _Reあり + 3日連続赤字 + 7日利益プラス
   if (isRe && isConsecutiveLoss3Days && profit7Days > 0) {
@@ -211,10 +211,10 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
   }
 
   // 2. 作り替え条件をチェック（3日連続赤字）← 継続より先にチェック
-  // 当日が赤字 かつ 過去の赤字日数が2日以上 = 3日連続赤字
+  // consecutiveLossは当日を含む連続赤字日数なので、3日連続赤字は >= 3
   // _Reあり: 3日連続赤字 + 7日利益プラス → 作り替え
   // _Reなし: 3日連続赤字 → 作り替え
-  if (todayProfit < 0 && consecutiveLoss >= 2) {
+  if (consecutiveLoss >= 3) {
     if (isRe && profit7Days >= 0) {
       // _Reあり + 3日連続赤字 + 7日利益プラス
       return {

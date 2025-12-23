@@ -220,9 +220,10 @@ export async function fetchHistoricalData(_spreadsheetId: string): Promise<RawRo
   const sheetName = `${year}年${month}月`;
 
   try {
+    // シートの構造: 6行目がヘッダー、7行目からデータ
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: historicalSpreadsheetId,
-      range: `'${sheetName}'!A:T`,
+      range: `'${sheetName}'!A7:T`,  // 7行目（データ開始行）から取得
     });
 
     const rows = response.data.values;
@@ -232,8 +233,8 @@ export async function fetchHistoricalData(_spreadsheetId: string): Promise<RawRo
 
     const data: RawRowData[] = [];
 
-    // データ行を処理（1行目はヘッダーなのでスキップ）
-    for (let i = 1; i < rows.length; i++) {
+    // データ行を処理（7行目から開始なのでインデックス0からデータ）
+    for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length < 10) continue;
 
@@ -363,17 +364,19 @@ export async function getFullAnalysisData() {
     fetchHistoricalData(spreadsheetId),
   ]);
 
-  // 過去7日間のデータを集計
+  // 過去7日間と40日間のデータを集計
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const fortyDaysAgo = new Date(today);
+  fortyDaysAgo.setDate(fortyDaysAgo.getDate() - 40);
 
-  // CPN別に過去データを日付順に整理
+  // CPN別に過去データを日付順に整理（40日間）
   const cpnHistoryMap = new Map<string, { date: Date; profit: number; mcv: number; spend: number; revenue: number }[]>();
 
   for (const row of historicalData) {
-    if (row.date < sevenDaysAgo) continue;
+    if (row.date < fortyDaysAgo) continue;  // 40日間のデータを保持
 
     const key = row.cpnName;
     if (!cpnHistoryMap.has(key)) {
@@ -388,14 +391,17 @@ export async function getFullAnalysisData() {
     });
   }
 
-  // CPN別に7日間の集計と連続日数を計算
+  // CPN別に7日間と40日間の集計と連続日数を計算
   const cpn7DaysMap = new Map<string, { 
     profit: number; 
     spend: number; 
     revenue: number; 
     consecutiveLoss: number; 
     consecutiveProfit: number; 
-    zeroMcvDays: number 
+    zeroMcvDays: number;
+    profit40Days: number;
+    spend40Days: number;
+    revenue40Days: number;
   }>();
 
   for (const [cpnName, history] of cpnHistoryMap.entries()) {
@@ -405,20 +411,32 @@ export async function getFullAnalysisData() {
     let profit = 0;
     let spend = 0;
     let revenue = 0;
+    let profit40Days = 0;
+    let spend40Days = 0;
+    let revenue40Days = 0;
     let zeroMcvDays = 0;
     let consecutiveLoss = 0;
     let consecutiveProfit = 0;
 
-    // 集計
+    // 集計（7日間と40日間）
     for (const day of history) {
-      profit += day.profit;
-      spend += day.spend;
-      revenue += day.revenue;
-      if (day.mcv === 0 && day.spend >= 3000) zeroMcvDays++;
+      // 40日間の集計
+      profit40Days += day.profit;
+      spend40Days += day.spend;
+      revenue40Days += day.revenue;
+      
+      // 7日間の集計
+      if (day.date >= sevenDaysAgo) {
+        profit += day.profit;
+        spend += day.spend;
+        revenue += day.revenue;
+        if (day.mcv === 0 && day.spend >= 3000) zeroMcvDays++;
+      }
     }
 
-    // 連続日数を計算（新しい日付から遡って連続をカウント）
+    // 連続日数を計算（新しい日付から遡って連続をカウント）- 7日間のデータのみ
     for (const day of history) {
+      if (day.date < sevenDaysAgo) break;  // 7日以内のデータのみ
       if (day.profit < 0) {
         if (consecutiveProfit === 0) {
           consecutiveLoss++;
@@ -434,7 +452,7 @@ export async function getFullAnalysisData() {
       }
     }
 
-    cpn7DaysMap.set(cpnName, { profit, spend, revenue, consecutiveLoss, consecutiveProfit, zeroMcvDays });
+    cpn7DaysMap.set(cpnName, { profit, spend, revenue, consecutiveLoss, consecutiveProfit, zeroMcvDays, profit40Days, spend40Days, revenue40Days });
   }
 
   // 当日データに7日間集計を追加
@@ -455,12 +473,24 @@ export async function getFullAnalysisData() {
       consecutiveLoss = 0;
     }
     
+    // 当日データを含めた7日間の集計を計算
+    const profit7Days = (stats?.profit || 0) + row.profit;
+    const spend7Days = (stats?.spend || 0) + row.spend;
+    const revenue7Days = (stats?.revenue || 0) + row.revenue;
+    
+    // 当日データを含めた40日間の集計を計算
+    const profit40Days = (stats?.profit40Days || 0) + row.profit;
+    const spend40Days = (stats?.spend40Days || 0) + row.spend;
+    const revenue40Days = (stats?.revenue40Days || 0) + row.revenue;
+    
     return {
       ...row,
       dailyBudget: row.campaignBudget || "-",
       campaignId: row.campaignId || "", // CPID
-      profit7Days: stats?.profit || 0,
-      roas7Days: stats && stats.spend > 0 ? (stats.revenue / stats.spend) * 100 : 0,
+      profit7Days: profit7Days,  // 当日データを含めた7日間利益
+      roas7Days: spend7Days > 0 ? (revenue7Days / spend7Days) * 100 : 0,  // 当日データを含めた7日間ROAS
+      profit40Days: profit40Days,  // 当日データを含めた40日間利益
+      roas40Days: spend40Days > 0 ? (revenue40Days / spend40Days) * 100 : 0,  // 当日データを含めた40日間ROAS
       consecutiveZeroMcv: stats?.zeroMcvDays || 0,
       consecutiveLoss,
       consecutiveProfit,

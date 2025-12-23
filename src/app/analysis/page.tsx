@@ -37,6 +37,8 @@ interface CpnData {
   budgetSchedule: string;
   profit7Days: number;
   roas7Days: number;
+  profit40Days?: number;  // 40日間利益
+  roas40Days?: number;    // 40日間ROAS
   consecutiveZeroMcv: number;
   consecutiveLoss: number;
   spend: number;
@@ -821,9 +823,12 @@ export default function AnalysisPage() {
           {(() => {
             const goodButOffCpns = cpnList.filter(cpn => {
               const noSpendToday = cpn.spend === 0; // 当日消化0円
-              const isGood = cpn.profit7Days >= 50000 || cpn.roas7Days >= 150; // 7日利益5万円以上 または ROAS150%以上
+              // 40日間データを参照（profit40Days, roas40Daysを使用）
+              const profit40 = cpn.profit40Days || cpn.profit7Days;  // fallback to 7days if 40days not available
+              const roas40 = cpn.roas40Days || cpn.roas7Days;
+              const isGood = profit40 >= 50000 || roas40 >= 150; // 40日利益5万円以上 または ROAS150%以上
               return noSpendToday && isGood;
-            }).sort((a, b) => b.profit7Days - a.profit7Days);
+            }).sort((a, b) => (b.profit40Days || b.profit7Days) - (a.profit40Days || a.profit7Days));
 
             if (goodButOffCpns.length === 0) {
               return (
@@ -835,7 +840,7 @@ export default function AnalysisPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-emerald-800">本日好調なCPNは全て出稿されています</p>
-                        <p className="text-xs text-emerald-600">7日利益5万円以上 or ROAS150%以上のCPNは全て配信中です</p>
+                        <p className="text-xs text-emerald-600">40日間利益5万円以上 or ROAS150%以上のCPNは全て配信中です</p>
                       </div>
                     </div>
                   </CardContent>
@@ -850,7 +855,7 @@ export default function AnalysisPage() {
                     <Lightbulb className="h-5 w-5 text-amber-500" />
                     好調だが本日未配信のCPN（{goodButOffCpns.length}件）
                   </CardTitle>
-                  <p className="text-xs text-amber-600">7日間利益5万円以上 or ROAS150%以上で、本日消化0円のCPNです</p>
+                  <p className="text-xs text-amber-600">40日間利益5万円以上 or ROAS150%以上で、本日消化0円のCPNです</p>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -864,8 +869,8 @@ export default function AnalysisPage() {
                               cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
                               "bg-slate-100 text-slate-700"
                             }`}>{cpn.media}</span>
-                            <span className="text-xs text-emerald-600 font-medium">7日利益: +¥{cpn.profit7Days.toLocaleString()}</span>
-                            <span className="text-xs text-slate-500">ROAS: {cpn.roas7Days.toFixed(0)}%</span>
+                            <span className="text-xs text-emerald-600 font-medium">40日利益: +¥{(cpn.profit40Days || cpn.profit7Days).toLocaleString()}</span>
+                            <span className="text-xs text-slate-500">ROAS: {(cpn.roas40Days || cpn.roas7Days).toFixed(0)}%</span>
                           </div>
                         </div>
                         <button
