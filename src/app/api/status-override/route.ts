@@ -6,14 +6,8 @@ const prisma = new PrismaClient();
 // ステータスオーバーライドを取得
 export async function GET() {
   try {
-    // 有効期限内のオーバーライドのみ取得
-    const overrides = await prisma.statusOverride.findMany({
-      where: {
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-    });
+    // すべてのオーバーライドを取得（無期限）
+    const overrides = await prisma.statusOverride.findMany();
 
     // cpnKeyをキーとしたオブジェクトに変換
     const overrideMap: Record<string, string> = {};
@@ -48,9 +42,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // 24時間後の有効期限を設定
+    // 無期限（100年後を設定）
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
+    expiresAt.setFullYear(expiresAt.getFullYear() + 100);
 
     // upsert（存在すれば更新、なければ作成）
     await prisma.statusOverride.upsert({
