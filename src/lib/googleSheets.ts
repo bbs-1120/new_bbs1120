@@ -501,8 +501,9 @@ export async function getFullAnalysisData() {
 
 /**
  * 今月（12月）の利益合計を取得
+ * @param teamName フィルタリング用のチーム名（指定時は「新規グロース部_{teamName}_」でフィルタ）
  */
-export async function getMonthlyProfit(): Promise<number> {
+export async function getMonthlyProfit(teamName?: string | null): Promise<number> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) {
     throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
@@ -510,10 +511,17 @@ export async function getMonthlyProfit(): Promise<number> {
 
   try {
     // 過去データを取得
-    const historicalData = await fetchHistoricalData(spreadsheetId);
+    let historicalData = await fetchHistoricalData(spreadsheetId);
     
     // 当日データも取得
-    const todayData = await fetchTodayData(spreadsheetId);
+    let todayData = await fetchTodayData(spreadsheetId);
+
+    // メンバーフィルタリング
+    if (teamName) {
+      const filterPattern = `新規グロース部_${teamName}_`;
+      historicalData = historicalData.filter(row => row.cpnName?.includes(filterPattern));
+      todayData = todayData.filter(row => row.cpnName?.includes(filterPattern));
+    }
 
     // 今月の開始日を計算（12月1日）
     const now = new Date();
@@ -543,8 +551,9 @@ export async function getMonthlyProfit(): Promise<number> {
 
 /**
  * 当月の日別データを取得（グラフ用）
+ * @param teamName フィルタリング用のチーム名
  */
-export async function getDailyTrendData() {
+export async function getDailyTrendData(teamName?: string | null) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) {
     throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
@@ -552,10 +561,17 @@ export async function getDailyTrendData() {
 
   try {
     // 過去データと当日データを取得
-    const [historicalData, todayData] = await Promise.all([
+    let [historicalData, todayData] = await Promise.all([
       fetchHistoricalData(spreadsheetId),
       fetchTodayData(spreadsheetId),
     ]);
+
+    // メンバーフィルタリング
+    if (teamName) {
+      const filterPattern = `新規グロース部_${teamName}_`;
+      historicalData = historicalData.filter(row => row.cpnName?.includes(filterPattern));
+      todayData = todayData.filter(row => row.cpnName?.includes(filterPattern));
+    }
 
     // 今月の開始日を計算
     const now = new Date();
@@ -628,18 +644,26 @@ export async function getDailyTrendData() {
 
 /**
  * 案件別の当月パフォーマンスを取得
+ * @param teamName フィルタリング用のチーム名
  */
-export async function getProjectMonthlyData() {
+export async function getProjectMonthlyData(teamName?: string | null) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) {
     throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
   }
 
   try {
-    const [historicalData, todayData] = await Promise.all([
+    let [historicalData, todayData] = await Promise.all([
       fetchHistoricalData(spreadsheetId),
       fetchTodayData(spreadsheetId),
     ]);
+
+    // メンバーフィルタリング
+    if (teamName) {
+      const filterPattern = `新規グロース部_${teamName}_`;
+      historicalData = historicalData.filter(row => row.cpnName?.includes(filterPattern));
+      todayData = todayData.filter(row => row.cpnName?.includes(filterPattern));
+    }
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);

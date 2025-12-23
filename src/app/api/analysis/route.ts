@@ -193,13 +193,17 @@ export async function GET(request: Request) {
     const cacheKeyWithUser = userRole === "admin" ? CACHE_KEY : `${CACHE_KEY}_${userTeamName || "all"}`;
     let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
 
+    // メンバーの場合のフィルタリング用teamName
+    const filterTeamName = userRole !== "admin" ? userTeamName : null;
+
     if (!cachedData) {
       // キャッシュがない場合はスプレッドシートから取得
+      // メンバーの場合はteamNameでフィルタリング
       const [sheetData, monthlyProfit, dailyTrend, projectMonthly] = await Promise.all([
         getFullAnalysisData(),
-        getMonthlyProfit(),
-        getDailyTrendData(),
-        getProjectMonthlyData(),
+        getMonthlyProfit(filterTeamName),
+        getDailyTrendData(filterTeamName),
+        getProjectMonthlyData(filterTeamName),
       ]);
 
       cachedData = { sheetData, monthlyProfit, dailyTrend, projectMonthly };
@@ -210,8 +214,8 @@ export async function GET(request: Request) {
 
     // メンバーの場合、担当者名でCPNをフィルタリング
     // CPN名に「新規グロース部_{担当者名}_」が含まれるもののみ表示
-    if (userRole !== "admin" && userTeamName) {
-      const filterPattern = `新規グロース部_${userTeamName}_`;
+    if (filterTeamName) {
+      const filterPattern = `新規グロース部_${filterTeamName}_`;
       sheetData = sheetData.filter(row => row.cpnName?.includes(filterPattern));
     }
 
