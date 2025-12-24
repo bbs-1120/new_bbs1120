@@ -173,7 +173,7 @@ async function updateTikTokStatus(
     console.log("Using known advertiser ID from account name mapping");
   } else {
     const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
-    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
   }
 
   if (advertiserIds.length === 0) {
@@ -295,7 +295,7 @@ async function updatePangleStatus(
     advertiserIds = [knownAdvertiserId];
   } else {
     const advertiserIdsStr = process.env.PANGLE_ADVERTISER_IDS || process.env.TIKTOK_ADVERTISER_IDS || "";
-    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
   }
 
   if (advertiserIds.length === 0) {

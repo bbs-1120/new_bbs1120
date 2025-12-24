@@ -188,7 +188,7 @@ async function updateTikTokBudget(
   } else {
     // フォールバック: 全広告主IDを試す（最大10個）
     const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
-    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
     console.log("Falling back to advertiser ID list, trying first 10");
   }
 
@@ -334,7 +334,7 @@ async function updatePangleBudget(
     console.log("Using known advertiser ID from account name mapping");
   } else {
     const advertiserIdsStr = process.env.PANGLE_ADVERTISER_IDS || process.env.TIKTOK_ADVERTISER_IDS || "";
-    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
   }
 
   if (advertiserIds.length === 0) {
