@@ -31,8 +31,68 @@ interface TodaySummary {
   monthlyProfit: number;
 }
 
+interface JudgmentResult {
+  cpnKey: string;
+  cpnName: string;
+  media: string;
+  judgment: string;
+}
+
+interface JudgmentOverride {
+  cpnKey: string;
+  originalJudgment: string;
+  newJudgment: string;
+  timestamp: number;
+}
+
 const CACHE_KEY = "home_data_cache";
 const CACHE_DURATION = 3 * 60 * 1000; // 3分
+const JUDGMENT_OVERRIDE_KEY = "judgment_overrides";
+const REFRESH_INTERVAL = 30 * 1000; // 30秒ごとに更新
+
+// 判定オーバーライドを取得（当日23:59まで有効）
+function getJudgmentOverrides(): JudgmentOverride[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem(JUDGMENT_OVERRIDE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return parsed.filter((o: JudgmentOverride) => {
+        const overrideDate = new Date(new Date(o.timestamp).toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+        const expiryDate = new Date(overrideDate);
+        expiryDate.setHours(23, 59, 59, 999);
+        const nowJst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+        return nowJst <= expiryDate;
+      });
+    }
+  } catch {}
+  return [];
+}
+
+// オーバーライドを適用してサマリーを再計算
+function applyOverridesToSummary(results: JudgmentResult[], overrides: JudgmentOverride[]): SummaryData {
+  const overrideMap = new Map(overrides.map(o => [o.cpnKey, o.newJudgment]));
+  
+  let stop = 0, replace = 0, continueCount = 0, error = 0;
+  
+  for (const result of results) {
+    const finalJudgment = overrideMap.get(result.cpnKey) || result.judgment;
+    switch (finalJudgment) {
+      case "停止": stop++; break;
+      case "作り替え": replace++; break;
+      case "継続": continueCount++; break;
+      case "エラー": error++; break;
+    }
+  }
+  
+  return {
+    stop,
+    replace,
+    continue: continueCount,
+    error,
+    total: results.length,
+  };
+}
 
 export default function HomePage() {
   const [summary, setSummary] = useState<SummaryData>({
@@ -43,6 +103,7 @@ export default function HomePage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [hasCache, setHasCache] = useState(false);
+  const [allResults, setAllResults] = useState<JudgmentResult[]>([]);
 
   // 時刻はuseMemoで計算（毎回再計算しない）
   const currentTime = useMemo(() => {
@@ -100,7 +161,17 @@ export default function HomePage() {
         analysisRes.json(),
       ]);
       
-      const newSummary = judgmentData.success ? judgmentData.summary : summary;
+      // 判定結果を保存
+      if (judgmentData.success && judgmentData.results) {
+        setAllResults(judgmentData.results);
+        // オーバーライドを適用してサマリーを計算
+        const overrides = getJudgmentOverrides();
+        const newSummary = applyOverridesToSummary(judgmentData.results, overrides);
+        setSummary(newSummary);
+      } else if (judgmentData.success) {
+        setSummary(judgmentData.summary);
+      }
+      
       const newTodaySummary = analysisData.success ? {
         spend: analysisData.summary.spend,
         revenue: analysisData.summary.revenue,
@@ -111,11 +182,10 @@ export default function HomePage() {
         monthlyProfit: analysisData.summary.monthlyProfit || 0,
       } : todaySummary;
 
-      setSummary(newSummary);
       setTodaySummary(newTodaySummary);
       
-      // キャッシュに保存
-      saveToCache({ summary: newSummary, todaySummary: newTodaySummary });
+      // キャッシュに保存（判定結果も含める）
+      saveToCache({ summary, todaySummary: newTodaySummary });
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -123,12 +193,62 @@ export default function HomePage() {
     }
   }, [summary, todaySummary, saveToCache]);
 
+  // オーバーライドを適用してサマリーを更新
+  const updateSummaryWithOverrides = useCallback(() => {
+    if (allResults.length === 0) return;
+    const overrides = getJudgmentOverrides();
+    const newSummary = applyOverridesToSummary(allResults, overrides);
+    setSummary(newSummary);
+  }, [allResults]);
+
   // 初回読み込み
   useEffect(() => {
     const hasCachedData = loadFromCache();
     // キャッシュがあってもバックグラウンドで更新
     fetchData();
   }, []);
+
+  // 定期更新（30秒ごと）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      updateSummaryWithOverrides();
+    }, REFRESH_INTERVAL);
+    
+    return () => clearInterval(interval);
+  }, [updateSummaryWithOverrides]);
+
+  // ページがフォーカスされた時に更新
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateSummaryWithOverrides();
+      }
+    };
+    
+    const handleFocus = () => {
+      updateSummaryWithOverrides();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [updateSummaryWithOverrides]);
+
+  // localStorageの変更を検知（他タブでの変更）
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === JUDGMENT_OVERRIDE_KEY) {
+        updateSummaryWithOverrides();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [updateSummaryWithOverrides]);
 
   const formatCurrency = (value: number, short = false) => {
     const sign = value >= 0 ? "+" : "";
