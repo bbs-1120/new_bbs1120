@@ -125,7 +125,15 @@ export default function HomePage() {
         const { data, timestamp } = JSON.parse(cached);
         // キャッシュが有効期間内なら使用
         if (Date.now() - timestamp < CACHE_DURATION) {
-          setSummary(data.summary);
+          // allResultsがあればオーバーライドを適用してサマリーを計算
+          if (data.allResults && data.allResults.length > 0) {
+            setAllResults(data.allResults);
+            const overrides = getJudgmentOverrides();
+            const newSummary = applyOverridesToSummary(data.allResults, overrides);
+            setSummary(newSummary);
+          } else {
+            setSummary(data.summary);
+          }
           setTodaySummary(data.todaySummary);
           setHasCache(true);
           setIsLoading(false);
@@ -137,7 +145,7 @@ export default function HomePage() {
   }, []);
 
   // キャッシュに保存
-  const saveToCache = useCallback((data: { summary: SummaryData; todaySummary: TodaySummary }) => {
+  const saveToCache = useCallback((data: { summary: SummaryData; todaySummary: TodaySummary; allResults?: JudgmentResult[] }) => {
     if (typeof window === "undefined") return;
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
@@ -162,13 +170,18 @@ export default function HomePage() {
       ]);
       
       // 判定結果を保存
+      let newSummary = summary;
+      let resultsToCache: JudgmentResult[] = [];
+      
       if (judgmentData.success && judgmentData.results) {
+        resultsToCache = judgmentData.results;
         setAllResults(judgmentData.results);
         // オーバーライドを適用してサマリーを計算
         const overrides = getJudgmentOverrides();
-        const newSummary = applyOverridesToSummary(judgmentData.results, overrides);
+        newSummary = applyOverridesToSummary(judgmentData.results, overrides);
         setSummary(newSummary);
       } else if (judgmentData.success) {
+        newSummary = judgmentData.summary;
         setSummary(judgmentData.summary);
       }
       
@@ -185,7 +198,7 @@ export default function HomePage() {
       setTodaySummary(newTodaySummary);
       
       // キャッシュに保存（判定結果も含める）
-      saveToCache({ summary, todaySummary: newTodaySummary });
+      saveToCache({ summary: newSummary, todaySummary: newTodaySummary, allResults: resultsToCache });
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
