@@ -59,7 +59,8 @@ const navigation: NavCategory[] = [
     category: "操作",
     icon: Send,
     items: [
-      { name: "Chatwork送信", href: "/send", icon: MessageSquare },
+      { name: "Chatwork送信管理", href: "/chatwork-send", icon: MessageSquare },
+      { name: "Chatwork送信（旧）", href: "/send", icon: Send },
       { name: "データ同期", href: "/sync", icon: RefreshCw },
     ],
   },
