@@ -104,8 +104,16 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
       const saved = localStorage.getItem(OVERRIDE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // 24時間以上経過したオーバーライドは削除
-        const filtered = parsed.filter((o: JudgmentOverride) => Date.now() - o.timestamp < 24 * 60 * 60 * 1000);
+        // 当日23:59を過ぎたオーバーライドは削除（JSTベース）
+        const filtered = parsed.filter((o: JudgmentOverride) => {
+          // JSTでオーバーライドが作成された日の23:59:59を計算
+          const overrideDate = new Date(new Date(o.timestamp).toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+          const expiryDate = new Date(overrideDate);
+          expiryDate.setHours(23, 59, 59, 999);
+          // 現在時刻（JST）と比較
+          const nowJst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+          return nowJst <= expiryDate;
+        });
         setOverrides(filtered);
         if (filtered.length !== parsed.length) {
           localStorage.setItem(OVERRIDE_KEY, JSON.stringify(filtered));
