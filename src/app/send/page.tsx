@@ -19,6 +19,29 @@ interface CpnResult {
 
 const CACHE_KEY = "chatwork_send_data";
 const CACHE_DURATION = 5 * 60 * 1000; // 5分
+const JUDGMENT_OVERRIDE_KEY = "judgment_overrides"; // CPN診断と同じキー
+
+// 判定オーバーライドの型
+interface JudgmentOverride {
+  cpnKey: string;
+  originalJudgment: string;
+  newJudgment: string;
+  timestamp: number;
+}
+
+// 判定オーバーライドを取得
+function getJudgmentOverrides(): JudgmentOverride[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem(JUDGMENT_OVERRIDE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // 24時間以上経過したオーバーライドは除外
+      return parsed.filter((o: JudgmentOverride) => Date.now() - o.timestamp < 24 * 60 * 60 * 1000);
+    }
+  } catch {}
+  return [];
+}
 
 // ローカルキャッシュ
 function getLocalCache(): { data: CpnResult[]; timestamp: number } | null {
@@ -60,10 +83,18 @@ export default function SendPage() {
   const [removedCpns, setRemovedCpns] = useState<Set<string>>(new Set()); // 削除されたCPN
   const [addedCpns, setAddedCpns] = useState<CpnResult[]>([]); // 追加されたCPN
 
+  // 判定オーバーライドを適用した「継続」CPNを取得
+  const [judgmentOverrides, setJudgmentOverrides] = useState<JudgmentOverride[]>([]);
+  const [overriddenCpns, setOverriddenCpns] = useState<CpnResult[]>([]); // オーバーライドで継続になったCPN
+
   // データ取得
   const fetchData = async (forceRefresh = false) => {
-    // キャッシュ確認（強制更新でない場合）
-    if (!forceRefresh) {
+    // 判定オーバーライドを読み込む
+    const overrides = getJudgmentOverrides();
+    setJudgmentOverrides(overrides);
+    
+    // キャッシュ確認（強制更新でない場合）- オーバーライドがある場合は無視
+    if (!forceRefresh && overrides.length === 0) {
       const cached = getLocalCache();
       if (cached) {
         // YouTubeを除外
@@ -80,27 +111,39 @@ export default function SendPage() {
       setError(null);
       setIsFromCache(false);
       
-      // 継続CPNを取得
-      const response = await fetch("/api/judgment?judgment=continue");
-      const data = await response.json();
-      
-      // 全CPNを取得（追加用）
+      // 全CPNを取得（オーバーライド適用のため）
       const allResponse = await fetch("/api/judgment?refresh=true");
       const allData = await allResponse.json();
       
-      if (data.success) {
-        // YouTubeを除外
-        const filteredResults = data.results.filter((r: CpnResult) => r.media !== "YouTube");
-        setResults(filteredResults);
-        setLocalCache(filteredResults);
-      } else {
-        setError(data.error || "データの取得に失敗しました");
-      }
-      
       if (allData.success) {
-        // YouTubeを除外
-        const filteredAll = allData.results.filter((r: CpnResult) => r.media !== "YouTube");
-        setAllCpns(filteredAll);
+        const allCpnList = allData.results.filter((r: CpnResult) => r.media !== "YouTube");
+        setAllCpns(allCpnList);
+        
+        // オーバーライドで「継続」に変更されたCPNを抽出
+        const overrideToContinue = overrides.filter(o => o.newJudgment === "継続");
+        const overriddenKeys = new Set(overrideToContinue.map(o => o.cpnKey));
+        
+        // 元々「継続」のCPN
+        const originalContinueCpns = allCpnList.filter((r: CpnResult) => {
+          // オーバーライドで別の判定に変更されている場合は除外
+          const override = overrides.find(o => o.cpnKey === r.cpnKey);
+          if (override) {
+            return override.newJudgment === "継続";
+          }
+          return r.judgment === "継続";
+        });
+        
+        // オーバーライドで「継続」になったCPN（元は別の判定）
+        const newContinueCpns = allCpnList.filter((r: CpnResult) => {
+          const override = overrides.find(o => o.cpnKey === r.cpnKey);
+          return override && override.newJudgment === "継続" && r.judgment !== "継続";
+        });
+        
+        setOverriddenCpns(newContinueCpns);
+        setResults(originalContinueCpns);
+        setLocalCache(originalContinueCpns);
+      } else {
+        setError(allData.error || "データの取得に失敗しました");
       }
       
       // 追加・削除状態をリセット
@@ -295,6 +338,18 @@ export default function SendPage() {
       <Header title="Chatwork送信" description="継続CPNを媒体別に通知（追加・削除可能）" />
 
       <div className="max-w-4xl space-y-6">
+        {/* オーバーライド情報 */}
+        {overriddenCpns.length > 0 && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm font-medium text-amber-800">
+              📋 CPN診断で「継続」に変更されたCPN: {overriddenCpns.length}件
+            </p>
+            <p className="text-xs text-amber-600 mt-1">
+              これらのCPNは元の判定から「継続」に移動されたため、送信リストに含まれています
+            </p>
+          </div>
+        )}
+
         {/* 更新ボタン */}
         <div className="flex items-center justify-between">
           <div className="text-sm text-slate-500">
@@ -386,13 +441,17 @@ export default function SendPage() {
                     <tbody className="divide-y divide-slate-100">
                       {cpns.map((cpn, idx) => {
                         const isAdded = addedCpns.some(c => c.cpnKey === cpn.cpnKey);
+                        const isFromOverride = overriddenCpns.some(c => c.cpnKey === cpn.cpnKey);
                         return (
-                          <tr key={cpn.cpnKey} className={`hover:bg-slate-50 ${isAdded ? "bg-green-50" : ""}`}>
+                          <tr key={cpn.cpnKey} className={`hover:bg-slate-50 ${isAdded ? "bg-green-50" : ""} ${isFromOverride ? "bg-amber-50" : ""}`}>
                             <td className="px-4 py-2 text-sm text-slate-400">{idx + 1}</td>
                             <td className="px-4 py-2 text-sm text-slate-700 break-all">
                               {cpn.cpnName}
                               {isAdded && (
                                 <span className="ml-2 text-xs text-green-600 font-medium">追加</span>
+                              )}
+                              {isFromOverride && (
+                                <span className="ml-2 text-xs text-amber-600 font-medium">診断から移動</span>
                               )}
                             </td>
                             {media === "TikTok" && (
@@ -564,12 +623,11 @@ export default function SendPage() {
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-slate-500">{cpn.media}</span>
                           <span className={`text-xs px-2 py-0.5 rounded ${
-                            cpn.judgment === "continue" ? "bg-green-100 text-green-700" :
-                            cpn.judgment === "stop" ? "bg-red-100 text-red-700" :
+                            cpn.judgment === "継続" ? "bg-green-100 text-green-700" :
+                            cpn.judgment === "停止" ? "bg-red-100 text-red-700" :
                             "bg-yellow-100 text-yellow-700"
                           }`}>
-                            {cpn.judgment === "continue" ? "継続" :
-                             cpn.judgment === "stop" ? "停止" : "作り替え"}
+                            {cpn.judgment}
                           </span>
                           <span className={`text-xs ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                             ¥{Math.round(cpn.profit).toLocaleString()}
