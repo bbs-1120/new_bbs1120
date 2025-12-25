@@ -65,8 +65,8 @@ export default function ChatworkSendPage() {
         }));
         setAllCpns(cpns);
         
-        // デフォルトで「継続」CPNを送信リストに追加
-        const continueCpns = cpns.filter(c => c.judgment === "continue");
+        // デフォルトで「継続」CPNを送信リストに追加（YouTubeは除外）
+        const continueCpns = cpns.filter(c => c.judgment === "continue" && c.media !== "YouTube");
         setSendList(continueCpns.map(c => ({
           cpnName: c.cpnName,
           media: c.media,

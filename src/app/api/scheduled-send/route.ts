@@ -29,9 +29,9 @@ function generateContinueMessages(
     })
   );
 
-  // 継続CPNのみフィルタ
+  // 継続CPNのみフィルタ（YouTubeは除外）
   const continueCpns = judgmentResults.filter(
-    (result) => result.judgment === JUDGMENT.CONTINUE
+    (result) => result.judgment === JUDGMENT.CONTINUE && result.media !== "YouTube"
   );
 
   // 媒体別にグループ化

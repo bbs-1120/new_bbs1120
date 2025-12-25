@@ -41,9 +41,10 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
-    // 媒体別にグループ化
+    // YouTubeを除外して媒体別にグループ化
+    const filteredCpns = cpns.filter(cpn => cpn.media !== "YouTube");
     const mediaGroups: Record<string, CpnItem[]> = {};
-    for (const cpn of cpns) {
+    for (const cpn of filteredCpns) {
       const displayMedia = getMediaDisplayName(cpn.media);
       if (!mediaGroups[displayMedia]) {
         mediaGroups[displayMedia] = [];
