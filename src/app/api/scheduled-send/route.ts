@@ -34,9 +34,10 @@ function generateContinueMessages(
     (result) => result.judgment === JUDGMENT.CONTINUE && result.media !== "YouTube"
   );
 
-  // 媒体別にグループ化
+  // 媒体別にグループ化（TikTokとPangleは統合）
   const mediaGroups = continueCpns.reduce((acc, cpn) => {
-    const media = cpn.media;
+    // PangleはTikTokに統合
+    const media = cpn.media === "Pangle" ? "TikTok" : cpn.media;
     if (!acc[media]) {
       acc[media] = [];
     }
