@@ -56,17 +56,28 @@ const judgmentConfig: Record<string, { title: string; description: string; color
   },
 };
 
-const judgmentMap: Record<string, string> = {
+// URLパラメータから日本語判定値へのマッピング
+const judgmentUrlToValue: Record<string, string> = {
   stop: "停止",
   replace: "作り替え",
   continue: "継続",
   error: "エラー",
 };
 
+// 日本語判定値からURLパラメータへのマッピング
+const judgmentValueToUrl: Record<string, string> = {
+  "停止": "stop",
+  "作り替え": "replace",
+  "継続": "continue",
+  "エラー": "error",
+};
+
+const judgmentMap: Record<string, string> = judgmentUrlToValue;
+
 const judgmentOptions = [
-  { value: "stop", label: "停止", color: "bg-red-100 text-red-700 hover:bg-red-200" },
-  { value: "replace", label: "作り替え", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
-  { value: "continue", label: "継続", color: "bg-green-100 text-green-700 hover:bg-green-200" },
+  { value: "停止", urlValue: "stop", label: "停止", color: "bg-red-100 text-red-700 hover:bg-red-200" },
+  { value: "作り替え", urlValue: "replace", label: "作り替え", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
+  { value: "継続", urlValue: "continue", label: "継続", color: "bg-green-100 text-green-700 hover:bg-green-200" },
 ];
 
 export default function JudgmentDetailPage({ params }: { params: Promise<{ judgment: string }> }) {
@@ -111,9 +122,9 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
     }
   };
 
-  // 判定を変更
-  const handleChangeJudgment = (cpn: JudgmentResult, newJudgment: string) => {
-    if (newJudgment === cpn.judgment) {
+  // 判定を変更（newJudgmentは日本語値："停止", "作り替え", "継続"）
+  const handleChangeJudgment = (cpn: JudgmentResult, newJudgmentValue: string) => {
+    if (newJudgmentValue === cpn.judgment) {
       // 元の判定に戻す場合はオーバーライドを削除
       const newOverrides = overrides.filter(o => o.cpnKey !== cpn.cpnKey);
       saveOverrides(newOverrides);
@@ -123,7 +134,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
       const newOverride: JudgmentOverride = {
         cpnKey: cpn.cpnKey,
         originalJudgment: cpn.judgment,
-        newJudgment,
+        newJudgment: newJudgmentValue,
         timestamp: Date.now(),
       };
       
@@ -138,7 +149,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
     
     setShowMoveModal(null);
     setSelectedCpn(null);
-    setMessage({ type: "success", text: `${cpn.cpnName.substring(0, 30)}... を「${judgmentMap[newJudgment]}」に移動しました` });
+    setMessage({ type: "success", text: `${cpn.cpnName.substring(0, 30)}... を「${newJudgmentValue}」に移動しました` });
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -150,10 +161,13 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
   };
 
   // 現在の判定カテゴリに属するCPN（オーバーライド適用後）
+  // URLパラメータ（stop, replace等）を日本語判定値（停止, 作り替え等）に変換
+  const targetJudgmentValue = judgmentUrlToValue[judgment] || judgment;
+  
   const filteredResults = results.filter(r => {
     const override = overrides.find(o => o.cpnKey === r.cpnKey);
     const effectiveJudgment = override ? override.newJudgment : r.judgment;
-    return effectiveJudgment === judgment;
+    return effectiveJudgment === targetJudgmentValue;
   });
 
   // ソート処理
@@ -416,8 +430,8 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
           </Button>
           <Button variant="secondary" size="sm" className="text-xs lg:text-sm flex-1 lg:flex-none">
             <Download className="mr-1.5 h-3.5 w-3.5 lg:h-4 lg:w-4" />
-            CSV出力
-          </Button>
+          CSV出力
+        </Button>
         </div>
       </div>
 
@@ -588,9 +602,9 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                    <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-slate-900">{result.cpnName}</p>
+                      <p className="text-sm font-medium text-slate-900">{result.cpnName}</p>
                           {isOverridden && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
                               変更済
@@ -612,53 +626,53 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                             )}
                           </button>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          result.media === "Meta" ? "bg-blue-100 text-blue-700" :
-                          result.media === "TikTok" ? "bg-pink-100 text-pink-700" :
-                          result.media === "Pangle" ? "bg-orange-100 text-orange-700" :
-                          "bg-slate-100 text-slate-700"
-                        }`}>
-                          {result.media}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`text-xs font-medium px-2 py-1 rounded ${
-                            result.isRe
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {result.isRe ? "Re" : "-"}
-                        </span>
-                      </td>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        result.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                        result.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                        result.media === "Pangle" ? "bg-orange-100 text-orange-700" :
+                        "bg-slate-100 text-slate-700"
+                      }`}>
+                        {result.media}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs font-medium px-2 py-1 rounded ${
+                          result.isRe
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {result.isRe ? "Re" : "-"}
+                      </span>
+                    </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <span
-                          className={`text-sm font-medium ${
-                            result.todayProfit >= 0 ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
+                      <span
+                        className={`text-sm font-medium ${
+                          result.todayProfit >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
                           {result.todayProfit >= 0 ? "+" : ""}¥{Math.floor(result.todayProfit).toLocaleString("ja-JP")}
-                        </span>
-                      </td>
+                      </span>
+                    </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <span
-                          className={`text-sm font-medium ${
-                            result.profit7Days >= 0 ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
+                      <span
+                        className={`text-sm font-medium ${
+                          result.profit7Days >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
                           {result.profit7Days >= 0 ? "+" : ""}¥{Math.floor(result.profit7Days).toLocaleString("ja-JP")}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-sm text-slate-600">
-                          {result.roas7Days.toFixed(1)}%
-                        </span>
-                      </td>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-sm text-slate-600">
+                        {result.roas7Days.toFixed(1)}%
+                      </span>
+                    </td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
-                        {result.todayProfit >= 0 ? (
+                      {result.todayProfit >= 0 ? (
                           result.consecutiveProfitDays === 1 ? (
                             <span className="inline-flex items-center text-green-600 font-medium text-sm">当日プラス</span>
                           ) : result.consecutiveProfitDays >= 2 ? (
@@ -666,26 +680,26 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                           ) : (
                             <span className="inline-flex items-center text-green-600 font-medium text-sm">当日プラス</span>
                           )
-                        ) : result.consecutiveLossDays === 1 ? (
+                      ) : result.consecutiveLossDays === 1 ? (
                           <span className="inline-flex items-center text-red-600 font-medium text-sm">当日マイナス</span>
-                        ) : result.consecutiveLossDays >= 2 ? (
+                      ) : result.consecutiveLossDays >= 2 ? (
                           <span className="inline-flex items-center text-red-600 font-medium text-sm">{result.consecutiveLossDays}日連続マイナス</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {result.reasons.map((reason, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600"
-                            >
-                              {reason}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {result.reasons.map((reason, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600"
+                          >
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => {
@@ -698,7 +712,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                           移動
                         </button>
                       </td>
-                    </tr>
+                  </tr>
                   );
                 })}
               </tbody>
@@ -737,21 +751,24 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
               <p className="text-sm text-slate-600 mb-3">移動先を選択:</p>
               
               <div className="flex flex-col gap-2">
-                {judgmentOptions.map(option => (
-                  <button
-                    key={option.value}
-                    onClick={() => handleChangeJudgment(selectedCpn, option.value)}
-                    disabled={option.value === judgment}
-                    className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition ${
-                      option.value === judgment
-                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                        : option.color
-                    }`}
-                  >
-                    {option.label}
-                    {option.value === judgment && " (現在)"}
-                  </button>
-                ))}
+                {judgmentOptions.map(option => {
+                  const isCurrentJudgment = option.urlValue === judgment;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => handleChangeJudgment(selectedCpn, option.value)}
+                      disabled={isCurrentJudgment}
+                      className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition ${
+                        isCurrentJudgment
+                          ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                          : option.color
+                      }`}
+                    >
+                      {option.label}
+                      {isCurrentJudgment && " (現在)"}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
