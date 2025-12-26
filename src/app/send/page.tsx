@@ -27,6 +27,7 @@ interface JudgmentOverride {
   originalJudgment: string;
   newJudgment: string;
   timestamp: number;
+  memo?: string;
 }
 
 // 判定オーバーライドを取得

@@ -43,6 +43,7 @@ interface JudgmentOverride {
   originalJudgment: string;
   newJudgment: string;
   timestamp: number;
+  memo?: string;
 }
 
 const CACHE_KEY = "home_data_cache";

@@ -27,6 +27,7 @@ interface JudgmentOverride {
   originalJudgment: string;
   newJudgment: string;
   timestamp: number;
+  memo?: string; // 作り替え時のメモ
 }
 
 const CACHE_KEY_PREFIX = "judgment_cache_";
@@ -88,6 +89,8 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
   const [showMoveModal, setShowMoveModal] = useState<string | null>(null); // cpnKey
   const [selectedCpn, setSelectedCpn] = useState<JudgmentResult | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [pendingJudgment, setPendingJudgment] = useState<string | null>(null); // メモ入力待ちの判定
+  const [memoText, setMemoText] = useState<string>("");
 
   const config = judgmentConfig[judgment] || judgmentConfig.error;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -131,7 +134,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
   };
 
   // 判定を変更（newJudgmentは日本語値："停止", "作り替え", "継続"）
-  const handleChangeJudgment = (cpn: JudgmentResult, newJudgmentValue: string) => {
+  const handleChangeJudgment = (cpn: JudgmentResult, newJudgmentValue: string, memo?: string) => {
     if (newJudgmentValue === cpn.judgment) {
       // 元の判定に戻す場合はオーバーライドを削除
       const newOverrides = overrides.filter(o => o.cpnKey !== cpn.cpnKey);
@@ -144,6 +147,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
         originalJudgment: cpn.judgment,
         newJudgment: newJudgmentValue,
         timestamp: Date.now(),
+        memo: memo || undefined,
       };
       
       if (existingIndex >= 0) {
@@ -503,7 +507,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                 </div>
 
                 {/* CPN名 */}
-                <div className="flex items-center gap-1.5 mb-3">
+                <div className="flex items-center gap-1.5 mb-1">
                   <p className="text-sm font-medium text-slate-900 truncate flex-1">{result.cpnName}</p>
                   <button
                     onClick={() => handleCopy(result, "cpn")}
@@ -516,6 +520,13 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                     {copiedKey === `${result.cpnKey}-cpn` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                   </button>
                 </div>
+                {/* メモ表示 */}
+                {override?.memo && (
+                  <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded mb-2">
+                    📝 {override.memo}
+                  </p>
+                )}
+                <div className="mb-3" />
 
                 {/* 数値 */}
                 <div className="grid grid-cols-3 gap-2 mb-3">
@@ -611,28 +622,35 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                         </div>
                       </td>
                     <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-slate-900">{result.cpnName}</p>
-                          {isOverridden && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                              変更済
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handleCopy(result, "cpn")}
-                            className={`p-1 rounded transition-colors flex-shrink-0 ${
-                              copiedKey === `${result.cpnKey}-cpn`
-                                ? "bg-green-100 text-green-600"
-                                : "bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600"
-                            }`}
-                            title="CPN名をコピー"
-                          >
-                            {copiedKey === `${result.cpnKey}-cpn` ? (
-                              <Check className="h-3.5 w-3.5" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5" />
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-slate-900">{result.cpnName}</p>
+                            {isOverridden && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                                変更済
+                              </span>
                             )}
-                          </button>
+                            <button
+                              onClick={() => handleCopy(result, "cpn")}
+                              className={`p-1 rounded transition-colors flex-shrink-0 ${
+                                copiedKey === `${result.cpnKey}-cpn`
+                                  ? "bg-green-100 text-green-600"
+                                  : "bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600"
+                              }`}
+                              title="CPN名をコピー"
+                            >
+                              {copiedKey === `${result.cpnKey}-cpn` ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                          {override?.memo && (
+                            <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                              📝 {override.memo}
+                            </p>
+                          )}
                         </div>
                     </td>
                     <td className="px-4 py-3">
@@ -738,11 +756,15 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full overflow-hidden">
             <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="font-semibold">判定を変更</h3>
+              <h3 className="font-semibold">
+                {pendingJudgment === "作り替え" ? "作り替えメモ入力" : "判定を変更"}
+              </h3>
               <button
                 onClick={() => {
                   setShowMoveModal(null);
                   setSelectedCpn(null);
+                  setPendingJudgment(null);
+                  setMemoText("");
                 }}
                 className="p-2 hover:bg-slate-100 rounded-lg transition"
               >
@@ -754,30 +776,74 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
               <p className="text-sm text-slate-600 mb-2">CPN名:</p>
               <p className="text-sm font-medium text-slate-900 mb-4 truncate">{selectedCpn.cpnName}</p>
               
-              <p className="text-sm text-slate-600 mb-2">現在の判定: <span className="font-medium">{judgmentMap[selectedCpn.judgment]}</span></p>
-              
-              <p className="text-sm text-slate-600 mb-3">移動先を選択:</p>
-              
-              <div className="flex flex-col gap-2">
-                {judgmentOptions.map(option => {
-                  const isCurrentJudgment = option.urlValue === judgment;
-                  return (
+              {/* メモ入力画面 */}
+              {pendingJudgment === "作り替え" ? (
+                <>
+                  <p className="text-sm text-slate-600 mb-2">作り替えの理由やメモを入力:</p>
+                  <textarea
+                    value={memoText}
+                    onChange={(e) => setMemoText(e.target.value)}
+                    placeholder="例: クリエイティブ疲弊のため、新規素材で作成予定"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
+                    rows={3}
+                  />
+                  <div className="flex gap-2">
                     <button
-                      key={option.value}
-                      onClick={() => handleChangeJudgment(selectedCpn, option.value)}
-                      disabled={isCurrentJudgment}
-                      className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition ${
-                        isCurrentJudgment
-                          ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                          : option.color
-                      }`}
+                      onClick={() => {
+                        setPendingJudgment(null);
+                        setMemoText("");
+                      }}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
                     >
-                      {option.label}
-                      {isCurrentJudgment && " (現在)"}
+                      戻る
                     </button>
-                  );
-                })}
-              </div>
+                    <button
+                      onClick={() => {
+                        handleChangeJudgment(selectedCpn, "作り替え", memoText);
+                        setPendingJudgment(null);
+                        setMemoText("");
+                      }}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition"
+                    >
+                      作り替えに変更
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-600 mb-2">現在の判定: <span className="font-medium">{judgmentMap[selectedCpn.judgment]}</span></p>
+                  
+                  <p className="text-sm text-slate-600 mb-3">移動先を選択:</p>
+                  
+                  <div className="flex flex-col gap-2">
+                    {judgmentOptions.map(option => {
+                      const isCurrentJudgment = option.urlValue === judgment;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => {
+                            if (option.value === "作り替え") {
+                              // 作り替えの場合はメモ入力画面へ
+                              setPendingJudgment("作り替え");
+                            } else {
+                              handleChangeJudgment(selectedCpn, option.value);
+                            }
+                          }}
+                          disabled={isCurrentJudgment}
+                          className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition ${
+                            isCurrentJudgment
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : option.color
+                          }`}
+                        >
+                          {option.label}
+                          {isCurrentJudgment && " (現在)"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
