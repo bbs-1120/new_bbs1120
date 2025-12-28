@@ -9,13 +9,13 @@ export async function POST(request: Request) {
     const { resultIds } = body;
 
     // 設定を取得
-    const chatworkRoomIdSetting = await prisma.setting.findUnique({
+    const chatworkRoomIdSetting = await prisma.settings.findUnique({
       where: { key: "chatworkRoomId" },
     });
-    const chatworkApiTokenSetting = await prisma.setting.findUnique({
+    const chatworkApiTokenSetting = await prisma.settings.findUnique({
       where: { key: "chatworkApiToken" },
     });
-    const ruleVersionSetting = await prisma.setting.findUnique({
+    const ruleVersionSetting = await prisma.settings.findUnique({
       where: { key: "ruleVersion" },
     });
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // 送信対象の結果を取得
     let results;
     if (resultIds && resultIds.length > 0) {
-      results = await prisma.judgmentResult.findMany({
+      results = await prisma.judgment_results.findMany({
         where: { id: { in: resultIds } },
         include: { media: true },
       });
@@ -38,10 +38,10 @@ export async function POST(request: Request) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      results = await prisma.judgmentResult.findMany({
+      results = await prisma.judgment_results.findMany({
         where: {
-          judgmentDate: today,
-          isSendTarget: true,
+          judgment_date: today,
+          is_send_target: true,
         },
         include: { media: true },
       });
@@ -66,14 +66,14 @@ export async function POST(request: Request) {
 
     if (!sendResult.success) {
       // エラーログを記録
-      await prisma.executionLog.create({
+      await prisma.execution_logs.create({
         data: {
-          executedBy: "中田悠太",
-          actionType: "send",
-          targetCount: results.length,
-          ruleVersion: ruleVersionSetting?.value || "1.0",
+          executed_by: "中田悠太",
+          action_type: "send",
+          target_count: results.length,
+          rule_version: ruleVersionSetting?.value || "1.0",
           status: "error",
-          errorMessage: sendResult.error,
+          error_message: sendResult.error,
         },
       });
 
@@ -84,12 +84,12 @@ export async function POST(request: Request) {
     }
 
     // 成功ログを記録
-    await prisma.executionLog.create({
+    await prisma.execution_logs.create({
       data: {
-        executedBy: "中田悠太",
-        actionType: "send",
-        targetCount: results.length,
-        ruleVersion: ruleVersionSetting?.value || "1.0",
+        executed_by: "中田悠太",
+        action_type: "send",
+        target_count: results.length,
+        rule_version: ruleVersionSetting?.value || "1.0",
         status: "success",
       },
     });
@@ -114,10 +114,10 @@ export async function GET() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const results = await prisma.judgmentResult.findMany({
+    const results = await prisma.judgment_results.findMany({
       where: {
-        judgmentDate: today,
-        isSendTarget: true,
+        judgment_date: today,
+        is_send_target: true,
       },
       include: { media: true },
     });

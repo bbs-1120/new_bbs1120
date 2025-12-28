@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 // GET: 設定を取得
 export async function GET() {
   try {
-    const settings = await prisma.setting.findMany();
+    const settings = await prisma.settings.findMany();
     
     // オブジェクト形式に変換
     const settingsObj: Record<string, string> = {};
@@ -40,7 +40,7 @@ export async function PUT(request: Request) {
 
     // 各設定を更新
     for (const [key, value] of Object.entries(settings)) {
-      await prisma.setting.upsert({
+      await prisma.settings.upsert({
         where: { key },
         update: { value: String(value) },
         create: { key, value: String(value) },

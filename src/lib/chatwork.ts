@@ -1,14 +1,14 @@
 import { formatDate, formatCurrency, formatPercentage } from "./utils";
 
 interface JudgmentResult {
-  cpnName: string;
+  cpn_name: string;
   media: { name: string };
   judgment: string;
-  todayProfit: number | { toNumber: () => number };
-  profit7Days: number | { toNumber: () => number };
-  roas7Days: number | { toNumber: () => number };
+  today_profit: number | { toNumber: () => number };
+  profit_7days: number | { toNumber: () => number };
+  roas_7days: number | { toNumber: () => number };
   reasons: string[];
-  isRe: boolean;
+  is_re: boolean;
 }
 
 interface SimpleCpnResult {
@@ -43,10 +43,10 @@ export function generateChatworkMessage(results: JudgmentResult[]): string {
   if (grouped.stop.length > 0) {
     message += "\n■ 停止（Reあり）\n";
     for (const r of grouped.stop) {
-      const todayProfit = toNumber(r.todayProfit);
-      const profit7Days = toNumber(r.profit7Days);
-      const roas7Days = toNumber(r.roas7Days);
-      message += `${r.cpnName}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}｜${r.reasons.join(", ")}\n`;
+      const todayProfit = toNumber(r.today_profit);
+      const profit7Days = toNumber(r.profit_7days);
+      const roas7Days = toNumber(r.roas_7days);
+      message += `${r.cpn_name}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}｜${r.reasons.join(", ")}\n`;
     }
   }
 
@@ -54,10 +54,10 @@ export function generateChatworkMessage(results: JudgmentResult[]): string {
   if (grouped.replace.length > 0) {
     message += "\n■ 作り替え（Reなし）\n";
     for (const r of grouped.replace) {
-      const todayProfit = toNumber(r.todayProfit);
-      const profit7Days = toNumber(r.profit7Days);
-      const roas7Days = toNumber(r.roas7Days);
-      message += `${r.cpnName}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}｜${r.reasons.join(", ")}\n`;
+      const todayProfit = toNumber(r.today_profit);
+      const profit7Days = toNumber(r.profit_7days);
+      const roas7Days = toNumber(r.roas_7days);
+      message += `${r.cpn_name}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}｜${r.reasons.join(", ")}\n`;
     }
   }
 
@@ -65,10 +65,10 @@ export function generateChatworkMessage(results: JudgmentResult[]): string {
   if (grouped.continue.length > 0) {
     message += "\n■ 継続\n";
     for (const r of grouped.continue) {
-      const todayProfit = toNumber(r.todayProfit);
-      const profit7Days = toNumber(r.profit7Days);
-      const roas7Days = toNumber(r.roas7Days);
-      message += `${r.cpnName}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}\n`;
+      const todayProfit = toNumber(r.today_profit);
+      const profit7Days = toNumber(r.profit_7days);
+      const roas7Days = toNumber(r.roas_7days);
+      message += `${r.cpn_name}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}\n`;
     }
   }
 
@@ -76,10 +76,10 @@ export function generateChatworkMessage(results: JudgmentResult[]): string {
   if (grouped.check.length > 0) {
     message += "\n■ 要確認\n";
     for (const r of grouped.check) {
-      const todayProfit = toNumber(r.todayProfit);
-      const profit7Days = toNumber(r.profit7Days);
-      const roas7Days = toNumber(r.roas7Days);
-      message += `${r.cpnName}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}｜${r.reasons.join(", ")}\n`;
+      const todayProfit = toNumber(r.today_profit);
+      const profit7Days = toNumber(r.profit_7days);
+      const roas7Days = toNumber(r.roas_7days);
+      message += `${r.cpn_name}｜${formatCurrency(todayProfit)}｜${formatCurrency(profit7Days)}｜${formatPercentage(roas7Days)}｜${r.reasons.join(", ")}\n`;
     }
   }
 

@@ -7,9 +7,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "50");
 
-    const logs = await prisma.executionLog.findMany({
+    const logs = await prisma.execution_logs.findMany({
       take: limit,
-      orderBy: { executedAt: "desc" },
+      orderBy: { executed_at: "desc" },
     });
 
     return NextResponse.json({

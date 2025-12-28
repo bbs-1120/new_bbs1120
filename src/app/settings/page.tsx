@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { NotificationSettings } from "@/components/ui/notification-settings";
 import { AnomalyPanel } from "@/components/ui/anomaly-panel";
+import { DeviceSync } from "@/components/ui/device-sync";
 import { useState, useEffect } from "react";
 import { Save, CheckCircle } from "lucide-react";
 
@@ -117,6 +118,9 @@ export default function SettingsPage() {
       )}
 
       <div className="grid gap-6 max-w-3xl">
+        {/* デバイス間同期 */}
+        <DeviceSync />
+
         {/* 仕分けルール設定 */}
         <Card>
           <CardHeader>

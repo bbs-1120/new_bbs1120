@@ -1,177 +1,128 @@
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { fetchRawDataFromSheet, testConnection } from "@/lib/googleSheets";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-// POST: スプレッドシートからデータを同期
-export async function POST() {
+// 6桁のランダムな同期コードを生成
+function generateSyncCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 紛らわしい文字を除外
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// GET: 設定を取得
+export async function GET(request: NextRequest) {
   try {
-    // スプレッドシートIDを取得
-    const spreadsheetIdSetting = await prisma.setting.findUnique({
-      where: { key: "spreadsheetId" },
-    });
-    const ruleVersionSetting = await prisma.setting.findUnique({
-      where: { key: "ruleVersion" },
-    });
+    const { searchParams } = new URL(request.url);
+    const syncCode = searchParams.get("code");
 
-    if (!spreadsheetIdSetting?.value) {
+    if (!syncCode) {
       return NextResponse.json(
-        { success: false, error: "スプレッドシートIDが設定されていません" },
+        { success: false, error: "同期コードが必要です" },
         { status: 400 }
       );
     }
 
-    // スプレッドシートからデータを取得
-    const rawData = await fetchRawDataFromSheet(spreadsheetIdSetting.value);
+    const settings = await prisma.user_settings.findUnique({
+      where: { sync_code: syncCode.toUpperCase() },
+    });
 
-    if (rawData.length === 0) {
+    if (!settings) {
       return NextResponse.json(
-        { success: false, error: "取得できるデータがありません" },
-        { status: 400 }
+        { success: false, error: "同期コードが見つかりません" },
+        { status: 404 }
       );
     }
-
-    // 媒体マスタを取得
-    const mediaList = await prisma.media.findMany();
-    const mediaMap = new Map(mediaList.map((m) => [m.name, m.id]));
-
-    // データをDBに保存
-    let insertedCount = 0;
-    let updatedCount = 0;
-    let skippedCount = 0;
-
-    for (const row of rawData) {
-      // 媒体IDを取得
-      let mediaId = mediaMap.get(row.media);
-      
-      // 媒体が存在しない場合は作成
-      if (!mediaId) {
-        const newMedia = await prisma.media.create({
-          data: { name: row.media },
-        });
-        mediaId = newMedia.id;
-        mediaMap.set(row.media, mediaId);
-      }
-
-      try {
-        // upsertでデータを保存
-        const result = await prisma.cpnDailyData.upsert({
-          where: {
-            cpnKey_date: {
-              cpnKey: row.cpnKey,
-              date: row.date,
-            },
-          },
-          update: {
-            cpnName: row.cpnName,
-            mediaId,
-            spend: row.spend,
-            revenue: row.revenue,
-            profit: row.profit,
-            roas: row.roas,
-            cv: row.cv,
-            mcv: row.mcv,
-            cpm: row.cpm,
-            cpc: row.cpc,
-          },
-          create: {
-            cpnKey: row.cpnKey,
-            cpnName: row.cpnName,
-            mediaId,
-            date: row.date,
-            spend: row.spend,
-            revenue: row.revenue,
-            profit: row.profit,
-            roas: row.roas,
-            cv: row.cv,
-            mcv: row.mcv,
-            cpm: row.cpm,
-            cpc: row.cpc,
-          },
-        });
-
-        if (result.createdAt.getTime() === result.updatedAt.getTime()) {
-          insertedCount++;
-        } else {
-          updatedCount++;
-        }
-      } catch (error) {
-        console.error(`Error saving row: ${row.cpnKey}`, error);
-        skippedCount++;
-      }
-    }
-
-    // 実行ログを記録
-    await prisma.executionLog.create({
-      data: {
-        executedBy: "中田悠太",
-        actionType: "sync",
-        targetCount: insertedCount + updatedCount,
-        ruleVersion: ruleVersionSetting?.value || "1.0",
-        status: "success",
-      },
-    });
 
     return NextResponse.json({
       success: true,
-      totalRows: rawData.length,
-      inserted: insertedCount,
-      updated: updatedCount,
-      skipped: skippedCount,
+      data: {
+        syncCode: settings.sync_code,
+        darkMode: settings.dark_mode,
+        cpnMemos: settings.cpn_memos,
+        dashboardConfig: settings.dashboard_config,
+        monthlyGoal: settings.monthly_goal,
+        alertSettings: settings.alert_settings,
+        updatedAt: settings.updated_at,
+      },
     });
   } catch (error) {
-    console.error("Sync error:", error);
-
-    // エラーログを記録
-    try {
-      const ruleVersionSetting = await prisma.setting.findUnique({
-        where: { key: "ruleVersion" },
-      });
-      
-      await prisma.executionLog.create({
-        data: {
-          executedBy: "中田悠太",
-          actionType: "sync",
-          targetCount: 0,
-          ruleVersion: ruleVersionSetting?.value || "1.0",
-          status: "error",
-          errorMessage: error instanceof Error ? error.message : "Unknown error",
-        },
-      });
-    } catch (logError) {
-      console.error("Failed to log error:", logError);
-    }
-
+    console.error("Sync GET error:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : "同期処理に失敗しました" 
-      },
+      { success: false, error: "設定の取得に失敗しました" },
       { status: 500 }
     );
   }
 }
 
-// GET: 接続テスト
-export async function GET() {
+// POST: 新しい同期コードを生成、または既存の設定を更新
+export async function POST(request: NextRequest) {
   try {
-    const spreadsheetIdSetting = await prisma.setting.findUnique({
-      where: { key: "spreadsheetId" },
-    });
+    const body = await request.json();
+    const { action, syncCode, settings } = body;
 
-    if (!spreadsheetIdSetting?.value) {
+    // 新規同期コード生成
+    if (action === "generate") {
+      // ユニークなコードが生成されるまでループ
+      let newCode = generateSyncCode();
+      let attempts = 0;
+      while (attempts < 10) {
+        const existing = await prisma.user_settings.findUnique({
+          where: { sync_code: newCode },
+        });
+        if (!existing) break;
+        newCode = generateSyncCode();
+        attempts++;
+      }
+
+      const newSettings = await prisma.user_settings.create({
+        data: {
+          sync_code: newCode,
+          dark_mode: settings?.darkMode ?? false,
+          cpn_memos: settings?.cpnMemos ?? {},
+          dashboard_config: settings?.dashboardConfig ?? {},
+          monthly_goal: settings?.monthlyGoal ?? 0,
+          alert_settings: settings?.alertSettings ?? {},
+        },
+      });
+
       return NextResponse.json({
-        success: false,
-        error: "スプレッドシートIDが設定されていません",
+        success: true,
+        syncCode: newSettings.sync_code,
+        message: "同期コードを生成しました",
       });
     }
 
-    const result = await testConnection(spreadsheetIdSetting.value);
-    return NextResponse.json(result);
+    // 設定を更新
+    if (action === "update" && syncCode) {
+      const updated = await prisma.user_settings.update({
+        where: { sync_code: syncCode.toUpperCase() },
+        data: {
+          dark_mode: settings?.darkMode,
+          cpn_memos: settings?.cpnMemos,
+          dashboard_config: settings?.dashboardConfig,
+          monthly_goal: settings?.monthlyGoal,
+          alert_settings: settings?.alertSettings,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        syncCode: updated.sync_code,
+        message: "設定を更新しました",
+      });
+    }
+
+    return NextResponse.json(
+      { success: false, error: "無効なアクションです" },
+      { status: 400 }
+    );
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : "接続テストに失敗しました",
-    });
+    console.error("Sync POST error:", error);
+    return NextResponse.json(
+      { success: false, error: "設定の保存に失敗しました" },
+      { status: 500 }
+    );
   }
 }
-
