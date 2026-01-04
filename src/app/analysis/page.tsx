@@ -489,7 +489,7 @@ export default function AnalysisPage() {
   };
 
   const STORAGE_KEY = "analysis_page_cache";
-  const CACHE_DURATION = 30 * 60 * 1000; // 30分
+  const CACHE_DURATION = 60 * 60 * 1000; // 60分（パフォーマンス改善）
 
   // ローカルキャッシュから即座にデータを読み込み
   const loadFromLocalCache = async () => {

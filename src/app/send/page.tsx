@@ -18,7 +18,7 @@ interface CpnResult {
 }
 
 const CACHE_KEY = "chatwork_send_data";
-const CACHE_DURATION = 5 * 60 * 1000; // 5分
+const CACHE_DURATION = 15 * 60 * 1000; // 15分（パフォーマンス改善）
 const JUDGMENT_OVERRIDE_KEY = "judgment_overrides"; // CPN診断と同じキー
 
 // 判定オーバーライドの型

@@ -4,7 +4,7 @@ import { getCache, setCache } from "@/lib/cache";
 import { auth } from "@/lib/auth";
 
 const CACHE_KEY = "analysis_data";
-const CACHE_TTL = 5 * 60 * 1000; // 5分間キャッシュ（高速レスポンス）
+const CACHE_TTL = 30 * 60 * 1000; // 30分間キャッシュ（パフォーマンス改善）
 
 interface CachedData {
   sheetData: Awaited<ReturnType<typeof getFullAnalysisData>>;

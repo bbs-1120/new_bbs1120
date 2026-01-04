@@ -57,8 +57,8 @@ export async function GET(request: Request) {
       // 判定実行
       results = judgeAllCpns(cpnList);
 
-      // キャッシュに保存（30分）
-      setCache(cacheKeyWithUser, results, 30 * 60 * 1000);
+      // キャッシュに保存（60分）
+      setCache(cacheKeyWithUser, results, 60 * 60 * 1000);
     }
 
     // フィルター適用
