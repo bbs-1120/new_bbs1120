@@ -213,77 +213,92 @@ export async function fetchHistoricalData(_spreadsheetId: string): Promise<RawRo
     return [];
   }
 
-  // 現在の月のシート名を取得
+  // 現在の月と前月のシート名を取得（月またぎ対応）
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-  const sheetName = `${year}年${month}月`;
+  const currentSheetName = `${year}年${month}月`;
+  
+  // 前月のシート名を計算
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevSheetName = `${prevYear}年${prevMonth}月`;
 
-  try {
-    // シートの構造: 6行目がヘッダー、7行目からデータ
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: historicalSpreadsheetId,
-      range: `'${sheetName}'!A7:T`,  // 7行目（データ開始行）から取得
-    });
+  const data: RawRowData[] = [];
 
-    const rows = response.data.values;
-    if (!rows || rows.length === 0) {
-      return [];
-    }
-
-    const data: RawRowData[] = [];
-
-    // データ行を処理（7行目から開始なのでインデックス0からデータ）
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || row.length < 10) continue;
-
-      const cpnName = parseValue(row[3]); // D列: キャンペーン名
-      
-      // 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
-      if (!cpnName.includes("新規グロース部_")) continue;
-
-      const media = parseValue(row[12]); // M列: 媒体名
-      const spend = parseNumber(row[4]); // E列: Cost
-      const revenue = parseNumber(row[17]); // R列: 売上
-      const profit = revenue - spend; // 利益 = 売上 - Cost
-      const cv = Math.round(parseNumber(row[9])); // J列: CV
-      const mcv = Math.round(parseNumber(row[8])); // I列: MCV
-      const unitPrice = parseNumber(row[10]); // K列: 単価
-
-      data.push({
-        media: normalizeMediaName(media),
-        cpnKey: parseValue(row[1]), // B列: 日付+キャンペーン名
-        cpnName,
-        date: parseDate(row[2]), // C列: 日付
-        spend,
-        revenue,
-        profit,
-        roas: spend > 0 ? (revenue / spend) * 100 : 0,
-        cv,
-        mcv,
-        impressions: Math.round(parseNumber(row[5])), // F列: Imp
-        clicks: Math.round(parseNumber(row[6])), // G列: Clicks
-        cpm: 0,
-        cpc: 0,
-        unitPrice,
-        teamName: parseValue(row[13]), // N列: チーム名
-        personName: parseValue(row[14]), // O列: 担当者名
-        projectName: parseValue(row[15]), // P列: 案件名
-        projectOfferName: parseValue(row[16]), // Q列: 案件名_オファー名
-        accountName: parseValue(row[18]), // S列: アカウント名
-        campaignBudget: "",
-        status: "",
-        campaignId: "",
-        budgetSchedule: "",
+  // 当月と前月のデータを取得（月またぎ対応）
+  const sheetNames = [currentSheetName, prevSheetName];
+  
+  for (const sheetName of sheetNames) {
+    try {
+      // シートの構造: 6行目がヘッダー、7行目からデータ
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: historicalSpreadsheetId,
+        range: `'${sheetName}'!A7:T`,  // 7行目（データ開始行）から取得
       });
-    }
 
-    return data;
-  } catch (error) {
-    console.error("Error fetching historical data:", error);
-    return [];
+      const rows = response.data.values;
+      if (!rows || rows.length === 0) {
+        console.log(`Sheet ${sheetName} is empty or not found`);
+        continue;
+      }
+      
+      console.log(`Fetched ${rows.length} rows from ${sheetName}`);
+
+      // データ行を処理（7行目から開始なのでインデックス0からデータ）
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length < 10) continue;
+
+        const cpnName = parseValue(row[3]); // D列: キャンペーン名
+        
+        // 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
+        if (!cpnName.includes("新規グロース部_")) continue;
+
+        const media = parseValue(row[12]); // M列: 媒体名
+        const spend = parseNumber(row[4]); // E列: Cost
+        const revenue = parseNumber(row[17]); // R列: 売上
+        const profit = revenue - spend; // 利益 = 売上 - Cost
+        const cv = Math.round(parseNumber(row[9])); // J列: CV
+        const mcv = Math.round(parseNumber(row[8])); // I列: MCV
+        const unitPrice = parseNumber(row[10]); // K列: 単価
+
+        data.push({
+          media: normalizeMediaName(media),
+          cpnKey: parseValue(row[1]), // B列: 日付+キャンペーン名
+          cpnName,
+          date: parseDate(row[2]), // C列: 日付
+          spend,
+          revenue,
+          profit,
+          roas: spend > 0 ? (revenue / spend) * 100 : 0,
+          cv,
+          mcv,
+          impressions: Math.round(parseNumber(row[5])), // F列: Imp
+          clicks: Math.round(parseNumber(row[6])), // G列: Clicks
+          cpm: 0,
+          cpc: 0,
+          unitPrice,
+          teamName: parseValue(row[13]), // N列: チーム名
+          personName: parseValue(row[14]), // O列: 担当者名
+          projectName: parseValue(row[15]), // P列: 案件名
+          projectOfferName: parseValue(row[16]), // Q列: 案件名_オファー名
+          accountName: parseValue(row[18]), // S列: アカウント名
+          campaignBudget: "",
+          status: "",
+          campaignId: "",
+          budgetSchedule: "",
+        });
+      }
+    } catch (error) {
+      // シートが存在しない場合などはスキップ
+      console.warn(`Error fetching sheet ${sheetName}:`, error);
+      continue;
+    }
   }
+
+  console.log(`Total historical data rows: ${data.length}`);
+  return data;
 }
 
 /**
