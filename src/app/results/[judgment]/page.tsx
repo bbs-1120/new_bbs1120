@@ -316,10 +316,18 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
       }
     };
 
-    // キャッシュから読み込み
-    loadFromCache();
-    // バックグラウンドで更新
-    fetchData();
+    // キャッシュから読み込み、バックグラウンドで遅延更新（体感速度UP）
+    const hasCachedData = loadFromCache();
+    if (hasCachedData) {
+      // キャッシュがあれば3秒後にバックグラウンド更新
+      const timeoutId = setTimeout(() => {
+        fetchData();
+      }, 3000);
+      return () => clearTimeout(timeoutId);
+    } else {
+      // キャッシュがなければ即座に取得
+      fetchData();
+    }
   }, [loadFromCache, saveToCache]);
 
   // スケルトンUI（キャッシュがない時のみ）

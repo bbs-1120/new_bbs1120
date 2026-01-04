@@ -215,11 +215,19 @@ export default function HomePage() {
     setSummary(newSummary);
   }, [allResults]);
 
-  // 初回読み込み
+  // 初回読み込み（キャッシュ優先・バックグラウンド更新）
   useEffect(() => {
     const hasCachedData = loadFromCache();
-    // キャッシュがあってもバックグラウンドで更新
-    fetchData();
+    if (hasCachedData) {
+      // キャッシュがあれば即座に表示、バックグラウンドで更新（遅延実行）
+      const timeoutId = setTimeout(() => {
+        fetchData();
+      }, 2000); // 2秒後にバックグラウンド更新
+      return () => clearTimeout(timeoutId);
+    } else {
+      // キャッシュがなければ即座に取得
+      fetchData();
+    }
   }, []);
 
   // 定期更新（30秒ごと）

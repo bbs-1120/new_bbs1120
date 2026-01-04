@@ -605,13 +605,21 @@ export default function AnalysisPage() {
       // まずローカルキャッシュから読み込み（即座に表示）
       const hasCachedData = await loadFromLocalCache();
       
-      await Promise.all([
-        hasCachedData 
-          ? fetchData().catch(() => {}) // キャッシュがある場合は静かに更新
-          : fetchData(), // キャッシュがない場合はローディング表示
-        fetchGptAdvice(),
-        fetchComparisonData(),
-      ]);
+      if (hasCachedData) {
+        // キャッシュがある場合は遅延してバックグラウンド更新（体感速度UP）
+        setTimeout(() => {
+          fetchData().catch(() => {});
+        }, 3000); // 3秒後に更新
+        fetchGptAdvice();
+        fetchComparisonData();
+      } else {
+        // キャッシュがない場合は即座に取得
+        await Promise.all([
+          fetchData(),
+          fetchGptAdvice(),
+          fetchComparisonData(),
+        ]);
+      }
     };
     
     loadAllData();
