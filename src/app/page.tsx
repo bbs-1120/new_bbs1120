@@ -47,9 +47,9 @@ interface JudgmentOverride {
 }
 
 const CACHE_KEY = "home_data_cache";
-const CACHE_DURATION = 10 * 60 * 1000; // 10分（パフォーマンス改善）
+const CACHE_DURATION = 30 * 60 * 1000; // 30分（パフォーマンス改善）
 const JUDGMENT_OVERRIDE_KEY = "judgment_overrides";
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5分ごとに更新（パフォーマンス改善）
+const REFRESH_INTERVAL = 10 * 60 * 1000; // 10分ごとに更新（パフォーマンス改善）
 
 // 判定オーバーライドを取得（当日23:59まで有効）
 function getJudgmentOverrides(): JudgmentOverride[] {

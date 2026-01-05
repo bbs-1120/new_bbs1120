@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     // サマリーを計算
     const summary = getJudgmentSummary(results);
 
-    // キャッシュヘッダー付きレスポンス
+    // キャッシュヘッダー付きレスポンス（パフォーマンス改善）
     return NextResponse.json({
       success: true,
       date: new Date().toISOString().split("T")[0],
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
       results: filteredResults,
     }, {
       headers: {
-        "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+        "Cache-Control": "private, max-age=300, stale-while-revalidate=600",
       },
     });
   } catch (error) {

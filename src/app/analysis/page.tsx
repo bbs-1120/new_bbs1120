@@ -185,7 +185,7 @@ export default function AnalysisPage() {
   });
   const [budgetScheduleSubmitting, setBudgetScheduleSubmitting] = useState(false);
   const [budgetScheduleMessage, setBudgetScheduleMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  
+
   // モバイル用ページネーション
   const [mobilePage, setMobilePage] = useState(1);
   const MOBILE_PAGE_SIZE = 10;
@@ -506,7 +506,7 @@ export default function AnalysisPage() {
   };
 
   const STORAGE_KEY = "analysis_page_cache";
-  const CACHE_DURATION = 60 * 60 * 1000; // 60分（パフォーマンス改善）
+  const CACHE_DURATION = 2 * 60 * 60 * 1000; // 2時間（パフォーマンス改善）
 
   // ローカルキャッシュから即座にデータを読み込み
   const loadFromLocalCache = async () => {
@@ -601,7 +601,7 @@ export default function AnalysisPage() {
         
         // 最終更新時刻を記録
         setLastUpdated(new Date());
-        setNextRefreshIn(5 * 60); // 5分に変更
+        setNextRefreshIn(10 * 60); // 10分（パフォーマンス向上）
       } else {
         setError(data.error || "データの取得に失敗しました");
       }
@@ -623,19 +623,22 @@ export default function AnalysisPage() {
       const hasCachedData = await loadFromLocalCache();
       
       if (hasCachedData) {
-        // キャッシュがある場合は遅延してバックグラウンド更新（体感速度UP）
+        // キャッシュがある場合は1秒後にバックグラウンド更新（体感速度UP）
         setTimeout(() => {
           fetchData().catch(() => {});
-        }, 3000); // 3秒後に更新
-        fetchGptAdvice();
-        fetchComparisonData();
+        }, 1000);
+        // GPTと比較データは非同期で取得
+        setTimeout(() => {
+          fetchGptAdvice();
+          fetchComparisonData();
+        }, 2000);
       } else {
         // キャッシュがない場合は即座に取得
-        await Promise.all([
+      await Promise.all([
           fetchData(),
-          fetchGptAdvice(),
-          fetchComparisonData(),
-        ]);
+        fetchGptAdvice(),
+        fetchComparisonData(),
+      ]);
       }
     };
     

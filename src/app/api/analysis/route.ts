@@ -4,7 +4,7 @@ import { getCache, setCache } from "@/lib/cache";
 import { auth } from "@/lib/auth";
 
 const CACHE_KEY = "analysis_data";
-const CACHE_TTL = 30 * 60 * 1000; // 30分間キャッシュ（パフォーマンス改善）
+const CACHE_TTL = 60 * 60 * 1000; // 60分間キャッシュ（パフォーマンス改善）
 
 interface CachedData {
   sheetData: Awaited<ReturnType<typeof getFullAnalysisData>>;
@@ -368,9 +368,9 @@ export async function GET(request: Request) {
       cachedAt: new Date().toISOString(),
     });
 
-    // より積極的なキャッシュ設定（高速表示のため）
-    // ブラウザキャッシュ2分、CDNキャッシュ5分、stale-while-revalidate 10分
-    response.headers.set("Cache-Control", "public, max-age=120, s-maxage=300, stale-while-revalidate=600");
+    // 積極的なキャッシュ設定（高速表示のため）
+    // ブラウザキャッシュ5分、CDNキャッシュ10分、stale-while-revalidate 30分
+    response.headers.set("Cache-Control", "public, max-age=300, s-maxage=600, stale-while-revalidate=1800");
     
     return response;
   } catch (error) {
