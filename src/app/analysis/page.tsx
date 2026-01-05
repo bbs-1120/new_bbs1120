@@ -185,6 +185,13 @@ export default function AnalysisPage() {
   });
   const [budgetScheduleSubmitting, setBudgetScheduleSubmitting] = useState(false);
   const [budgetScheduleMessage, setBudgetScheduleMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
+  // モバイル用ページネーション
+  const [mobilePage, setMobilePage] = useState(1);
+  const MOBILE_PAGE_SIZE = 10;
+  
+  // Pull-to-refresh
+  const [isPulling, setIsPulling] = useState(false);
 
   // 予算スケジュールモーダルを開く
   const openBudgetScheduleModal = (cpn: CpnData) => {
@@ -791,23 +798,23 @@ export default function AnalysisPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-              className={`px-2 lg:px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors ${
                 autoRefreshEnabled 
                   ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" 
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              {autoRefreshEnabled ? "停止" : "開始"}
+              {autoRefreshEnabled ? "自動更新 停止" : "自動更新 開始"}
             </button>
             <Button 
               variant="secondary" 
               size="sm" 
               onClick={() => handleRefresh()}
               disabled={isRefreshing}
-              className="text-xs"
+              className="px-4 py-2 text-sm font-bold rounded-xl"
             >
-              <RefreshCw className={`h-3 w-3 lg:h-4 lg:w-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">今すぐ</span>更新
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              更新
             </Button>
           </div>
         </div>
@@ -840,47 +847,79 @@ export default function AnalysisPage() {
         <DashboardConfigButton onOpen={() => setShowDashboardConfig(true)} />
       </div>
 
-      {/* タブナビゲーション */}
-      <div className="flex gap-1 lg:gap-2 mb-4 lg:mb-6 border-b border-slate-200 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-hide">
+      {/* タブナビゲーション - モバイル最適化 */}
+      <div className="lg:hidden mb-4 -mx-4 px-4">
+        <div className="flex bg-slate-100 rounded-2xl p-1.5 gap-1">
+          {[
+            { key: "overview", emoji: "📊", label: "概要" },
+            { key: "cpn", emoji: "📋", label: "CPN" },
+            { key: "project", emoji: "📁", label: "案件" },
+            { key: "media", emoji: "📱", label: "媒体" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setActiveTab(tab.key as typeof activeTab);
+                if (tab.key === "cpn") setMobilePage(1);
+              }}
+              className={`flex-1 flex items-center justify-center py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ${
+                activeTab === tab.key
+                  ? "bg-white text-indigo-600 shadow-md"
+                  : "text-slate-500"
+              }`}
+            >
+              <span className="text-base mr-0.5">{tab.emoji}</span>
+              <span className="text-xs">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* デスクトップ用タブ */}
+      <div className="hidden lg:flex gap-2 mb-6 border-b border-slate-200">
         <button
           onClick={() => setActiveTab("overview")}
-          className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-fit ${
+          className={`flex items-center px-4 py-2 text-sm font-bold border-b-2 transition-all ${
             activeTab === "overview"
-              ? "border-indigo-600 text-indigo-600"
+              ? "text-indigo-600 border-indigo-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          📊 概要
+          <span className="text-base mr-1">📊</span>
+          概要
         </button>
         <button
           onClick={() => setActiveTab("cpn")}
-          className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-fit ${
+          className={`flex items-center px-4 py-2 text-sm font-bold border-b-2 transition-all ${
             activeTab === "cpn"
-              ? "border-indigo-600 text-indigo-600"
+              ? "text-indigo-600 border-indigo-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          📋 CPN
+          <span className="text-base mr-1">📋</span>
+          CPN
         </button>
         <button
           onClick={() => setActiveTab("project")}
-          className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-fit ${
+          className={`flex items-center px-4 py-2 text-sm font-bold border-b-2 transition-all ${
             activeTab === "project"
-              ? "border-indigo-600 text-indigo-600"
+              ? "text-indigo-600 border-indigo-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          📁 案件
+          <span className="text-base mr-1">📁</span>
+          案件
         </button>
         <button
           onClick={() => setActiveTab("media")}
-          className={`px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-fit ${
+          className={`flex items-center px-4 py-2 text-sm font-bold border-b-2 transition-all ${
             activeTab === "media"
-              ? "border-indigo-600 text-indigo-600"
+              ? "text-indigo-600 border-indigo-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          📱 媒体
+          <span className="text-base mr-1">📱</span>
+          媒体
         </button>
       </div>
 
@@ -1399,40 +1438,65 @@ export default function AnalysisPage() {
             <ChangeHistory onClose={() => setShowChangeHistory(false)} />
           )}
           
-          {/* メイン指標 */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-6">
+          {/* メイン指標 - モバイル最適化 */}
+          <div className="lg:hidden">
+            {/* モバイル: コンパクトなカード */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="grid grid-cols-3 divide-x divide-slate-100">
+                <div className="p-3 text-center">
+                  <p className="text-[10px] text-slate-500 mb-0.5">消化</p>
+                  <p className="text-base font-bold text-slate-800">{formatCurrency(displaySummary.spend)}</p>
+                </div>
+                <div className={`p-3 text-center ${displaySummary.profit >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+                  <p className="text-[10px] text-slate-500 mb-0.5">利益</p>
+                  <p className={`text-base font-bold ${displaySummary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatCurrency(displaySummary.profit)}
+                  </p>
+                </div>
+                <div className="p-3 text-center">
+                  <p className="text-[10px] text-slate-500 mb-0.5">ROAS</p>
+                  <p className={`text-base font-bold ${getRoasColorClass(displaySummary.roas)}`}>
+                    {formatPercent(displaySummary.roas)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* デスクトップ用カード */}
+          <div className="hidden lg:grid grid-cols-3 gap-6">
             <Card>
-              <CardContent className="pt-4 lg:pt-6">
+              <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs lg:text-sm text-slate-500">消化金額</p>
-                    <p className="text-xl lg:text-2xl font-bold text-slate-900">
+                    <p className="text-sm text-slate-500">消化金額</p>
+                    <p className="text-2xl font-bold text-slate-900">
                       {formatCurrency(displaySummary.spend)}
                     </p>
                   </div>
-                  <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <DollarSign className="h-5 w-5 lg:h-6 lg:w-6 text-blue-600" />
+                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-blue-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-4 lg:pt-6">
+              <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs lg:text-sm text-slate-500">利益</p>
-                    <p className={`text-xl lg:text-2xl font-bold ${displaySummary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    <p className="text-sm text-slate-500">利益</p>
+                    <p className={`text-2xl font-bold ${displaySummary.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {formatCurrency(displaySummary.profit)}
                     </p>
                   </div>
-                  <div className={`h-10 w-10 lg:h-12 lg:w-12 rounded-full flex items-center justify-center ${
+                  <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
                     displaySummary.profit >= 0 ? "bg-green-100" : "bg-red-100"
                   }`}>
                     {displaySummary.profit >= 0 ? (
-                      <TrendingUp className="h-5 w-5 lg:h-6 lg:w-6 text-green-600" />
+                      <TrendingUp className="h-6 w-6 text-green-600" />
                     ) : (
-                      <TrendingDown className="h-5 w-5 lg:h-6 lg:w-6 text-red-600" />
+                      <TrendingDown className="h-6 w-6 text-red-600" />
                     )}
                   </div>
                 </div>
@@ -1440,16 +1504,16 @@ export default function AnalysisPage() {
             </Card>
 
             <Card>
-              <CardContent className="pt-4 lg:pt-6">
+              <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs lg:text-sm text-slate-500">ROAS</p>
-                    <p className={`text-xl lg:text-2xl font-bold ${getRoasColorClass(displaySummary.roas)}`}>
+                    <p className="text-sm text-slate-500">ROAS</p>
+                    <p className={`text-2xl font-bold ${getRoasColorClass(displaySummary.roas)}`}>
                       {formatPercent(displaySummary.roas)}
                     </p>
                   </div>
-                  <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                    <BarChart3 className="h-5 w-5 lg:h-6 lg:w-6 text-purple-600" />
+                  <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
                   </div>
                 </div>
               </CardContent>
@@ -1574,7 +1638,150 @@ export default function AnalysisPage() {
               />
             </div>
           </CardHeader>
-          <div className="overflow-x-auto scrollbar-hide">
+          
+          {/* モバイル用カード表示 - ページネーション対応 */}
+          <div className="lg:hidden p-3 space-y-3">
+            {/* CPN件数表示 */}
+            <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+              <span>{getSortedCpnList().length}件中 {Math.min(mobilePage * MOBILE_PAGE_SIZE, getSortedCpnList().length)}件表示</span>
+              {mobilePage > 1 && (
+                <button 
+                  onClick={() => setMobilePage(1)}
+                  className="text-indigo-600 font-medium"
+                >
+                  最初に戻る
+                </button>
+              )}
+            </div>
+            
+            {getSortedCpnList().slice(0, mobilePage * MOBILE_PAGE_SIZE).map((cpn, index) => {
+              const isTargetMedia = ["Meta", "TikTok", "Pangle"].includes(cpn.media);
+              const currentStatus = cpn.status?.toLowerCase() || "";
+              const isActive = currentStatus === "active" || currentStatus === "enable" || currentStatus === "enabled" || currentStatus === "on";
+              const statusMessage = statusMessages[cpn.cpnKey];
+              const message = budgetMessages[cpn.cpnKey];
+              
+              return (
+                <div key={index} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  {/* ヘッダー行: 媒体 + 利益 + ROAS + ON/OFF */}
+                  <div className="flex items-center gap-2 p-2.5 bg-slate-50/50">
+                    <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-lg shrink-0 ${
+                      cpn.media === "Meta" ? "bg-blue-500 text-white" :
+                      cpn.media === "TikTok" ? "bg-pink-500 text-white" :
+                      cpn.media === "Pangle" ? "bg-orange-500 text-white" :
+                      cpn.media === "YouTube" ? "bg-red-500 text-white" :
+                      cpn.media === "LINE" ? "bg-green-500 text-white" :
+                      "bg-slate-500 text-white"
+                    }`}>
+                      {cpn.media || "-"}
+                    </span>
+                    <div className="flex-1 flex items-center justify-center gap-3">
+                      <span className={`text-sm font-bold ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {formatCurrency(cpn.profit)}
+                      </span>
+                      <span className={`text-sm font-bold ${getRoasColorClass(cpn.roas)}`}>
+                        {formatPercent(cpn.roas)}
+                      </span>
+                    </div>
+                    {isTargetMedia && (
+                      <button
+                        onClick={() => handleStatusToggle(cpn)}
+                        disabled={statusUpdating[cpn.cpnKey]}
+                        className={`inline-flex items-center justify-center w-14 h-7 rounded-full transition-colors font-bold text-xs shrink-0 ${
+                          statusUpdating[cpn.cpnKey] 
+                            ? "bg-slate-200 cursor-wait" 
+                            : isActive 
+                              ? "bg-green-500 text-white" 
+                              : "bg-slate-300 text-slate-600"
+                        }`}
+                      >
+                        {statusUpdating[cpn.cpnKey] ? (
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                        ) : (
+                          isActive ? "ON" : "OFF"
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* CPN名 */}
+                  <p className="text-xs text-slate-700 px-2.5 py-2 leading-relaxed line-clamp-2 border-b border-slate-100">{cpn.cpnName}</p>
+                  
+                  {/* サブ指標 - 横並び */}
+                  <div className="grid grid-cols-5 divide-x divide-slate-100 text-center py-2">
+                    <div>
+                      <p className="text-[9px] text-slate-400">消化</p>
+                      <p className="text-[11px] font-bold text-slate-700">{formatCurrency(cpn.spend)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-400">MCV</p>
+                      <p className="text-[11px] font-bold text-slate-700">{cpn.mcv}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-slate-400">CV</p>
+                      <p className="text-[11px] font-bold text-slate-700">{cpn.cv}</p>
+                    </div>
+                    <div className={cpn.consecutiveLoss >= 2 ? "bg-red-50" : ""}>
+                      <p className="text-[9px] text-slate-400">赤字</p>
+                      <p className={`text-[11px] font-bold ${cpn.consecutiveLoss >= 2 ? "text-red-600" : "text-slate-700"}`}>
+                        {cpn.profit >= 0 ? "-" : cpn.consecutiveLoss === 1 ? "当日" : `${cpn.consecutiveLoss}日`}
+                      </p>
+                    </div>
+                    <div className="bg-indigo-50/50">
+                      <p className="text-[9px] text-indigo-500">7日</p>
+                      <p className={`text-[11px] font-bold ${cpn.profit7Days >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {formatCurrency(cpn.profit7Days)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* 予算変更（Meta/TikTok/Pangleのみ） */}
+                  {isTargetMedia && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-2 bg-slate-50/50 border-t border-slate-100">
+                      <span className="text-[10px] text-slate-500 shrink-0">{cpn.dailyBudget}</span>
+                      <span className="text-slate-300 shrink-0">→</span>
+                      <input
+                        type="text"
+                        placeholder="¥"
+                        value={budgetInputs[cpn.cpnKey] || ""}
+                        onChange={(e) => handleBudgetChange(cpn.cpnKey, e.target.value)}
+                        className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <button
+                        onClick={() => handleBudgetSubmit(cpn)}
+                        disabled={budgetUpdating[cpn.cpnKey] || !budgetInputs[cpn.cpnKey]}
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg disabled:bg-slate-300 disabled:cursor-not-allowed shrink-0"
+                      >
+                        {budgetUpdating[cpn.cpnKey] ? "..." : "変更"}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* ステータスメッセージ */}
+                  {(statusMessage || message) && (
+                    <p className={`px-2.5 py-1 text-[10px] text-center ${
+                      (statusMessage?.type || message?.type) === "success" ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                    }`}>
+                      {statusMessage?.text || message?.text}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            
+            {/* もっと見るボタン */}
+            {mobilePage * MOBILE_PAGE_SIZE < getSortedCpnList().length && (
+              <button
+                onClick={() => setMobilePage(prev => prev + 1)}
+                className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-transform"
+              >
+                もっと見る ({getSortedCpnList().length - mobilePage * MOBILE_PAGE_SIZE}件)
+              </button>
+            )}
+          </div>
+          
+          {/* PC用テーブル表示 */}
+          <div className="hidden lg:block overflow-x-auto scrollbar-hide">
             <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                 <tr>
