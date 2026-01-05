@@ -1754,6 +1754,16 @@ export default function AnalysisPage() {
                       >
                         {budgetUpdating[cpn.cpnKey] ? "..." : "変更"}
                       </button>
+                      {/* Meta専用: 予算スケジュール */}
+                      {cpn.media === "Meta" && (
+                        <button
+                          onClick={() => openBudgetScheduleModal(cpn)}
+                          className="px-2.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg shrink-0 flex items-center gap-1"
+                        >
+                          <Calendar className="h-3 w-3" />
+                          <span>スケ</span>
+                        </button>
+                      )}
                     </div>
                   )}
                   
