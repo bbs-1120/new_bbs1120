@@ -195,17 +195,27 @@ export default function AnalysisPage() {
 
   // 予算スケジュールモーダルを開く
   const openBudgetScheduleModal = (cpn: CpnData) => {
-    // デフォルト値を設定（今日から明日）
+    // デフォルト値を設定（現在時刻から次の15分刻みを開始時刻に）
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
+    // 現在時刻から次の15分刻みを計算
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const nextSlotMinutes = Math.ceil(currentMinutes / 15) * 15 + 15; // 次の15分刻み（余裕を持たせる）
+    const startHour = Math.floor(nextSlotMinutes / 60) % 24;
+    const startMinute = nextSlotMinutes % 60;
+    const defaultStartTime = `${startHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
+    
+    // 開始時刻が24時を超える場合は翌日に
+    const startDate = nextSlotMinutes >= 24 * 60 ? tomorrow : now;
+    
     setBudgetScheduleCpn(cpn);
     setBudgetScheduleForm({
-      startDate: now.toISOString().split("T")[0],
-      startTime: "10:00",
+      startDate: startDate.toISOString().split("T")[0],
+      startTime: defaultStartTime,
       endDate: tomorrow.toISOString().split("T")[0],
-      endTime: "23:59",
+      endTime: "23:45",
       budgetAmount: "",
     });
     setBudgetScheduleMessage(null);
@@ -2521,18 +2531,35 @@ export default function AnalysisPage() {
                   <input
                     type="date"
                     value={budgetScheduleForm.startDate}
+                    min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, startDate: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">開始時刻</label>
-                  <input
-                    type="time"
+                  <select
                     value={budgetScheduleForm.startTime}
                     onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, startTime: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  >
+                    {Array.from({ length: 24 * 4 }, (_, i) => {
+                      const hour = Math.floor(i / 4);
+                      const minute = (i % 4) * 15;
+                      const timeStr = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+                      // 当日の場合、現在時刻より前は無効
+                      const now = new Date();
+                      const isToday = budgetScheduleForm.startDate === now.toISOString().split("T")[0];
+                      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                      const optionMinutes = hour * 60 + minute;
+                      const isDisabled = isToday && optionMinutes < currentMinutes;
+                      return (
+                        <option key={timeStr} value={timeStr} disabled={isDisabled}>
+                          {timeStr}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
 
@@ -2543,18 +2570,36 @@ export default function AnalysisPage() {
                   <input
                     type="date"
                     value={budgetScheduleForm.endDate}
+                    min={budgetScheduleForm.startDate || new Date().toISOString().split("T")[0]}
                     onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, endDate: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">終了時刻</label>
-                  <input
-                    type="time"
+                  <select
                     value={budgetScheduleForm.endTime}
                     onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, endTime: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  >
+                    {Array.from({ length: 24 * 4 }, (_, i) => {
+                      const hour = Math.floor(i / 4);
+                      const minute = (i % 4) * 15;
+                      const timeStr = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+                      // 開始日時より前は無効
+                      const isSameDay = budgetScheduleForm.startDate === budgetScheduleForm.endDate;
+                      const startMinutes = budgetScheduleForm.startTime 
+                        ? parseInt(budgetScheduleForm.startTime.split(":")[0]) * 60 + parseInt(budgetScheduleForm.startTime.split(":")[1])
+                        : 0;
+                      const optionMinutes = hour * 60 + minute;
+                      const isDisabled = isSameDay && optionMinutes <= startMinutes;
+                      return (
+                        <option key={timeStr} value={timeStr} disabled={isDisabled}>
+                          {timeStr}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
 
