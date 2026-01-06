@@ -146,15 +146,20 @@ async function updateMetaStatus(
   return { success: false, error: lastError };
 }
 
-// TikTok Ads API - キャンペーンステータス変更 + 広告アカウント名マッピング対応
+// TikTok Ads API - キャンペーンステータス変更 + 複数トークン対応 + 広告アカウント名マッピング対応
 async function updateTikTokStatus(
   campaignId: string | undefined,
   status: "active" | "paused",
   knownAdvertiserId: string | null = null
 ): Promise<{ success: boolean; error?: string }> {
-  const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
+  // 複数のアクセストークンを取得（新しいビジネスセンター対応）
+  const accessTokens = [
+    process.env.TIKTOK_ACCESS_TOKEN,
+    process.env.TIKTOK_ACCESS_TOKEN_2,
+    process.env.TIKTOK_ACCESS_TOKEN_3,
+  ].filter(Boolean) as string[];
   
-  if (!accessToken) {
+  if (accessTokens.length === 0) {
     return { success: false, error: "TikTok APIの認証情報が設定されていません" };
   }
 
@@ -182,51 +187,57 @@ async function updateTikTokStatus(
 
   let lastError = "広告主IDが見つかりませんでした";
   
-  for (let i = 0; i < advertiserIds.length; i++) {
-    const advertiserId = advertiserIds[i].trim();
+  // 各トークンで試行（複数ビジネスセンター対応）
+  for (let t = 0; t < accessTokens.length; t++) {
+    const accessToken = accessTokens[t];
+    console.log(`[Token ${t + 1}/${accessTokens.length}] Trying status update...`);
     
-    // campaign/status/update/ APIを使用（Upgraded Smart Plus対応）
-    try {
-      const response = await fetch(
-        "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Token": accessToken,
-          },
-          body: JSON.stringify({
-            advertiser_id: advertiserId,
-            campaign_ids: [campaignId],  // 配列で渡す
-            operation_status: tiktokStatus,
-          }),
-        }
-      );
-
-      const data = await response.json();
-      console.log(`TikTok status update response:`, JSON.stringify(data));
-
-      if (data.code === 0) {
-        return { success: true };
-      } else {
-        lastError = data.message || "TikTok APIエラー";
-        
-        // SPCの場合はSPC APIを試す
-        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
-          const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, tiktokStatus);
-          if (spcResult.success) {
-            return { success: true };
+    for (let i = 0; i < advertiserIds.length; i++) {
+      const advertiserId = advertiserIds[i].trim();
+      
+      // campaign/status/update/ APIを使用（Upgraded Smart Plus対応）
+      try {
+        const response = await fetch(
+          "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Token": accessToken,
+            },
+            body: JSON.stringify({
+              advertiser_id: advertiserId,
+              campaign_ids: [campaignId],  // 配列で渡す
+              operation_status: tiktokStatus,
+            }),
           }
-          lastError = spcResult.error || lastError;
+        );
+
+        const data = await response.json();
+        console.log(`TikTok status update response:`, JSON.stringify(data));
+
+        if (data.code === 0) {
+          return { success: true };
+        } else {
+          lastError = data.message || "TikTok APIエラー";
+          
+          // SPCの場合はSPC APIを試す
+          if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+            const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, tiktokStatus);
+            if (spcResult.success) {
+              return { success: true };
+            }
+            lastError = spcResult.error || lastError;
+          }
+          
+          if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
+            continue;
+          }
         }
-        
-        if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
-          continue;
-        }
+      } catch (error) {
+        console.error("TikTok API error:", error);
+        lastError = "TikTok APIへの接続に失敗しました";
       }
-    } catch (error) {
-      console.error("TikTok API error:", error);
-      lastError = "TikTok APIへの接続に失敗しました";
     }
   }
 
