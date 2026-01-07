@@ -55,7 +55,7 @@ export async function generateGPTAdvice(data: AnalysisData): Promise<string> {
 ## 👤 悠太さんの運用プロフィール
 
 ### 📊 今月の運用成績
-- 12月累計利益: ¥${data.summary.monthlyProfit.toLocaleString()}
+- ${new Date().getMonth() + 1}月累計利益: ¥${data.summary.monthlyProfit.toLocaleString()}
 - 平均日次利益: ¥${Math.round(avgDailyProfit).toLocaleString()}
 - 黒字日数: ${profitableDays}日 / 赤字日数: ${lossDays}日
 - 勝率: ${winRate.toFixed(1)}%
@@ -91,7 +91,7 @@ ${recentTrend.map(d => `- ${d.date}: ¥${d.profit.toLocaleString()}`).join("\n")
 2. **今日やるべきこと**: 本日のデータを見て、今すぐ取るべきアクション
 3. **強みを活かす提案**: 得意領域をさらに伸ばすための具体策
 4. **弱点の改善策**: 赤字領域の改善アプローチ
-5. **今後の戦略**: 12月残りの期間で利益を最大化するための提案
+5. **今後の戦略**: 今月残りの期間で利益を最大化するための提案
 
 親しみやすく、悠太さんに直接話しかけるような口調で、具体的で実行可能なアドバイスをお願いします。絵文字を使って分かりやすく！`;
 

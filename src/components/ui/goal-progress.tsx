@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
 import { Target, Edit2, Check, X } from "lucide-react";
@@ -12,7 +12,21 @@ interface GoalProgressProps {
 
 const STORAGE_KEY = "monthly_goal";
 
-export function GoalProgress({ currentValue, label = "12月目標" }: GoalProgressProps) {
+// 現在の月を取得
+function getCurrentMonth(): string {
+  const now = new Date();
+  return now.toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+  }).replace("月", "");
+}
+
+export function GoalProgress({ currentValue, label }: GoalProgressProps) {
+  // 動的な月ラベル
+  const dynamicLabel = useMemo(() => {
+    if (label) return label;
+    return `${getCurrentMonth()}月目標`;
+  }, [label]);
   const [goal, setGoal] = useState<number>(0);
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -85,7 +99,7 @@ export function GoalProgress({ currentValue, label = "12月目標" }: GoalProgre
         <CardContent className="py-6">
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <label className="text-sm text-slate-500 mb-2 block">{label}利益（円）</label>
+              <label className="text-sm text-slate-500 mb-2 block">{dynamicLabel}利益（円）</label>
               <div className="flex items-center gap-2">
                 <span className="text-slate-500">¥</span>
                 <input
@@ -118,7 +132,7 @@ export function GoalProgress({ currentValue, label = "12月目標" }: GoalProgre
         <div className="flex items-center justify-between">
           <CardTitle className={`flex items-center gap-2 ${isAchieved ? "text-white" : "text-slate-800"}`}>
             <Target className={`h-5 w-5 ${isAchieved ? "text-white" : "text-emerald-600"}`} />
-            {label}
+            {dynamicLabel}
             {isAchieved && <span className="ml-2 text-sm bg-white/20 px-2 py-0.5 rounded-full">🎉 達成！</span>}
           </CardTitle>
           <button

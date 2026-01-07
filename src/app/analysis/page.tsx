@@ -3,7 +3,7 @@
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power, Lightbulb, AlertTriangle, CheckCircle, Info, History, Calendar, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
 import { GoalProgress } from "@/components/ui/goal-progress";
@@ -192,6 +192,15 @@ export default function AnalysisPage() {
   
   // Pull-to-refresh
   const [isPulling, setIsPulling] = useState(false);
+
+  // 現在の月を動的に取得
+  const currentMonth = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "numeric",
+    }).replace("月", "");
+  }, []);
 
   // 予算スケジュールモーダルを開く
   const openBudgetScheduleModal = (cpn: CpnData) => {
@@ -942,7 +951,7 @@ export default function AnalysisPage() {
           {/* 月間目標と進捗バー */}
           <GoalProgress 
             currentValue={displaySummary.monthlyProfit} 
-            label="12月目標" 
+            label={`${currentMonth}月目標`} 
           />
 
           {/* メインサマリーカード（前日比・前週比あり） */}
@@ -958,7 +967,7 @@ export default function AnalysisPage() {
                 colorClass={comparisonData.today.profit >= 0 ? "from-emerald-500 to-green-600" : "from-red-500 to-rose-600"}
               />
               <ComparisonCard
-                title="12月累計利益"
+                title={`${currentMonth}月累計利益`}
                 value={displaySummary.monthlyProfit}
                 previousValue={0}
                 change={0}
@@ -1082,7 +1091,7 @@ export default function AnalysisPage() {
             {/* 日別利益推移 */}
             <Card>
               <CardHeader className="pb-2 lg:pb-4">
-                <CardTitle className="text-base lg:text-lg">📈 12月 日別利益推移</CardTitle>
+                <CardTitle className="text-base lg:text-lg">📈 {currentMonth}月 日別利益推移</CardTitle>
               </CardHeader>
               <CardContent className="px-2 lg:px-6">
                 {dailyTrend.length > 0 ? (
@@ -1602,7 +1611,7 @@ export default function AnalysisPage() {
                 </div>
                 <p className={`text-xs font-medium ${
                   displaySummary.monthlyProfit >= 0 ? "text-emerald-700" : "text-red-700"
-                }`}>12月利益</p>
+                }`}>{currentMonth}月利益</p>
               </div>
               <p className={`text-2xl font-bold ${
                 displaySummary.monthlyProfit >= 0 ? "text-emerald-900" : "text-red-900"

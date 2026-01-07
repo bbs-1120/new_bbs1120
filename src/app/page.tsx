@@ -107,14 +107,19 @@ export default function HomePage() {
   const [allResults, setAllResults] = useState<JudgmentResult[]>([]);
 
   // 時刻はuseMemoで計算（毎回再計算しない）
-  const currentTime = useMemo(() => {
+  const { currentTime, currentMonth } = useMemo(() => {
     const now = new Date();
-    return now.toLocaleString("ja-JP", {
+    const time = now.toLocaleString("ja-JP", {
       timeZone: "Asia/Tokyo",
       month: "long",
       day: "numeric",
       weekday: "short",
     });
+    const month = now.toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "numeric",
+    }).replace("月", "");
+    return { currentTime: time, currentMonth: month };
   }, []);
 
   // ローカルキャッシュから読み込み
@@ -367,7 +372,7 @@ export default function HomePage() {
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 lg:p-4">
-            <p className="text-slate-500 text-[10px] lg:text-xs mb-1">12月累計</p>
+            <p className="text-slate-500 text-[10px] lg:text-xs mb-1">{currentMonth}月累計</p>
             <span className={`text-base lg:text-2xl font-bold ${todaySummary.monthlyProfit >= 0 ? "text-slate-800" : "text-red-600"}`}>
               <span className="lg:hidden">{formatCurrency(todaySummary.monthlyProfit, true)}</span>
               <span className="hidden lg:inline">{formatCurrency(todaySummary.monthlyProfit)}</span>

@@ -538,7 +538,7 @@ export async function getMonthlyProfit(teamName?: string | null): Promise<number
       todayData = todayData.filter(row => row.cpnName?.includes(filterPattern));
     }
 
-    // 今月の開始日を計算（12月1日）
+    // 今月の開始日を計算（動的）
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     monthStart.setHours(0, 0, 0, 0);

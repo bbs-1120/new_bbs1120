@@ -158,18 +158,19 @@ function generateAIAdvice(
   }
 
   // 8. 月間累計
+  const currentMonth = new Date().getMonth() + 1; // 現在の月を動的に取得
   if (summary.monthlyProfit > 0) {
     advice.push({
       type: "success",
       title: "📅 今月の累計は黒字です",
-      message: `12月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。${summary.monthlyProfit > 500000 ? "素晴らしい成績です！" : "このペースを維持しましょう。"}`,
+      message: `${currentMonth}月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。${summary.monthlyProfit > 500000 ? "素晴らしい成績です！" : "このペースを維持しましょう。"}`,
       priority: 5,
     });
   } else if (summary.monthlyProfit < 0) {
     advice.push({
       type: "danger",
       title: "📅 今月の累計が赤字です",
-      message: `12月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。早急な対策が必要です。`,
+      message: `${currentMonth}月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。早急な対策が必要です。`,
       priority: 1,
     });
   }
@@ -230,7 +231,7 @@ export async function GET(request: Request) {
       roas: 0,
       cpa: 0,
       cvr: 0,
-      monthlyProfit: monthlyProfit, // 12月利益
+      monthlyProfit: monthlyProfit, // 今月利益（動的）
     };
 
     // データを集計
