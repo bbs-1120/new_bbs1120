@@ -91,7 +91,7 @@ function normalizeMediaName(media: string): string {
 
 /**
  * 突き合わせ_当日CPN一覧 シートからデータを取得
- * Updated: 2024-12-22
+ * Updated: 2026-01-07
  * 「新規グロース部_」を含む行のみ抽出（全メンバー対象）
  * 
  * カラム構成（H列から開始）:
@@ -515,7 +515,7 @@ export async function getFullAnalysisData() {
 }
 
 /**
- * 今月（12月）の利益合計を取得
+ * 今月の利益合計を取得（月は自動計算）
  * @param teamName フィルタリング用のチーム名（指定時は「新規グロース部_{teamName}_」でフィルタ）
  */
 export async function getMonthlyProfit(teamName?: string | null): Promise<number> {
