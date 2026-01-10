@@ -81,45 +81,45 @@ export function ComparisonCard({
   const isProfit = title.includes("利益") || title.includes("売上") || title.includes("MCV") || title.includes("CV") || title.includes("ROAS");
 
   return (
-    <Card className={`bg-gradient-to-br ${colorClass} text-white overflow-hidden shadow-lg`}>
-      <CardContent className="pt-4 pb-4 lg:pt-5 lg:pb-5 px-4 lg:px-5">
-        <div className="flex items-center justify-between mb-2 lg:mb-2">
-          <div className="flex items-center gap-2">
+    <Card className={`bg-gradient-to-br ${colorClass} text-white overflow-hidden`}>
+      <CardContent className="pt-3 pb-3 lg:pt-4 lg:pb-4 px-3 lg:px-4">
+        <div className="flex items-center justify-between mb-1 lg:mb-2">
+          <div className="flex items-center gap-1 lg:gap-2">
             {icon && <span className="text-white/80">{icon}</span>}
-            <span className="text-sm lg:text-sm font-medium text-white/90">{title}</span>
+            <span className="text-xs lg:text-sm text-white/80">{title}</span>
           </div>
           {getTrendIcon(change)}
         </div>
         
-        <div className="text-2xl lg:text-3xl font-bold mb-3 lg:mb-3 tracking-tight">{formatValue(value)}</div>
+        <div className="text-lg lg:text-2xl font-bold mb-2 lg:mb-3">{formatValue(value)}</div>
         
         {/* 比較セクション */}
         {!hideComparison ? (
-          <div className="flex gap-2 lg:gap-4 text-xs lg:text-xs">
+          <div className="flex gap-2 lg:gap-4 text-[10px] lg:text-xs">
             {/* 前日比 */}
-            <div className="flex-1 bg-white/15 rounded-lg p-2 lg:p-2.5">
-              <div className="text-white/70 mb-1 font-medium">前日比</div>
-              <div className={`font-bold text-base lg:text-base ${getTrendColor(change, isProfit)}`}>
+            <div className="flex-1 bg-white/10 rounded-lg p-1.5 lg:p-2">
+              <div className="text-white/60 mb-0.5 lg:mb-1">前日比</div>
+              <div className={`font-semibold ${getTrendColor(change, isProfit)}`}>
                 {formatChange(change)}
               </div>
               {previousValue !== undefined && format !== "percent" && (
-                <div className="hidden lg:block text-white/50 text-[10px] mt-0.5">
+                <div className="hidden lg:block text-white/40 text-[10px] mt-0.5">
                   ({formatValue(previousValue)})
                 </div>
               )}
             </div>
             
             {/* 前週比 */}
-            <div className="flex-1 bg-white/15 rounded-lg p-2 lg:p-2.5">
-              <div className="text-white/70 mb-1 font-medium">前週比</div>
-              <div className={`font-bold text-base lg:text-base ${getTrendColor(weekChange, isProfit)}`}>
+            <div className="flex-1 bg-white/10 rounded-lg p-1.5 lg:p-2">
+              <div className="text-white/60 mb-0.5 lg:mb-1">前週比</div>
+              <div className={`font-semibold ${getTrendColor(weekChange, isProfit)}`}>
                 {formatChange(weekChange)}
               </div>
             </div>
           </div>
         ) : showMonthlyNote ? (
-          <div className="text-xs lg:text-sm text-white/70 bg-white/15 rounded-lg p-2 lg:p-2.5 font-medium">
-            📊 今月の累計利益
+          <div className="text-[10px] lg:text-xs text-white/60 bg-white/10 rounded-lg p-1.5 lg:p-2">
+            今月の累計利益
           </div>
         ) : null}
       </CardContent>
