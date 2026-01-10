@@ -6,12 +6,14 @@ declare module "next-auth" {
       id: string;
       role: string;
       teamName: string | null;
+      mediaFilter: string | null; // 特定媒体のみ表示（例: "YouTube"）
     } & DefaultSession["user"];
   }
 
   interface User extends DefaultUser {
     role: string;
     teamName?: string | null;
+    mediaFilter?: string | null;
   }
 }
 
@@ -20,5 +22,6 @@ declare module "@auth/core/jwt" {
     id: string;
     role: string;
     teamName: string | null;
+    mediaFilter: string | null;
   }
 }

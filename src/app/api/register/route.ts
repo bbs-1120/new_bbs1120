@@ -48,6 +48,7 @@ export async function GET(request: Request) {
         email: invite.email,
         role: invite.role,
         teamName: invite.teamName,
+        mediaFilter: invite.mediaFilter,
       },
     });
   } catch (error) {
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         role: invite.role,
         teamName: invite.teamName,
+        mediaFilter: invite.mediaFilter,
       },
     });
 

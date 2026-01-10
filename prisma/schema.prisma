@@ -18,6 +18,7 @@ model User {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   password      String?
   teamName      String?   @map("team_name")
+  mediaFilter   String?   @map("media_filter") // 特定媒体のみ表示（例: "YouTube", "Meta", "TikTok"）
   accounts      Account[]
   sessions      Session[]
 
@@ -25,14 +26,15 @@ model User {
 }
 
 model Invite {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  token     String    @unique
-  role      String    @default("member")
-  teamName  String?   @map("team_name")
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
+  id          String    @id @default(cuid())
+  email       String    @unique
+  token       String    @unique
+  role        String    @default("member")
+  teamName    String?   @map("team_name")
+  mediaFilter String?   @map("media_filter") // 特定媒体のみ表示
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([token])
   @@map("invites")

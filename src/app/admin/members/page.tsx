@@ -36,6 +36,7 @@ interface UserData {
   name: string | null;
   role: string;
   teamName: string | null;
+  mediaFilter: string | null;
   createdAt: string;
 }
 
@@ -51,6 +52,7 @@ export default function AdminMembersPage() {
     email: "",
     role: "member",
     teamName: "",
+    mediaFilter: "",
   });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [newInviteUrl, setNewInviteUrl] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export default function AdminMembersPage() {
       if (data.success) {
         setNewInviteUrl(data.invite.inviteUrl);
         setInvites([data.invite, ...invites]);
-        setInviteForm({ email: "", role: "member", teamName: "" });
+        setInviteForm({ email: "", role: "member", teamName: "", mediaFilter: "" });
       } else {
         setError(data.error || "招待の作成に失敗しました");
       }
@@ -194,6 +196,7 @@ export default function AdminMembersPage() {
                       <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">名前</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">メール</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">担当者名</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">媒体</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">権限</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">登録日</th>
                     </tr>
@@ -210,6 +213,15 @@ export default function AdminMembersPage() {
                             </span>
                           ) : (
                             "-"
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {user.mediaFilter ? (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-sm">
+                              {user.mediaFilter}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-sm">全媒体</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -407,6 +419,29 @@ export default function AdminMembersPage() {
                       <option value="member">メンバー（自分のCPNのみ）</option>
                       <option value="admin">管理者（全CPN閲覧可）</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      媒体フィルター（任意）
+                    </label>
+                    <select
+                      value={inviteForm.mediaFilter}
+                      onChange={(e) =>
+                        setInviteForm({ ...inviteForm, mediaFilter: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">全媒体</option>
+                      <option value="Meta">Meta（Facebook）</option>
+                      <option value="TikTok">TikTok</option>
+                      <option value="Pangle">Pangle</option>
+                      <option value="YouTube">YouTube</option>
+                      <option value="LINE">LINE</option>
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1">
+                      特定の媒体のみ表示したい場合に選択
+                    </p>
                   </div>
 
                   <div className="flex gap-2 pt-2">

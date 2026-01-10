@@ -28,6 +28,7 @@ export async function GET() {
         name: true,
         role: true,
         teamName: true,
+        mediaFilter: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, role, teamName } = body;
+    const { email, role, teamName, mediaFilter } = body;
 
     if (!email) {
       return NextResponse.json(
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
         token,
         role: role || "member",
         teamName: teamName || null,
+        mediaFilter: mediaFilter || null,
         expiresAt,
       },
     });

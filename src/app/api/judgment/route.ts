@@ -13,12 +13,15 @@ export async function GET(request: Request) {
     const session = await auth();
     const userRole = session?.user?.role || "member";
     const userTeamName = session?.user?.teamName || null;
+    const userMediaFilter = session?.user?.mediaFilter || null;
 
     const { searchParams } = new URL(request.url);
     const judgment = searchParams.get("judgment"); // フィルター用
 
     // キャッシュをチェック（ユーザー別キャッシュ）
-    const cacheKeyWithUser = userRole === "admin" ? CACHE_KEY : `${CACHE_KEY}_${userTeamName || "all"}`;
+    const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
+      ? CACHE_KEY 
+      : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
     let results = getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
 
     if (!results) {
@@ -29,6 +32,11 @@ export async function GET(request: Request) {
       if (userRole !== "admin" && userTeamName) {
         const filterPattern = `新規グロース部_${userTeamName}_`;
         analysisData = analysisData.filter(row => row.cpnName?.includes(filterPattern));
+      }
+
+      // 媒体フィルターが設定されている場合、特定媒体のみ表示
+      if (userMediaFilter) {
+        analysisData = analysisData.filter(row => row.media === userMediaFilter);
       }
 
       // CPN データを判定用の形式に変換（accountName追加）

@@ -60,6 +60,7 @@ providers.push(
         name: user.name,
         role: user.role,
         teamName: user.teamName,
+        mediaFilter: user.mediaFilter,
       };
     },
   })
@@ -135,6 +136,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.role = user.role || "member";
         token.teamName = user.teamName || null;
+        token.mediaFilter = user.mediaFilter || null;
       } else if (user && user.email) {
         // Googleログインの場合はDBから取得
         const dbUser = await prisma.user.findUnique({
@@ -144,6 +146,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.id = dbUser.id;
           token.role = dbUser.role;
           token.teamName = dbUser.teamName;
+          token.mediaFilter = dbUser.mediaFilter;
         }
       }
 
@@ -155,6 +158,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (dbUser) {
           token.role = dbUser.role;
           token.teamName = dbUser.teamName;
+          token.mediaFilter = dbUser.mediaFilter;
         }
       }
 
@@ -165,6 +169,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.teamName = token.teamName as string | null;
+        session.user.mediaFilter = token.mediaFilter as string | null;
       }
       return session;
     },

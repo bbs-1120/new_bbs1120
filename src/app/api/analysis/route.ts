@@ -185,13 +185,16 @@ export async function GET(request: Request) {
     const session = await auth();
     const userRole = session?.user?.role || "member";
     const userTeamName = session?.user?.teamName || null;
+    const userMediaFilter = session?.user?.mediaFilter || null;
 
     // URLパラメータでキャッシュをスキップできる
     const { searchParams } = new URL(request.url);
     const skipCache = searchParams.get("refresh") === "true";
 
     // キャッシュからデータを取得（管理者と一般ユーザーで別キャッシュ）
-    const cacheKeyWithUser = userRole === "admin" ? CACHE_KEY : `${CACHE_KEY}_${userTeamName || "all"}`;
+    const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
+      ? CACHE_KEY 
+      : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
     let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
 
     // メンバーの場合のフィルタリング用teamName
@@ -218,6 +221,11 @@ export async function GET(request: Request) {
     if (filterTeamName) {
       const filterPattern = `新規グロース部_${filterTeamName}_`;
       sheetData = sheetData.filter(row => row.cpnName?.includes(filterPattern));
+    }
+
+    // 媒体フィルターが設定されている場合、特定媒体のみ表示
+    if (userMediaFilter) {
+      sheetData = sheetData.filter(row => row.media === userMediaFilter);
     }
 
     // 1. 当日合計を計算
