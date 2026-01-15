@@ -12,20 +12,20 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "GrowthDeck - 広告運用ダッシュボード",
+  title: "AdProfit - 広告運用ダッシュボード",
   description: "広告運用を自動化・最適化するインテリジェントプラットフォーム",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "GrowthDeck",
+    title: "AdProfit",
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    icon: "/icons/Cactus-Jack.jpg",
-    apple: "/icons/Cactus-Jack.jpg",
+    icon: "/icons/adprofit-logo.png",
+    apple: "/icons/adprofit-logo.png",
   },
 };
 

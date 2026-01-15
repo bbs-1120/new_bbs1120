@@ -12,11 +12,9 @@ import {
   RefreshCw,
   Send,
   BarChart3,
-  Sparkles,
   PieChart,
   ChevronDown,
   MessageSquare,
-  Zap,
   Menu,
   X,
   Clock,
@@ -215,10 +213,8 @@ export function Sidebar() {
           <Menu className="h-6 w-6 text-slate-700" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-            <Zap className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-slate-800 font-bold">GrowthDeck</span>
+          <img src="/icons/adprofit-logo.png" alt="AdProfit" className="w-7 h-7 rounded-lg object-cover" />
+          <span className="text-slate-800 font-bold">AdProfit</span>
         </div>
         <DarkModeToggle />
       </div>
@@ -250,9 +246,7 @@ export function Sidebar() {
         {/* サイドバーヘッダー */}
         <div className="flex items-center justify-between h-12 px-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <Zap className="h-4 w-4 text-white" />
-            </div>
+            <img src="/icons/adprofit-logo.png" alt="AdProfit" className="w-7 h-7 rounded-lg object-cover" />
             <span className="text-sm font-bold text-slate-800">メニュー</span>
           </div>
           <button
