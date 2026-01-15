@@ -1108,33 +1108,29 @@ export default function AnalysisPage() {
               </CardContent>
             </Card>
 
-            {/* 媒体別利益（円グラフ） */}
+            {/* 媒体別利益（棒グラフ） */}
             <Card>
               <CardHeader className="pb-2 lg:pb-4">
-                <CardTitle className="text-base lg:text-lg">📊 媒体別利益構成</CardTitle>
+                <CardTitle className="text-base lg:text-lg">📊 媒体別利益</CardTitle>
               </CardHeader>
               <CardContent className="px-2 lg:px-6">
                 {mediaList.length > 0 ? (
                   <div className="chart-container">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={mediaList.filter(m => m.profit > 0) as unknown as Array<Record<string, unknown>>}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name || ''} ${((percent || 0) * 100).toFixed(0)}%`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="profit"
-                        nameKey="media"
-                      >
-                        {mediaList.filter(m => m.profit > 0).map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
+                    <BarChart data={mediaList} layout="vertical" margin={{ left: 20, right: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`} />
+                      <YAxis type="category" dataKey="media" width={60} tick={{ fontSize: 12 }} />
                       <Tooltip formatter={(value) => [`¥${(value as number)?.toLocaleString() || 0}`, "利益"]} />
-                    </PieChart>
+                      <Bar dataKey="profit" name="利益">
+                        {mediaList.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={entry.profit >= 0 ? "#10b981" : "#ef4444"} 
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                   </div>
                 ) : (
