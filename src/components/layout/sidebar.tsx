@@ -185,6 +185,7 @@ function UserProfile() {
 export function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   // ページ遷移時にメニューを閉じる
   useEffect(() => {
@@ -205,8 +206,8 @@ export function Sidebar() {
 
   return (
     <>
-      {/* モバイルヘッダー */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-white flex items-center justify-between px-4 border-b border-slate-200 shadow-sm">
+      {/* 固定ヘッダー（モバイル・デスクトップ共通） */}
+      <div className="fixed top-0 left-0 right-0 z-40 h-14 bg-white flex items-center justify-between px-4 border-b border-slate-200 shadow-sm">
         <button
           onClick={() => setIsOpen(true)}
           className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -222,44 +223,44 @@ export function Sidebar() {
         <DarkModeToggle />
       </div>
 
-      {/* オーバーレイ（モバイル） */}
-      {isOpen && (
+      {/* ホバーエリア（デスクトップ用 - 左端にマウスを持っていくと開く） */}
+      <div
+        className="hidden lg:block fixed top-14 left-0 bottom-0 w-4 z-40"
+        onMouseEnter={() => setIsHovered(true)}
+      />
+
+      {/* オーバーレイ */}
+      {(isOpen || isHovered) && (
         <div
-          className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none"
+          onClick={() => { setIsOpen(false); setIsHovered(false); }}
+          onMouseEnter={() => setIsHovered(false)}
         />
       )}
 
       {/* サイドバー */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 lg:w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out shadow-lg lg:shadow-none",
-          "lg:translate-x-0",
-          isOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed top-14 bottom-0 left-0 z-50 w-72 lg:w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out shadow-lg",
+          (isOpen || isHovered) ? "translate-x-0" : "-translate-x-full"
         )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between h-14 px-4 border-b border-slate-200">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
-              <Zap className="h-5 w-5 text-white" />
+        {/* サイドバーヘッダー */}
+        <div className="flex items-center justify-between h-12 px-4 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+              <Zap className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <h1 className="text-[15px] font-bold text-slate-800 tracking-tight">GrowthDeck</h1>
-              <p className="text-[10px] text-slate-500 -mt-0.5">広告運用ダッシュボード</p>
-            </div>
+            <span className="text-sm font-bold text-slate-800">メニュー</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="hidden lg:block">
-              <DarkModeToggle />
-            </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              <X className="h-5 w-5 text-slate-700" />
-            </button>
-          </div>
+          <button
+            onClick={() => { setIsOpen(false); setIsHovered(false); }}
+            className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            <X className="h-5 w-5 text-slate-700" />
+          </button>
         </div>
 
         {/* ナビゲーション */}

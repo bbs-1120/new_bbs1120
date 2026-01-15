@@ -49,8 +49,8 @@ export default function RootLayout({
         <SessionProvider>
         <DataProvider>
           <Sidebar />
-          <main className="lg:pl-64">
-            <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
+          <main>
+            <div className="min-h-screen pt-16 px-4 py-4 lg:pt-20 lg:px-8 lg:py-6">
               {children}
             </div>
           </main>
