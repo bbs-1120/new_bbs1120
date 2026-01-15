@@ -45,6 +45,32 @@ function getJudgmentOverrides(): JudgmentOverride[] {
   return [];
 }
 
+// 媒体アイコンコンポーネント
+function MediaIcon({ media, className = "w-5 h-5" }: { media: string; className?: string }) {
+  if (media === "FB") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+      </svg>
+    );
+  }
+  if (media === "TikTok") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+      </svg>
+    );
+  }
+  if (media === "LINE") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+      </svg>
+    );
+  }
+  return null;
+}
+
 export default function SendDeletePage() {
   const [allCpns, setAllCpns] = useState<CpnResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +103,6 @@ export default function SendDeletePage() {
         const allCpnList = allData.results.filter((r: CpnResult) => r.media !== "YouTube");
         setAllCpns(allCpnList);
         
-        // 削除用：継続CPNを表示（追加したものを削除する）
         const newContinueCpns = allCpnList.filter((r: CpnResult) => {
           const override = overrides.find(o => o.cpnKey === r.cpnKey);
           return override && override.newJudgment === "継続" && r.judgment !== "継続";
@@ -102,7 +127,6 @@ export default function SendDeletePage() {
     fetchData();
   }, []);
 
-  // 削除用も継続CPNを表示（追加したものを削除する）
   const continueCpns = useMemo(() => {
     return allCpns.filter((r: CpnResult) => {
       const override = judgmentOverrides.find(o => o.cpnKey === r.cpnKey);
@@ -211,12 +235,30 @@ export default function SendDeletePage() {
     }
   };
 
+  const getMediaStyle = (media: string) => {
+    switch (media) {
+      case "FB": return "from-blue-500 to-blue-600";
+      case "TikTok": return "from-pink-500 to-rose-500";
+      case "LINE": return "from-green-500 to-green-600";
+      default: return "from-slate-500 to-slate-600";
+    }
+  };
+
   const getMediaBgStyle = (media: string) => {
     switch (media) {
       case "FB": return "bg-blue-50 border-blue-200";
       case "TikTok": return "bg-pink-50 border-pink-200";
       case "LINE": return "bg-green-50 border-green-200";
       default: return "bg-slate-50 border-slate-200";
+    }
+  };
+
+  const getMediaTextColor = (media: string) => {
+    switch (media) {
+      case "FB": return "text-blue-600";
+      case "TikTok": return "text-pink-600";
+      case "LINE": return "text-green-600";
+      default: return "text-slate-600";
     }
   };
 
@@ -282,7 +324,10 @@ export default function SendDeletePage() {
           {mediaList.map(([media, cpns]) => (
             <Card key={media} className={`${getMediaBgStyle(media)} border`}>
               <CardContent className="py-4 text-center">
-                <div className="text-2xl font-bold text-red-600">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <MediaIcon media={media} className={`w-5 h-5 ${getMediaTextColor(media)}`} />
+                </div>
+                <div className={`text-2xl font-bold bg-gradient-to-r ${getMediaStyle(media)} bg-clip-text text-transparent`}>
                   {cpns.length}
                 </div>
                 <div className="text-sm text-slate-600">{media}</div>
@@ -299,10 +344,11 @@ export default function SendDeletePage() {
           
           return (
             <Card key={media} className="overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-red-500 to-red-600 text-white">
+              <CardHeader className={`bg-gradient-to-r ${getMediaStyle(media)} text-white`}>
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <Minus className="h-5 w-5" />
+                    <MediaIcon media={media} className="w-5 h-5" />
                     {media}
                     <span className="text-sm font-normal opacity-90">（{cpns.length}件）</span>
                   </span>
@@ -342,11 +388,11 @@ export default function SendDeletePage() {
                         const isAdded = addedCpns.some(c => c.cpnKey === cpn.cpnKey);
                         const isFromOverride = overriddenCpns.some(c => c.cpnKey === cpn.cpnKey);
                         return (
-                          <tr key={cpn.cpnKey} className={`hover:bg-slate-50 ${isAdded ? "bg-red-50" : ""} ${isFromOverride ? "bg-amber-50" : ""}`}>
+                          <tr key={cpn.cpnKey} className={`hover:bg-slate-50 ${isAdded ? "bg-blue-50" : ""} ${isFromOverride ? "bg-amber-50" : ""}`}>
                             <td className="px-4 py-2 text-sm text-slate-400">{idx + 1}</td>
                             <td className="px-4 py-2 text-sm text-slate-700 break-all">
                               {cpn.cpnName}
-                              {isAdded && <span className="ml-2 text-xs text-red-600 font-medium">追加</span>}
+                              {isAdded && <span className="ml-2 text-xs text-blue-600 font-medium">追加</span>}
                               {isFromOverride && <span className="ml-2 text-xs text-amber-600 font-medium">診断から移動</span>}
                             </td>
                             {media === "TikTok" && (
@@ -390,7 +436,7 @@ export default function SendDeletePage() {
                     onClick={() => handleSend(media, message)}
                     disabled={isSending || isSent || cpns.length === 0}
                     loading={isCurrentlySending}
-                    className={isSent ? "bg-green-500 hover:bg-green-500" : "bg-red-500 hover:bg-red-600"}
+                    className={isSent ? "bg-green-500 hover:bg-green-500" : ""}
                   >
                     {isSent ? (
                       <><CheckCircle className="mr-1 h-4 w-4" />送信完了</>
@@ -405,12 +451,15 @@ export default function SendDeletePage() {
         })}
 
         {mediaList.length > 0 && (
-          <Card className="bg-gradient-to-r from-red-700 to-red-800">
+          <Card className="bg-gradient-to-r from-slate-700 to-slate-800">
             <CardContent className="py-6">
               <div className="flex items-center justify-between">
                 <div className="text-white">
-                  <div className="font-semibold">全ての媒体をまとめて削除送信</div>
-                  <div className="text-sm text-red-200">
+                  <div className="font-semibold flex items-center gap-2">
+                    <Minus className="h-5 w-5" />
+                    全ての媒体をまとめて削除送信
+                  </div>
+                  <div className="text-sm text-slate-300">
                     {mediaList.length}媒体、合計{currentResults.length}件のCPNを送信
                   </div>
                 </div>
@@ -448,9 +497,12 @@ export default function SendDeletePage() {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-red-100 to-red-200">
-              <h3 className="font-semibold text-lg">{showAddModal} のCPNを削除リストに追加</h3>
-              <button onClick={() => setShowAddModal(null)} className="p-2 hover:bg-slate-300 rounded-lg transition">
+            <div className={`p-4 border-b flex items-center justify-between bg-gradient-to-r ${getMediaStyle(showAddModal)} text-white`}>
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <MediaIcon media={showAddModal} className="w-5 h-5" />
+                {showAddModal} のCPNを削除リストに追加
+              </h3>
+              <button onClick={() => setShowAddModal(null)} className="p-2 hover:bg-white/20 rounded-lg transition">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -460,7 +512,7 @@ export default function SendDeletePage() {
                 placeholder="CPN名で検索..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="max-h-[50vh] overflow-y-auto">
@@ -480,7 +532,7 @@ export default function SendDeletePage() {
                           }`}>{cpn.judgment}</span>
                         </div>
                       </div>
-                      <button onClick={() => handleAddCpn(cpn)} className="flex items-center gap-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm transition">
+                      <button onClick={() => handleAddCpn(cpn)} className={`flex items-center gap-1 px-3 py-2 text-white rounded-lg text-sm transition bg-gradient-to-r ${getMediaStyle(showAddModal)}`}>
                         <Plus className="h-4 w-4" />追加
                       </button>
                     </div>
