@@ -453,8 +453,18 @@ export default function SendDeletePage() {
                     <Minus className="h-5 w-5" />
                     全ての媒体をまとめて削除送信
                   </div>
-                  <div className="text-sm text-slate-300">
-                    {mediaList.length}媒体、合計{currentResults.length}件のCPNを送信
+                  <div className="text-sm text-slate-300 flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-1">
+                      {mediaList.map(([media]) => (
+                        <img 
+                          key={media}
+                          src={`/icons/${media.toLowerCase()}-logo.png`} 
+                          alt={media} 
+                          className="h-5 w-5 object-contain bg-white rounded p-0.5" 
+                        />
+                      ))}
+                    </div>
+                    <span>{mediaList.length}媒体、合計{currentResults.length}件のCPNを送信</span>
                   </div>
                 </div>
                 <Button
