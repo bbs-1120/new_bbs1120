@@ -21,6 +21,8 @@ import {
   LogOut,
   Home,
   Stethoscope,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -57,7 +59,8 @@ const navigation: NavCategory[] = [
     category: "操作",
     icon: Send,
     items: [
-      { name: "Chatwork送信", href: "/send", icon: MessageSquare },
+      { name: "追加用送信", href: "/send/add", icon: Plus },
+      { name: "削除用送信", href: "/send/delete", icon: Minus },
       { name: "データ同期", href: "/sync", icon: RefreshCw },
     ],
   },
