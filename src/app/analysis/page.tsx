@@ -7,7 +7,6 @@ import { useState, useEffect, useMemo } from "react";
 import { RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, Power, Lightbulb, AlertTriangle, CheckCircle, Info, History, Calendar, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
 import { GoalProgress } from "@/components/ui/goal-progress";
-import { ComparisonCard, ComparisonBadge } from "@/components/ui/comparison-card";
 import { ExportButton } from "@/components/ui/export-button";
 import { AlertBanner, AlertSettingsModal, AutoStopPanel } from "@/components/ui/alert-banner";
 import { SearchFilter, FilterOptions } from "@/components/ui/search-filter";
@@ -954,67 +953,34 @@ export default function AnalysisPage() {
             label={`${currentMonth}月目標`} 
           />
 
-          {/* メインサマリーカード（前日比・前週比あり） */}
-          {comparisonData && (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-4">
-              <ComparisonCard
-                title="本日利益"
-                value={comparisonData.today.profit}
-                previousValue={comparisonData.yesterday.profit}
-                change={comparisonData.dayOverDay.profit}
-                weekChange={comparisonData.weekOverWeek.profit}
-                format="currency"
-                colorClass={comparisonData.today.profit >= 0 ? "from-emerald-500 to-green-600" : "from-red-500 to-rose-600"}
-              />
-              <ComparisonCard
-                title={`${currentMonth}月累計利益`}
-                value={displaySummary.monthlyProfit}
-                previousValue={0}
-                change={0}
-                weekChange={0}
-                format="currency"
-                colorClass={displaySummary.monthlyProfit >= 0 ? "from-indigo-500 to-blue-600" : "from-orange-500 to-red-600"}
-                hideComparison={true}
-                showMonthlyNote={true}
-              />
-              <ComparisonCard
-                title="ROAS"
-                value={comparisonData.today.roas}
-                previousValue={comparisonData.yesterday.roas}
-                change={comparisonData.today.roas - comparisonData.yesterday.roas}
-                weekChange={comparisonData.today.roas - comparisonData.lastWeek.roas}
-                format="percent"
-                colorClass={comparisonData.today.roas >= 100 ? "from-teal-500 to-emerald-600" : "from-amber-500 to-orange-600"}
-              />
-              <ComparisonCard
-                title="消化金額"
-                value={comparisonData.today.spend}
-                previousValue={comparisonData.yesterday.spend}
-                change={comparisonData.dayOverDay.spend}
-                weekChange={comparisonData.weekOverWeek.spend}
-                format="currency"
-                colorClass="from-blue-500 to-indigo-600"
-              />
-              <ComparisonCard
-                title="MCV"
-                value={comparisonData.today.mcv}
-                previousValue={comparisonData.yesterday.mcv}
-                change={comparisonData.dayOverDay.mcv}
-                weekChange={comparisonData.weekOverWeek.mcv}
-                format="number"
-                colorClass="from-purple-500 to-violet-600"
-              />
-              <ComparisonCard
-                title="CV"
-                value={comparisonData.today.cv}
-                previousValue={comparisonData.yesterday.cv}
-                change={comparisonData.dayOverDay.cv}
-                weekChange={comparisonData.weekOverWeek.cv}
-                format="number"
-                colorClass="from-amber-500 to-orange-600"
-              />
+          {/* メインサマリーカード（シンプル表示） */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-4">
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.profit >= 0 ? "from-emerald-500 to-green-600" : "from-red-500 to-rose-600"}`}>
+              <p className="text-xs lg:text-sm opacity-90">本日利益</p>
+              <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.profit).toLocaleString()}</p>
             </div>
-          )}
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-indigo-500 to-blue-600" : "from-orange-500 to-red-600"}`}>
+              <p className="text-xs lg:text-sm opacity-90">{currentMonth}月累計利益</p>
+              <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.monthlyProfit).toLocaleString()}</p>
+              <p className="text-xs opacity-75 mt-1">今月の累計利益</p>
+            </div>
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.roas >= 100 ? "from-teal-500 to-emerald-600" : "from-amber-500 to-orange-600"}`}>
+              <p className="text-xs lg:text-sm opacity-90">ROAS</p>
+              <p className="text-xl lg:text-3xl font-bold mt-1">{displaySummary.roas.toFixed(1)}%</p>
+            </div>
+            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-blue-500 to-indigo-600">
+              <p className="text-xs lg:text-sm opacity-90">消化金額</p>
+              <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.spend).toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-purple-500 to-violet-600">
+              <p className="text-xs lg:text-sm opacity-90">MCV</p>
+              <p className="text-xl lg:text-3xl font-bold mt-1">{Math.round(displaySummary.mcv).toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-amber-500 to-orange-600">
+              <p className="text-xs lg:text-sm opacity-90">CV</p>
+              <p className="text-xl lg:text-3xl font-bold mt-1">{Math.round(displaySummary.cv).toLocaleString()}</p>
+            </div>
+          </div>
 
           {/* 好調だがOFFのCPN一覧 */}
           {(() => {
@@ -1325,116 +1291,6 @@ export default function AnalysisPage() {
             </CardContent>
           </Card>
 
-          {/* GPT-4 運用傾向分析 */}
-          <Card className="bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-emerald-900">
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.8956zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/>
-                  </svg>
-                  🧠 悠太さんの運用傾向分析
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  {gptGeneratedAt && (
-                    <span className="text-xs text-emerald-600">
-                      {new Date(gptGeneratedAt).toLocaleTimeString("ja-JP")} 生成
-                    </span>
-                  )}
-                  <Button 
-                    variant="secondary" 
-                    size="sm"
-                    onClick={() => fetchGptAdvice(true)}
-                    disabled={gptAdviceLoading}
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-1 ${gptAdviceLoading ? "animate-spin" : ""}`} />
-                    再生成
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {gptAdviceLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="h-6 w-6 animate-spin text-emerald-600 mr-2" />
-                  <span className="text-emerald-700">GPT-4が分析中...</span>
-                </div>
-              ) : gptConfigured === false ? (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-amber-900">OpenAI API キーが設定されていません</div>
-                      <div className="text-sm text-amber-700 mt-1">
-                        GPTアドバイス機能を使用するには、<code className="bg-amber-100 px-1 rounded">.env</code> ファイルに以下を追加してください：
-                        <pre className="mt-2 p-2 bg-amber-100 rounded text-xs">OPENAI_API_KEY=sk-your-api-key</pre>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : gptAdvice ? (
-                <div className="prose prose-emerald max-w-none">
-                  <div className="whitespace-pre-wrap text-emerald-900 text-sm leading-relaxed">
-                    {gptAdvice}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-4 text-emerald-600">
-                  アドバイスを取得できませんでした
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* AIアドバイス */}
-          {aiAdvice.length > 0 && (
-            <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-indigo-900">
-                  <Lightbulb className="h-5 w-5" />
-                  AIアドバイス
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {aiAdvice.slice(0, 5).map((advice, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-lg border ${
-                      advice.type === "success" ? "bg-green-50 border-green-200" :
-                      advice.type === "warning" ? "bg-amber-50 border-amber-200" :
-                      advice.type === "danger" ? "bg-red-50 border-red-200" :
-                      "bg-blue-50 border-blue-200"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {advice.type === "success" && <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />}
-                      {advice.type === "warning" && <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />}
-                      {advice.type === "danger" && <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />}
-                      {advice.type === "info" && <Info className="h-5 w-5 text-blue-600 mt-0.5" />}
-                      <div>
-                        <div className={`font-semibold ${
-                          advice.type === "success" ? "text-green-900" :
-                          advice.type === "warning" ? "text-amber-900" :
-                          advice.type === "danger" ? "text-red-900" :
-                          "text-blue-900"
-                        }`}>
-                          {advice.title}
-                        </div>
-                        <div className={`text-sm mt-1 ${
-                          advice.type === "success" ? "text-green-700" :
-                          advice.type === "warning" ? "text-amber-700" :
-                          advice.type === "danger" ? "text-red-700" :
-                          "text-blue-700"
-                        }`}>
-                          {advice.message}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 
