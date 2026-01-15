@@ -365,7 +365,7 @@ export default function SendDeletePage() {
               </CardHeader>
               
               <CardContent className="p-0">
-                <div className="max-h-48 overflow-y-auto border-b border-slate-200">
+                <div className="border-b border-slate-200">
                   <table className="w-full">
                     <thead className="bg-slate-50 sticky top-0">
                       <tr>
