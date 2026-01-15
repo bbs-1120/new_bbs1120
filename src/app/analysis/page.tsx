@@ -2292,28 +2292,48 @@ export default function AnalysisPage() {
               <p className="text-sm text-slate-500 mt-1">媒体名をクリックすると詳細を表示</p>
             </CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[1200px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">媒体</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">消化金額</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">MCV</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CV</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">売上</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">利益</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">ROAS</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">CPA</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500">媒体</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">消化金額</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">MCV</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CV</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">売上</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 bg-emerald-50">利益</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">ROAS</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CPA</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CPM</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">Imp.</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">Clicks</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CTR</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CPC</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">MCVR</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">MCPA</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CVR</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {mediaList.map((media, index) => (
+                  {mediaList.map((media, index) => {
+                    // 媒体に属するCPNを集計して詳細指標を計算
+                    const mediaCpns = cpnList.filter(c => c.media === media.media);
+                    const totalImpressions = mediaCpns.reduce((sum, c) => sum + (c.impressions || 0), 0);
+                    const totalClicks = mediaCpns.reduce((sum, c) => sum + (c.clicks || 0), 0);
+                    const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+                    const cpc = totalClicks > 0 ? media.spend / totalClicks : 0;
+                    const cpm = totalImpressions > 0 ? (media.spend / totalImpressions) * 1000 : 0;
+                    const mcvr = totalClicks > 0 ? (media.mcv / totalClicks) * 100 : 0;
+                    const mcpa = media.mcv > 0 ? media.spend / media.mcv : 0;
+                    const cvr = media.mcv > 0 ? (media.cv / media.mcv) * 100 : 0;
+                    
+                    return (
                     <>
                       <tr 
                         key={index} 
                         className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedMedia === media.media ? "bg-indigo-50" : ""}`}
                         onClick={() => setSelectedMedia(selectedMedia === media.media ? null : media.media)}
                       >
-                        <td className="px-4 py-2 font-medium text-slate-900">
+                        <td className="px-3 py-2 font-medium text-slate-900">
                           <div className="flex items-center gap-2">
                             <span className={`transition-transform ${selectedMedia === media.media ? "rotate-90" : ""}`}>▶</span>
                             <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -2324,29 +2344,33 @@ export default function AnalysisPage() {
                               media.media === "LINE" ? "bg-green-100 text-green-700" :
                               "bg-slate-100 text-slate-700"
                             }`}>
-                              {media.media === "Meta" ? "📘" : 
-                               media.media === "TikTok" ? "🎵" : 
-                               media.media === "Pangle" ? "🔶" : 
-                               media.media === "YouTube" ? "▶️" : 
-                               media.media === "LINE" ? "💬" : "📱"}
+                              <MediaLogo media={media.media} size={14} />
                               {media.media}
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(media.spend)}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{media.mcv}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{media.cv}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(media.revenue)}</td>
-                        <td className={`px-4 py-2 text-right font-medium ${media.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{formatCurrency(media.spend)}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{media.mcv.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{media.cv.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{formatCurrency(media.revenue)}</td>
+                        <td className={`px-2 py-2 text-right font-bold ${media.profit >= 0 ? "text-green-600 bg-emerald-50" : "text-red-600 bg-red-50"}`}>
                           {formatCurrency(media.profit)}
                         </td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatPercent(media.roas)}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{formatCurrency(media.cpa)}</td>
+                        <td className={`px-2 py-2 text-right text-[10px] ${getRoasColorClass(media.roas)}`}>{formatPercent(media.roas)}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{formatCurrency(media.cpa)}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">¥{cpm > 0 ? Math.floor(cpm).toLocaleString() : "-"}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{totalImpressions.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{totalClicks.toLocaleString()}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{ctr.toFixed(2)}%</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">¥{cpc > 0 ? Math.floor(cpc).toLocaleString() : "-"}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{mcvr.toFixed(2)}%</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">¥{mcpa > 0 ? Math.floor(mcpa).toLocaleString() : "-"}</td>
+                        <td className="px-2 py-2 text-right text-[10px] text-slate-600">{cvr.toFixed(2)}%</td>
                       </tr>
                       {/* 詳細パネル */}
                       {selectedMedia === media.media && (
                         <tr key={`${index}-detail`}>
-                          <td colSpan={8} className="px-4 py-4 bg-slate-50">
+                          <td colSpan={16} className="px-4 py-4 bg-slate-50">
                             <div className="space-y-4">
                               <div className="bg-white rounded-lg p-4 border border-slate-200">
                                 <h4 className="text-sm font-semibold text-slate-700 mb-3">
@@ -2418,7 +2442,8 @@ export default function AnalysisPage() {
                         </tr>
                       )}
                     </>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
