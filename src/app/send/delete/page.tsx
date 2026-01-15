@@ -435,7 +435,7 @@ export default function SendDeletePage() {
                     {isSent ? (
                       <><CheckCircle className="mr-1 h-4 w-4" />送信完了</>
                     ) : (
-                      <><Send className="mr-1 h-4 w-4" />Chatworkに送信</>
+                      <><img src="/icons/chatwork-logo.png" alt="Chatwork" className="mr-1 h-4 w-4 object-contain" />Chatworkに送信</>
                     )}
                   </Button>
                 </div>
@@ -471,7 +471,7 @@ export default function SendDeletePage() {
                   }}
                   disabled={isSending || mediaList.every(([media]) => sentMedia.has(media))}
                 >
-                  <Send className="mr-2 h-5 w-5" />
+                  <img src="/icons/chatwork-logo.png" alt="Chatwork" className="mr-2 h-5 w-5 object-contain" />
                   {mediaList.every(([media]) => sentMedia.has(media)) ? "全て送信済み" : "全て送信"}
                 </Button>
               </div>
