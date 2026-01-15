@@ -189,11 +189,11 @@ export default function SendPage() {
     return [...filtered, ...addAddedCpns];
   }, [continueCpns, addRemovedCpns, addAddedCpns]);
 
-  // 現在の送信対象CPN（削除タブ）
+  // 現在の送信対象CPN（削除タブ）- 削除対象も継続CPNから選択
   const currentDeleteResults = useMemo(() => {
-    const filtered = stopCpns.filter(r => !deleteRemovedCpns.has(r.cpnKey));
+    const filtered = continueCpns.filter(r => !deleteRemovedCpns.has(r.cpnKey));
     return [...filtered, ...deleteAddedCpns];
-  }, [stopCpns, deleteRemovedCpns, deleteAddedCpns]);
+  }, [continueCpns, deleteRemovedCpns, deleteAddedCpns]);
 
   // 媒体別にグループ化
   const groupByMedia = (cpns: CpnResult[]) => {
@@ -226,7 +226,7 @@ export default function SendPage() {
   const mediaGroups = activeTab === "add" ? addMediaGroups : deleteMediaGroups;
   const removedCpns = activeTab === "add" ? addRemovedCpns : deleteRemovedCpns;
   const addedCpns = activeTab === "add" ? addAddedCpns : deleteAddedCpns;
-  const overriddenCpns = activeTab === "add" ? overriddenContinueCpns : overriddenStopCpns;
+  const overriddenCpns = overriddenContinueCpns; // 両タブとも継続CPNを使用
 
   // 追加可能なCPN（現在の送信対象に含まれていないもの）
   const availableCpns = useMemo(() => {
@@ -419,7 +419,7 @@ export default function SendPage() {
             <span className={`px-2 py-0.5 rounded text-sm ${
               activeTab === "delete" ? "bg-white/20" : "bg-slate-300"
             }`}>
-              {stopCpns.length}
+              {continueCpns.length}
             </span>
           </button>
         </div>
