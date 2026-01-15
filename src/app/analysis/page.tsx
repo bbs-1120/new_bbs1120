@@ -16,6 +16,22 @@ import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
 import { AnalysisPageSkeleton } from "@/components/ui/skeleton";
 import { getRoasColorClass } from "@/lib/utils";
 
+// 媒体ロゴコンポーネント
+function MediaLogo({ media, size = 14 }: { media: string; size?: number }) {
+  const logoMap: Record<string, string> = {
+    "FB": "/icons/fb-logo.png",
+    "Meta": "/icons/fb-logo.png",
+    "TikTok": "/icons/tiktok-logo.png",
+    "LINE": "/icons/line-logo.png",
+    "YouTube": "/icons/youtube-logo.png",
+    "Yahoo": "/icons/yahoo-logo.png",
+    "Pangle": "/icons/pangle-logo.png",
+  };
+  const src = logoMap[media];
+  if (!src) return null;
+  return <img src={src} alt={media} style={{ width: size, height: size }} className="object-contain shrink-0" />;
+}
+
 interface SummaryData {
   spend: number;
   mcv: number;
@@ -1031,11 +1047,11 @@ export default function AnalysisPage() {
                         <div className="flex-1 min-w-0 mr-3">
                           <p className="text-sm font-medium text-slate-800 truncate">{cpn.cpnName}</p>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
                               cpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
                               cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
                               "bg-slate-100 text-slate-700"
-                            }`}>{cpn.media}</span>
+                            }`}><MediaLogo media={cpn.media} size={12} />{cpn.media}</span>
                             <span className="text-xs text-emerald-600 font-medium">40日利益: +¥{(cpn.profit40Days || cpn.profit7Days).toLocaleString()}</span>
                             <span className="text-xs text-slate-500">ROAS: {(cpn.roas40Days || cpn.roas7Days).toFixed(0)}%</span>
                           </div>
@@ -1203,12 +1219,13 @@ export default function AnalysisPage() {
                               </td>
                               <td className="px-2 py-2">
                                 <div className="flex items-center gap-1.5">
-                                  <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded shrink-0 ${
+                                  <span className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium rounded shrink-0 ${
                                     cpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
                                     cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
                                     cpn.media === "Pangle" ? "bg-orange-100 text-orange-700" :
                                     "bg-slate-100 text-slate-600"
                                   }`}>
+                                    <MediaLogo media={cpn.media} size={12} />
                                     {cpn.media}
                                   </span>
                                   <p className="text-[10px] text-slate-800">
@@ -1584,7 +1601,7 @@ export default function AnalysisPage() {
                 <div key={index} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                   {/* ヘッダー行: 媒体 + 利益 + ROAS + ON/OFF */}
                   <div className="flex items-center gap-2 p-2.5 bg-slate-50/50">
-                    <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-lg shrink-0 ${
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg shrink-0 ${
                       cpn.media === "Meta" ? "bg-blue-500 text-white" :
                       cpn.media === "TikTok" ? "bg-pink-500 text-white" :
                       cpn.media === "Pangle" ? "bg-orange-500 text-white" :
@@ -1592,6 +1609,7 @@ export default function AnalysisPage() {
                       cpn.media === "LINE" ? "bg-green-500 text-white" :
                       "bg-slate-500 text-white"
                     }`}>
+                      <MediaLogo media={cpn.media} size={14} />
                       {cpn.media || "-"}
                     </span>
                     <div className="flex-1 flex items-center justify-center gap-3">
