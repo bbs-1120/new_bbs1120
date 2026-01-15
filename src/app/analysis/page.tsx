@@ -50,6 +50,15 @@ interface CpnData {
   media: string;
   status: string;
   campaignId?: string;
+  // 追加フィールド
+  impressions?: number;
+  clicks?: number;
+  cpm?: number;
+  cpc?: number;
+  ctr?: number;
+  cvr?: number;
+  mcvr?: number;
+  mcpa?: number;
 }
 
 interface ProjectData {
@@ -1151,17 +1160,27 @@ export default function AnalysisPage() {
             </CardHeader>
             <CardContent className="p-0">
               {cpnList.length > 0 ? (
-                <div className="overflow-x-auto scrollbar-hide">
-                  <table className="w-full text-sm table-auto min-w-[500px] lg:min-w-0">
-                    <thead className="bg-slate-50 border-y border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm table-auto min-w-[1200px]">
+                    <thead className="bg-slate-50 border-y border-slate-200 sticky top-0">
                       <tr>
-                        <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 w-7 lg:w-8">#</th>
-                        <th className="px-1.5 lg:px-2 py-2 text-left text-[10px] lg:text-xs font-medium text-slate-500 w-12 lg:w-14">媒体</th>
-                        <th className="px-1.5 lg:px-2 py-2 text-left text-[10px] lg:text-xs font-medium text-slate-500 min-w-[120px]">CPN名</th>
-                        <th className="px-1.5 lg:px-2 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-emerald-50">💰 利益</th>
-                        <th className="px-1.5 lg:px-2 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">ROAS</th>
-                        <th className="hidden sm:table-cell px-1.5 lg:px-2 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">消化</th>
-                        <th className="hidden sm:table-cell px-1.5 lg:px-2 py-2 pr-3 lg:pr-4 text-right text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">CV</th>
+                        <th className="px-2 py-2 text-center text-[10px] font-medium text-slate-500 w-8">#</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium text-slate-500 min-w-[150px]">CPN名</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">消化金額</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">MCV</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CV</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">売上</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap bg-emerald-50">利益</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">ROAS</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CPA</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CPM</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">Imp.</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">Clicks</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CTR</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CPC</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">MCVR</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">MCPA</th>
+                        <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CVR</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1172,8 +1191,8 @@ export default function AnalysisPage() {
                           const rank = index + 1;
                           return (
                             <tr key={cpn.cpnKey} className="hover:bg-slate-50">
-                              <td className="px-1.5 lg:px-2 py-1.5 lg:py-2 text-center">
-                                <span className={`inline-flex items-center justify-center w-5 h-5 lg:w-6 lg:h-6 rounded-full text-[10px] lg:text-xs font-bold ${
+                              <td className="px-2 py-2 text-center">
+                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                                   rank === 1 ? "bg-gradient-to-br from-yellow-400 to-amber-500 text-white shadow-sm" :
                                   rank === 2 ? "bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-sm" :
                                   rank === 3 ? "bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-sm" :
@@ -1182,38 +1201,69 @@ export default function AnalysisPage() {
                                   {rank}
                                 </span>
                               </td>
-                              <td className="px-1.5 lg:px-2 py-1.5 lg:py-2">
-                                <span className={`px-1 lg:px-1.5 py-0.5 text-[9px] lg:text-[10px] font-medium rounded ${
-                                  cpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
-                                  cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
-                                  cpn.media === "Pangle" ? "bg-orange-100 text-orange-700" :
-                                  "bg-slate-100 text-slate-600"
-                                }`}>
-                                  {cpn.media}
-                                </span>
+                              <td className="px-2 py-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded shrink-0 ${
+                                    cpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                                    cpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                                    cpn.media === "Pangle" ? "bg-orange-100 text-orange-700" :
+                                    "bg-slate-100 text-slate-600"
+                                  }`}>
+                                    {cpn.media}
+                                  </span>
+                                  <p className="text-[10px] text-slate-800 truncate max-w-[200px]" title={cpn.cpnName}>
+                                    {cpn.cpnName}
+                                  </p>
+                                </div>
                               </td>
-                              <td className="px-1.5 lg:px-2 py-1.5 lg:py-2">
-                                <p className="text-[10px] lg:text-xs text-slate-800 break-all line-clamp-2">
-                                  {cpn.cpnName}
-                                </p>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                ¥{Math.floor(cpn.spend).toLocaleString()}
                               </td>
-                              <td className={`px-2 lg:px-3 py-1.5 lg:py-2 text-right whitespace-nowrap ${
-                                cpn.profit >= 0 
-                                  ? "bg-gradient-to-r from-emerald-50 to-green-100" 
-                                  : "bg-gradient-to-r from-red-50 to-rose-100"
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {cpn.mcv.toLocaleString()}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {cpn.cv.toLocaleString()}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                ¥{Math.floor(cpn.revenue).toLocaleString()}
+                              </td>
+                              <td className={`px-2 py-2 text-right whitespace-nowrap ${
+                                cpn.profit >= 0 ? "bg-emerald-50" : "bg-red-50"
                               }`}>
-                                <span className={`text-xs lg:text-sm font-bold ${cpn.profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                                <span className={`text-xs font-bold ${cpn.profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                                   ¥{Math.floor(cpn.profit).toLocaleString()}
                                 </span>
                               </td>
-                              <td className={`px-1.5 lg:px-2 py-1.5 lg:py-2 text-right text-[10px] lg:text-xs whitespace-nowrap ${getRoasColorClass(cpn.roas)}`}>
+                              <td className={`px-2 py-2 text-right text-[10px] whitespace-nowrap ${getRoasColorClass(cpn.roas)}`}>
                                 {cpn.roas.toFixed(1)}%
                               </td>
-                              <td className="hidden sm:table-cell px-1.5 lg:px-2 py-1.5 lg:py-2 text-right text-[10px] lg:text-xs text-slate-500 whitespace-nowrap">
-                                ¥{Math.floor(cpn.spend).toLocaleString()}
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                ¥{cpn.cpa > 0 ? Math.floor(cpn.cpa).toLocaleString() : "-"}
                               </td>
-                              <td className="hidden sm:table-cell px-1.5 lg:px-2 py-1.5 lg:py-2 pr-3 lg:pr-4 text-right text-[10px] lg:text-xs text-slate-500 whitespace-nowrap">
-                                {cpn.cv.toLocaleString()}
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                ¥{(cpn.cpm ?? 0) > 0 ? Math.floor(cpn.cpm ?? 0).toLocaleString() : "-"}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {(cpn.impressions ?? 0).toLocaleString()}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {(cpn.clicks ?? 0).toLocaleString()}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {(cpn.ctr ?? 0).toFixed(2)}%
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                ¥{(cpn.cpc ?? 0) > 0 ? Math.floor(cpn.cpc ?? 0).toLocaleString() : "-"}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {(cpn.mcvr ?? 0).toFixed(2)}%
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                ¥{(cpn.mcpa ?? 0) > 0 ? Math.floor(cpn.mcpa ?? 0).toLocaleString() : "-"}
+                              </td>
+                              <td className="px-2 py-2 text-right text-[10px] text-slate-600 whitespace-nowrap">
+                                {(cpn.cvr ?? 0).toFixed(2)}%
                               </td>
                             </tr>
                           );
