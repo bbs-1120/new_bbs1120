@@ -247,6 +247,22 @@ body {
   }
 }
 
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-shift {
+  animation: gradientShift 4s ease infinite;
+}
+
 .animate-slide-in {
   animation: slideIn 0.3s ease-out;
 }

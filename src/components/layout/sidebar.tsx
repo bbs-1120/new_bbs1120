@@ -156,11 +156,17 @@ function UserProfile() {
               className="w-9 h-9 rounded-lg object-cover"
             />
           ) : (
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm">
-              {userInitial}
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm overflow-hidden animate-gradient-shift"
+              style={{
+                background: "linear-gradient(-45deg, #10b981, #14b8a6, #06b6d4, #3b82f6, #8b5cf6, #ec4899)",
+                backgroundSize: "300% 300%",
+                animation: "gradientShift 4s ease infinite",
+              }}
+            >
+              <span className="drop-shadow-md">{userInitial}</span>
             </div>
           )}
-          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white animate-pulse"></div>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-slate-800 truncate">{userName}</p>
