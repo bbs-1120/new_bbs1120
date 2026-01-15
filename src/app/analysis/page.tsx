@@ -954,15 +954,14 @@ export default function AnalysisPage() {
           />
 
           {/* メインサマリーカード（シンプル表示） */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-4">
             <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.profit >= 0 ? "from-emerald-500 to-green-600" : "from-red-500 to-rose-600"}`}>
-              <p className="text-xs lg:text-sm opacity-90">本日利益</p>
+              <p className="text-xs lg:text-sm opacity-90">利益</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.profit).toLocaleString()}</p>
             </div>
             <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-indigo-500 to-blue-600" : "from-orange-500 to-red-600"}`}>
-              <p className="text-xs lg:text-sm opacity-90">{currentMonth}月累計利益</p>
+              <p className="text-xs lg:text-sm opacity-90">{currentMonth}月利益</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.monthlyProfit).toLocaleString()}</p>
-              <p className="text-xs opacity-75 mt-1">今月の累計利益</p>
             </div>
             <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.roas >= 100 ? "from-teal-500 to-emerald-600" : "from-amber-500 to-orange-600"}`}>
               <p className="text-xs lg:text-sm opacity-90">ROAS</p>
@@ -971,10 +970,6 @@ export default function AnalysisPage() {
             <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-blue-500 to-indigo-600">
               <p className="text-xs lg:text-sm opacity-90">消化金額</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.spend).toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-purple-500 to-violet-600">
-              <p className="text-xs lg:text-sm opacity-90">MCV</p>
-              <p className="text-xl lg:text-3xl font-bold mt-1">{Math.round(displaySummary.mcv).toLocaleString()}</p>
             </div>
             <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-amber-500 to-orange-600">
               <p className="text-xs lg:text-sm opacity-90">CV</p>
