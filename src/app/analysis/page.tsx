@@ -1165,7 +1165,7 @@ export default function AnalysisPage() {
                     <thead className="bg-slate-50 border-y border-slate-200 sticky top-0">
                       <tr>
                         <th className="px-2 py-2 text-center text-[10px] font-medium text-slate-500 w-8">#</th>
-                        <th className="px-2 py-2 text-left text-[10px] font-medium text-slate-500 min-w-[150px]">CPN名</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-medium text-slate-500">CPN名</th>
                         <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">消化金額</th>
                         <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">MCV</th>
                         <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 whitespace-nowrap">CV</th>
@@ -1211,7 +1211,7 @@ export default function AnalysisPage() {
                                   }`}>
                                     {cpn.media}
                                   </span>
-                                  <p className="text-[10px] text-slate-800 truncate max-w-[200px]" title={cpn.cpnName}>
+                                  <p className="text-[10px] text-slate-800">
                                     {cpn.cpnName}
                                   </p>
                                 </div>
