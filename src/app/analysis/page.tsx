@@ -955,23 +955,23 @@ export default function AnalysisPage() {
 
           {/* メインサマリーカード（シンプル表示） */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-4">
-            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.profit >= 0 ? "from-emerald-500 to-green-600" : "from-red-500 to-rose-600"}`}>
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.profit >= 0 ? "from-emerald-500 to-green-600" : "from-rose-500 to-red-600"}`}>
               <p className="text-xs lg:text-sm opacity-90">利益</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.profit).toLocaleString()}</p>
             </div>
-            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-indigo-500 to-blue-600" : "from-orange-500 to-red-600"}`}>
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-sky-500 to-blue-600" : "from-slate-600 to-slate-800"}`}>
               <p className="text-xs lg:text-sm opacity-90">{currentMonth}月利益</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.monthlyProfit).toLocaleString()}</p>
             </div>
-            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.roas >= 100 ? "from-teal-500 to-emerald-600" : "from-amber-500 to-orange-600"}`}>
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.roas >= 100 ? "from-cyan-500 to-teal-600" : "from-amber-500 to-yellow-600"}`}>
               <p className="text-xs lg:text-sm opacity-90">ROAS</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">{displaySummary.roas.toFixed(1)}%</p>
             </div>
-            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-blue-500 to-indigo-600">
+            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-violet-500 to-purple-600">
               <p className="text-xs lg:text-sm opacity-90">消化金額</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.spend).toLocaleString()}</p>
             </div>
-            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-amber-500 to-orange-600">
+            <div className="rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br from-pink-500 to-rose-600">
               <p className="text-xs lg:text-sm opacity-90">CV</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">{Math.round(displaySummary.cv).toLocaleString()}</p>
             </div>
