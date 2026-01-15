@@ -968,7 +968,7 @@ export default function AnalysisPage() {
               <p className="text-xs lg:text-sm opacity-90">利益</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.profit).toLocaleString()}</p>
             </div>
-            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-sky-500 to-blue-600" : "from-slate-600 to-slate-800"}`}>
+            <div className={`rounded-xl p-4 lg:p-6 text-white bg-gradient-to-br ${displaySummary.monthlyProfit >= 0 ? "from-sky-500 to-blue-600" : "from-rose-500 to-red-600"}`}>
               <p className="text-xs lg:text-sm opacity-90">{currentMonth}月利益</p>
               <p className="text-xl lg:text-3xl font-bold mt-1">¥{Math.round(displaySummary.monthlyProfit).toLocaleString()}</p>
             </div>
