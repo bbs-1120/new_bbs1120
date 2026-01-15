@@ -315,7 +315,7 @@ export default function SendPage() {
     return (
       <>
         <Header title="Chatwork送信" description="継続CPNを媒体別に通知" />
-        <Card className="max-w-4xl">
+        <Card className="max-w-4xl mx-auto">
           <CardContent className="py-12 text-center">
             <RefreshCw className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
             <p className="text-slate-600">データを読み込み中...</p>
@@ -329,7 +329,7 @@ export default function SendPage() {
     return (
       <>
         <Header title="Chatwork送信" description="継続CPNを媒体別に通知" />
-        <Card className="max-w-4xl">
+        <Card className="max-w-4xl mx-auto">
           <CardContent className="py-12 text-center">
             <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
             <p className="text-red-600 mb-4">{error}</p>
@@ -346,7 +346,7 @@ export default function SendPage() {
     <>
       <Header title="Chatwork送信" description="継続CPNを媒体別に通知（追加・削除可能）" />
 
-      <div className="max-w-4xl space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* オーバーライド情報 */}
         {overriddenCpns.length > 0 && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
