@@ -241,24 +241,24 @@ async function updateTikTokBudget(
         } else {
           lastError = data.message || "TikTok APIエラー";
           
-          // Smart Performance Campaignエラーの場合はSPC APIを試す
-          if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
-            console.log("  Trying SPC API...");
+          // Smart Performance Campaign または Upgraded Smart Plus エラーの場合はSPC APIを試す
+          if (data.message?.includes("Smart Performance Campaign") || 
+              data.message?.includes("spc") ||
+              data.message?.includes("Upgraded Smart Plus") ||
+              data.message?.includes("Smart Plus")) {
+            console.log("  Trying SPC API for Smart Plus campaign...");
             const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId, campaignId, newBudget);
             if (spcResult.success) {
               return { success: true };
             }
+            console.log(`  SPC API failed: ${spcResult.error}`);
             lastError = spcResult.error || lastError;
+            // SPC APIも失敗した場合は次のトークン/広告主IDを試す
+            continue;
           }
           
           // 権限エラーやキャンペーンが見つからない場合は次を試す
           if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
-            continue;
-          }
-          
-          // Upgraded Smart Plusエラーでも次のトークンを試す（別のビジネスセンターで成功するかも）
-          if (data.message?.includes("Upgraded Smart Plus")) {
-            lastError = "このキャンペーンは「Upgraded Smart Plus」タイプのため、APIから予算変更できません。TikTok Ads Managerから直接変更してください。";
             continue;
           }
         }
@@ -381,20 +381,18 @@ async function updatePangleBudget(
       } else {
         lastError = data.message || "Pangle APIエラー";
         
-        // Upgraded Smart Plus adsはAPIで変更不可
-        if (data.message?.includes("Upgraded Smart Plus")) {
-          return { 
-            success: false, 
-            error: "このキャンペーンは「Upgraded Smart Plus」タイプのため、APIから予算変更できません。TikTok Ads Managerから直接変更してください。" 
-          };
-        }
-        
-        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+        // Smart Performance Campaign または Upgraded Smart Plus エラーの場合はSPC APIを試す
+        if (data.message?.includes("Smart Performance Campaign") || 
+            data.message?.includes("spc") ||
+            data.message?.includes("Upgraded Smart Plus") ||
+            data.message?.includes("Smart Plus")) {
+          console.log("Pangle: Trying SPC API for Smart Plus campaign...");
           const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId, campaignId, newBudget);
           if (spcResult.success) {
             return { success: true };
           }
           lastError = spcResult.error || lastError;
+          continue;
         }
         
         if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
