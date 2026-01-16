@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, use, useCallback } from "react";
-import { ArrowLeft, Download, RefreshCw, Copy, Check, ChevronDown, ChevronUp, ArrowRight, X } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Copy, Check, ChevronDown, ChevronUp, ArrowRight, X, Search } from "lucide-react";
 import Link from "next/link";
 
 interface JudgmentResult {
@@ -95,6 +95,9 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
   const config = judgmentConfig[judgment] || judgmentConfig.error;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
+  // 検索用state
+  const [searchText, setSearchText] = useState<string>("");
+  
   // ソート用state
   type SortKey = "accountName" | "cpnName" | "media" | "todayProfit" | "profit7Days" | "roas7Days" | "consecutiveLossDays";
   const [sortKey, setSortKey] = useState<SortKey>("todayProfit");
@@ -179,7 +182,17 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
   const filteredResults = results.filter(r => {
     const override = overrides.find(o => o.cpnKey === r.cpnKey);
     const effectiveJudgment = override ? override.newJudgment : r.judgment;
-    return effectiveJudgment === targetJudgmentValue;
+    if (effectiveJudgment !== targetJudgmentValue) return false;
+    
+    // 検索フィルター
+    if (searchText.trim()) {
+      const searchLower = searchText.toLowerCase().trim();
+      const cpnNameMatch = r.cpnName.toLowerCase().includes(searchLower);
+      const accountNameMatch = r.accountName?.toLowerCase().includes(searchLower) || false;
+      const mediaMatch = r.media.toLowerCase().includes(searchLower);
+      return cpnNameMatch || accountNameMatch || mediaMatch;
+    }
+    return true;
   });
 
   // ソート処理
@@ -402,6 +415,33 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
           </button>
         </div>
       )}
+
+      {/* 検索バー */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="CPN名、アカウント名、媒体で検索..."
+            className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          {searchText && (
+            <button
+              onClick={() => setSearchText("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {searchText && (
+          <p className="text-xs text-slate-500 mt-1">
+            「{searchText}」で検索中 - {filteredResults.length}件ヒット
+          </p>
+        )}
+      </div>
 
       {/* アクションバー */}
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 mb-4 lg:mb-6">
