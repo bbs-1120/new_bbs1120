@@ -209,6 +209,52 @@ export default function AnalysisPage() {
   });
   const [budgetScheduleSubmitting, setBudgetScheduleSubmitting] = useState(false);
   const [budgetScheduleMessage, setBudgetScheduleMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
+  // 設定済みスケジュール表示用
+  interface ScheduleInfo {
+    id: string;
+    time_start: number;
+    time_end: number;
+    budget_value: string;
+  }
+  const [scheduleCache, setScheduleCache] = useState<Record<string, ScheduleInfo[]>>({});
+  const [loadingSchedules, setLoadingSchedules] = useState<Record<string, boolean>>({});
+  
+  // スケジュールを取得する関数
+  const fetchSchedule = async (campaignId: string) => {
+    if (!campaignId || scheduleCache[campaignId] || loadingSchedules[campaignId]) return;
+    
+    setLoadingSchedules(prev => ({ ...prev, [campaignId]: true }));
+    try {
+      const response = await fetch(`/api/budget-schedule?campaignId=${campaignId}`);
+      const data = await response.json();
+      if (data.success && data.schedules) {
+        setScheduleCache(prev => ({ ...prev, [campaignId]: data.schedules }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch schedule:", error);
+    } finally {
+      setLoadingSchedules(prev => ({ ...prev, [campaignId]: false }));
+    }
+  };
+  
+  // スケジュールをフォーマット
+  const formatSchedule = (schedules: ScheduleInfo[]) => {
+    if (!schedules || schedules.length === 0) return null;
+    // 未来のスケジュールのみ表示
+    const now = Math.floor(Date.now() / 1000);
+    const futureSchedules = schedules.filter(s => s.time_end > now);
+    if (futureSchedules.length === 0) return null;
+    
+    const schedule = futureSchedules[0];
+    const startDate = new Date(schedule.time_start * 1000);
+    const endDate = new Date(schedule.time_end * 1000);
+    const formatDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
+    return {
+      period: `${formatDate(startDate)}〜${formatDate(endDate)}`,
+      amount: `¥${parseInt(schedule.budget_value).toLocaleString()}`,
+    };
+  };
 
   // モバイル用ページネーション
   const [mobilePage, setMobilePage] = useState(1);
@@ -296,7 +342,19 @@ export default function AnalysisPage() {
 
       if (result.success) {
         setBudgetScheduleMessage({ type: "success", text: "予算スケジュールを設定しました" });
-        // 成功したら3秒後にモーダルを閉じる
+        // キャッシュをクリアして再取得
+        if (budgetScheduleCpn?.campaignId) {
+          setScheduleCache(prev => {
+            const newCache = { ...prev };
+            delete newCache[budgetScheduleCpn.campaignId!];
+            return newCache;
+          });
+          // 少し待ってから再取得
+          setTimeout(() => {
+            fetchSchedule(budgetScheduleCpn.campaignId!);
+          }, 500);
+        }
+        // 成功したら2秒後にモーダルを閉じる
         setTimeout(() => {
           setShowBudgetScheduleModal(false);
           setBudgetScheduleCpn(null);
@@ -1875,16 +1933,48 @@ export default function AnalysisPage() {
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{cpn.dailyBudget}</td>
                     {/* 予算スケジュール（Metaのみ設定可能） */}
                     <td className="px-2 py-2 text-center whitespace-nowrap">
-                      {cpn.media === "Meta" ? (
-                        <button
-                          onClick={() => openBudgetScheduleModal(cpn)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md transition-colors"
-                          title="予算スケジュールを設定"
-                        >
-                          <Calendar className="h-3 w-3" />
-                          設定
-                        </button>
-                      ) : (
+                      {cpn.media === "Meta" ? (() => {
+                        const schedules = scheduleCache[cpn.campaignId || ""];
+                        const formattedSchedule = schedules ? formatSchedule(schedules) : null;
+                        const isLoading = loadingSchedules[cpn.campaignId || ""];
+                        
+                        // スケジュールを自動取得
+                        if (cpn.campaignId && !schedules && !isLoading) {
+                          fetchSchedule(cpn.campaignId);
+                        }
+                        
+                        if (isLoading) {
+                          return <span className="text-xs text-slate-400">...</span>;
+                        }
+                        
+                        if (formattedSchedule) {
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-[10px] font-medium">
+                                {formattedSchedule.amount}
+                              </div>
+                              <span className="text-[9px] text-slate-500">{formattedSchedule.period}</span>
+                              <button
+                                onClick={() => openBudgetScheduleModal(cpn)}
+                                className="text-[9px] text-blue-600 hover:underline"
+                              >
+                                変更
+                              </button>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <button
+                            onClick={() => openBudgetScheduleModal(cpn)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md transition-colors"
+                            title="予算スケジュールを設定"
+                          >
+                            <Calendar className="h-3 w-3" />
+                            設定
+                          </button>
+                        );
+                      })() : (
                         <span className="text-xs text-slate-400">-</span>
                       )}
                     </td>
