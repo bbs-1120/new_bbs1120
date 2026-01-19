@@ -1819,8 +1819,8 @@ export default function AnalysisPage() {
                   >
                     現在予算<SortIcon columnKey="dailyBudget" />
                   </th>
-                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">予算スケ</th>
-                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">変更後</th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">予算変更</th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">スケジュール</th>
                   <th 
                     className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("profit")}
@@ -1946,44 +1946,7 @@ export default function AnalysisPage() {
                     </td>
                     {/* 現在予算 */}
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{cpn.dailyBudget}</td>
-                    {/* 予算スケジュール（Metaのみ設定可能） */}
-                    <td className="px-2 py-2 text-center whitespace-nowrap">
-                      {cpn.media === "Meta" ? (() => {
-                        const schedules = scheduleCache[cpn.campaignId || ""];
-                        const formattedSchedule = schedules ? formatSchedule(schedules) : null;
-                        
-                        if (formattedSchedule) {
-                          return (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <div className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-bold">
-                                {formattedSchedule.amount}
-                              </div>
-                              <span className="text-[8px] text-slate-500 leading-tight">{formattedSchedule.period}</span>
-                              <button
-                                onClick={() => openBudgetScheduleModal(cpn)}
-                                className="text-[9px] text-blue-600 hover:underline"
-                              >
-                                変更
-                              </button>
-                            </div>
-                          );
-                        }
-                        
-                        return (
-                          <button
-                            onClick={() => openBudgetScheduleModal(cpn)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md transition-colors"
-                            title="予算スケジュールを設定"
-                          >
-                            <Calendar className="h-3 w-3" />
-                            設定
-                          </button>
-                        );
-                      })() : (
-                        <span className="text-xs text-slate-400">-</span>
-                      )}
-                    </td>
-                    {/* 変更後予算 */}
+                    {/* 予算変更（Meta/TikTok/Pangle対応） */}
                     <td className="px-2 py-2">
                       {isTargetMedia ? (
                         <div className="flex items-center gap-1">
@@ -1992,7 +1955,7 @@ export default function AnalysisPage() {
                             placeholder="¥"
                             value={budgetInputs[cpn.cpnKey] || ""}
                             onChange={(e) => handleBudgetChange(cpn.cpnKey, e.target.value)}
-                            className="w-24 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-20 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                           <button
                             onClick={() => handleBudgetSubmit(cpn)}
@@ -2001,13 +1964,45 @@ export default function AnalysisPage() {
                           >
                             {budgetUpdating[cpn.cpnKey] ? "..." : "変更"}
                           </button>
-                          {message && (
-                            <span className={`text-xs ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                              {message.text}
-                            </span>
-                          )}
                         </div>
                       ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </td>
+                    {/* スケジュール（Metaのみ） */}
+                    <td className="px-2 py-2 text-center whitespace-nowrap bg-purple-50/30">
+                      {cpn.media === "Meta" ? (() => {
+                        const schedules = scheduleCache[cpn.campaignId || ""];
+                        const formattedSchedule = schedules ? formatSchedule(schedules) : null;
+                        
+                        if (formattedSchedule) {
+                          return (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <div className="px-2 py-0.5 bg-purple-500 text-white rounded text-[10px] font-bold">
+                                {formattedSchedule.amount}
+                              </div>
+                              <span className="text-[8px] text-purple-600 leading-tight">{formattedSchedule.period}</span>
+                              <button
+                                onClick={() => openBudgetScheduleModal(cpn)}
+                                className="text-[9px] text-purple-600 hover:underline font-medium"
+                              >
+                                編集
+                              </button>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <button
+                            onClick={() => openBudgetScheduleModal(cpn)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
+                            title="予算スケジュールを設定"
+                          >
+                            <Calendar className="h-3 w-3" />
+                            追加
+                          </button>
+                        );
+                      })() : (
                         <span className="text-xs text-slate-400">-</span>
                       )}
                     </td>
