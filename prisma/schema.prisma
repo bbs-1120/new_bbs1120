@@ -177,3 +177,19 @@ model StatusOverride {
   @@index([expiresAt])
   @@map("status_overrides")
 }
+
+model WeeklyReportComment {
+  id           String   @id @default(uuid())
+  weekKey      String   @map("week_key") // "2026-W03" 形式
+  memberName   String   @map("member_name")
+  todoComment  String?  @map("todo_comment") @db.Text
+  growthComment String? @map("growth_comment") @db.Text
+  shrinkComment String? @map("shrink_comment") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([weekKey, memberName])
+  @@index([weekKey])
+  @@index([memberName])
+  @@map("weekly_report_comments")
+}

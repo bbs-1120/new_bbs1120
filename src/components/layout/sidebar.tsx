@@ -23,6 +23,7 @@ import {
   Stethoscope,
   Plus,
   Minus,
+  FileText,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -53,6 +54,13 @@ const navigation: NavCategory[] = [
       { name: "マイ分析", href: "/analysis", icon: BarChart3 },
       { name: "CPN診断", href: "/results/stop", icon: Stethoscope },
       { name: "判定結果一覧", href: "/results", icon: ListChecks },
+    ],
+  },
+  {
+    category: "レポート",
+    icon: FileText,
+    items: [
+      { name: "週次レポート", href: "/reports/weekly", icon: FileText },
     ],
   },
   {
