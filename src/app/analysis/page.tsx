@@ -221,10 +221,9 @@ export default function AnalysisPage() {
   const [loadingSchedules, setLoadingSchedules] = useState<Record<string, boolean>>({});
   
   // スケジュールを取得する関数
-  const fetchSchedule = async (campaignId: string) => {
-    if (!campaignId || scheduleCache[campaignId] || loadingSchedules[campaignId]) return;
+  const fetchSchedule = useCallback(async (campaignId: string) => {
+    if (!campaignId) return;
     
-    setLoadingSchedules(prev => ({ ...prev, [campaignId]: true }));
     try {
       const response = await fetch(`/api/budget-schedule?campaignId=${campaignId}`);
       const data = await response.json();
@@ -233,10 +232,26 @@ export default function AnalysisPage() {
       }
     } catch (error) {
       console.error("Failed to fetch schedule:", error);
-    } finally {
-      setLoadingSchedules(prev => ({ ...prev, [campaignId]: false }));
     }
-  };
+  }, []);
+  
+  // Meta CPNのスケジュールを一括取得
+  useEffect(() => {
+    if (!cpnList || cpnList.length === 0) return;
+    
+    const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
+    const uncachedCpns = metaCpns.filter(cpn => !scheduleCache[cpn.campaignId!]);
+    
+    // 最初の10件のみ取得（パフォーマンス対策）
+    const toFetch = uncachedCpns.slice(0, 10);
+    
+    toFetch.forEach((cpn, index) => {
+      // 順番に取得（APIレート制限対策）
+      setTimeout(() => {
+        fetchSchedule(cpn.campaignId!);
+      }, index * 200);
+    });
+  }, [cpnList, scheduleCache, fetchSchedule]);
   
   // スケジュールをフォーマット
   const formatSchedule = (schedules: ScheduleInfo[]) => {
@@ -1936,24 +1951,14 @@ export default function AnalysisPage() {
                       {cpn.media === "Meta" ? (() => {
                         const schedules = scheduleCache[cpn.campaignId || ""];
                         const formattedSchedule = schedules ? formatSchedule(schedules) : null;
-                        const isLoading = loadingSchedules[cpn.campaignId || ""];
-                        
-                        // スケジュールを自動取得
-                        if (cpn.campaignId && !schedules && !isLoading) {
-                          fetchSchedule(cpn.campaignId);
-                        }
-                        
-                        if (isLoading) {
-                          return <span className="text-xs text-slate-400">...</span>;
-                        }
                         
                         if (formattedSchedule) {
                           return (
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-[10px] font-medium">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <div className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-bold">
                                 {formattedSchedule.amount}
                               </div>
-                              <span className="text-[9px] text-slate-500">{formattedSchedule.period}</span>
+                              <span className="text-[8px] text-slate-500 leading-tight">{formattedSchedule.period}</span>
                               <button
                                 onClick={() => openBudgetScheduleModal(cpn)}
                                 className="text-[9px] text-blue-600 hover:underline"
