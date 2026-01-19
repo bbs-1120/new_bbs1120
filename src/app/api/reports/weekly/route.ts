@@ -11,6 +11,15 @@ interface CpnData {
   revenue: number;
   profit: number;
   roas: number;
+  impressions?: number;
+  clicks?: number;
+  ctr?: number;
+  cpc?: number;
+  cpm?: number;
+  mcvr?: number;
+  mcpa?: number;
+  cvr?: number;
+  cpa?: number;
 }
 
 // CPN名からメンバー名を抽出
@@ -174,7 +183,7 @@ export async function GET(request: Request) {
         roas: data.spend > 0 ? (data.revenue / data.spend) * 100 : 0,
       })).sort((a, b) => b.profit - a.profit);
       
-      // TOP10 CPN
+      // TOP10 CPN（詳細指標付き）
       const topCpns = memberData.cpns
         .sort((a, b) => b.profit - a.profit)
         .slice(0, 10)
@@ -187,6 +196,15 @@ export async function GET(request: Request) {
           roas: cpn.roas,
           mcv: cpn.mcv,
           cv: cpn.cv,
+          impressions: cpn.impressions || 0,
+          clicks: cpn.clicks || 0,
+          ctr: cpn.ctr || 0,
+          cpc: cpn.cpc || 0,
+          cpm: cpn.cpm || 0,
+          mcvr: cpn.mcvr || 0,
+          mcpa: cpn.mcpa || 0,
+          cvr: cpn.cvr || 0,
+          cpa: cpn.cpa || 0,
         }));
       
       return NextResponse.json({

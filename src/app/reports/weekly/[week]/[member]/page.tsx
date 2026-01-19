@@ -56,6 +56,15 @@ interface TopCpn {
   roas: number;
   mcv: number;
   cv: number;
+  impressions?: number;
+  clicks?: number;
+  ctr?: number;
+  cpc?: number;
+  cpm?: number;
+  mcvr?: number;
+  mcpa?: number;
+  cvr?: number;
+  cpa?: number;
 }
 
 // 通貨フォーマット
@@ -406,48 +415,159 @@ export default function MemberReportPage({
         </CardContent>
       </Card>
       
-      {/* 利益TOP10 CPN */}
+      {/* 利益TOP10 CPN - 詳細指標付き */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Award className="h-4 w-4 text-amber-600" />
-            利益TOP10 CPN
+            利益TOP10 CPN（詳細）
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs min-w-[1200px]">
               <thead className="bg-slate-50 border-b">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">#</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">CPN名</th>
-                  <th className="px-3 py-2 text-center text-xs font-medium text-slate-500">媒体</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">消化</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">利益</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">ROAS</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">MCV</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500">CV</th>
+                  <th className="px-2 py-2 text-left text-[10px] font-medium text-slate-500">#</th>
+                  <th className="px-2 py-2 text-left text-[10px] font-medium text-slate-500 min-w-[150px]">CPN名</th>
+                  <th className="px-2 py-2 text-center text-[10px] font-medium text-slate-500">媒体</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">消化</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">MCV</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CV</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">売上</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500 bg-emerald-50">利益</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">ROAS</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CPA</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CPM</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">Imp.</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">Clicks</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CTR</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CPC</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">MCVR</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">MCPA</th>
+                  <th className="px-2 py-2 text-right text-[10px] font-medium text-slate-500">CVR</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {topCpns.map((cpn, index) => (
+                {topCpns.map((cpn, index) => {
+                  // 指標計算
+                  const impressions = cpn.impressions || 0;
+                  const clicks = cpn.clicks || 0;
+                  const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+                  const cpc = clicks > 0 ? cpn.spend / clicks : 0;
+                  const cpm = impressions > 0 ? (cpn.spend / impressions) * 1000 : 0;
+                  const mcvr = clicks > 0 ? (cpn.mcv / clicks) * 100 : 0;
+                  const mcpa = cpn.mcv > 0 ? cpn.spend / cpn.mcv : 0;
+                  const cvr = cpn.mcv > 0 ? (cpn.cv / cpn.mcv) * 100 : 0;
+                  const cpa = cpn.cv > 0 ? cpn.spend / cpn.cv : 0;
+                  
+                  return (
+                    <tr key={index} className="hover:bg-slate-50">
+                      <td className="px-2 py-2 text-slate-400">{index + 1}</td>
+                      <td className="px-2 py-2 text-slate-700 truncate max-w-[150px]" title={cpn.cpnName}>
+                        {cpn.cpnName.length > 30 ? cpn.cpnName.substring(0, 30) + "..." : cpn.cpnName}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${getMediaColor(cpn.media)}`}>
+                          {cpn.media}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(cpn.spend)}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{cpn.mcv}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{cpn.cv}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(cpn.revenue)}</td>
+                      <td className={`px-2 py-2 text-right font-bold bg-emerald-50/50 ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {formatCurrency(cpn.profit)}
+                      </td>
+                      <td className="px-2 py-2 text-right text-purple-600">{cpn.roas?.toFixed(0) || 0}%</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{cpa > 0 ? `¥${Math.floor(cpa).toLocaleString()}` : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{cpm > 0 ? `¥${Math.floor(cpm).toLocaleString()}` : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{impressions > 0 ? impressions.toLocaleString() : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{clicks > 0 ? clicks.toLocaleString() : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{ctr > 0 ? `${ctr.toFixed(2)}%` : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{cpc > 0 ? `¥${Math.floor(cpc).toLocaleString()}` : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{mcvr > 0 ? `${mcvr.toFixed(2)}%` : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{mcpa > 0 ? `¥${Math.floor(mcpa).toLocaleString()}` : "-"}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{cvr > 0 ? `${cvr.toFixed(2)}%` : "-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {/* 合計行 */}
+              <tfoot className="bg-slate-100 border-t-2 border-slate-300">
+                <tr className="font-bold">
+                  <td className="px-2 py-2 text-slate-600" colSpan={3}>合計</td>
+                  <td className="px-2 py-2 text-right text-slate-700">
+                    {formatCurrency(topCpns.reduce((sum, c) => sum + c.spend, 0))}
+                  </td>
+                  <td className="px-2 py-2 text-right text-slate-700">
+                    {topCpns.reduce((sum, c) => sum + c.mcv, 0)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-slate-700">
+                    {topCpns.reduce((sum, c) => sum + c.cv, 0)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-slate-700">
+                    {formatCurrency(topCpns.reduce((sum, c) => sum + c.revenue, 0))}
+                  </td>
+                  <td className={`px-2 py-2 text-right bg-emerald-50 ${topCpns.reduce((sum, c) => sum + c.profit, 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatCurrency(topCpns.reduce((sum, c) => sum + c.profit, 0))}
+                  </td>
+                  <td className="px-2 py-2 text-right text-purple-600">
+                    {(() => {
+                      const totalSpend = topCpns.reduce((sum, c) => sum + c.spend, 0);
+                      const totalRevenue = topCpns.reduce((sum, c) => sum + c.revenue, 0);
+                      return totalSpend > 0 ? `${((totalRevenue / totalSpend) * 100).toFixed(0)}%` : "-";
+                    })()}
+                  </td>
+                  <td className="px-2 py-2" colSpan={9}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* 案件×媒体マトリックス */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Layers className="h-4 w-4 text-indigo-600" />
+            案件×媒体 詳細
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[800px]">
+              <thead className="bg-slate-50 border-b">
+                <tr>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium text-slate-500">案件</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-medium text-slate-500">媒体</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500">消化</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500">MCV</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500">CV</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500">売上</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500 bg-emerald-50">利益</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500">ROAS</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-medium text-slate-500">CPN数</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {projects.slice(0, 15).map((project, index) => (
                   <tr key={index} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 text-slate-400">{index + 1}</td>
-                    <td className="px-3 py-2 text-slate-700 max-w-[200px] truncate" title={cpn.cpnName}>
-                      {cpn.cpnName.length > 40 ? cpn.cpnName.substring(0, 40) + "..." : cpn.cpnName}
-                    </td>
+                    <td className="px-3 py-2 text-slate-700 font-medium">{project.name}</td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${getMediaColor(cpn.media)}`}>
-                        {cpn.media}
-                      </span>
+                      {/* 媒体は案件ごとに表示 */}
+                      <span className="text-slate-500">-</span>
                     </td>
-                    <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(cpn.spend)}</td>
-                    <td className={`px-3 py-2 text-right font-bold ${cpn.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatCurrency(cpn.profit)}
+                    <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(project.spend)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600">-</td>
+                    <td className="px-3 py-2 text-right text-slate-600">-</td>
+                    <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(project.revenue)}</td>
+                    <td className={`px-3 py-2 text-right font-bold bg-emerald-50/50 ${project.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(project.profit)}
                     </td>
-                    <td className="px-3 py-2 text-right text-purple-600">{cpn.roas?.toFixed(0) || 0}%</td>
-                    <td className="px-3 py-2 text-right text-slate-600">{cpn.mcv}</td>
-                    <td className="px-3 py-2 text-right text-slate-600">{cpn.cv}</td>
+                    <td className="px-3 py-2 text-right text-purple-600">{project.roas.toFixed(0)}%</td>
+                    <td className="px-3 py-2 text-right text-slate-600">{project.cpnCount}</td>
                   </tr>
                 ))}
               </tbody>
