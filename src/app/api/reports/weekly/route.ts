@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAnalysisData, getHistoricalData } from "@/lib/googleSheets";
+import { getFullAnalysisData } from "@/lib/googleSheets";
 
 interface CpnData {
   cpnKey: string;
@@ -86,17 +86,17 @@ export async function GET(request: Request) {
     const weekKey = searchParams.get("week") || "";
     const memberName = searchParams.get("member") || "";
     
-    // 分析データを取得
-    const analysisData = await getAnalysisData();
+    // 分析データを取得（配列として返される）
+    const analysisData = await getFullAnalysisData();
     
-    if (!analysisData || !analysisData.cpnList) {
+    if (!analysisData || !Array.isArray(analysisData)) {
       return NextResponse.json({
         success: false,
         error: "データの取得に失敗しました",
       });
     }
     
-    const cpnList = analysisData.cpnList as CpnData[];
+    const cpnList = analysisData as CpnData[];
     
     // メンバー別に集計
     const memberMap = new Map<string, {
