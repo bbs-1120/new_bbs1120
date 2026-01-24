@@ -8,7 +8,7 @@ datasource db {
 }
 
 model accounts {
-  id                  String  @id
+  id                  String  @id @default(uuid())
   user_id             String
   type                String
   provider            String
@@ -26,7 +26,7 @@ model accounts {
 }
 
 model cpn_daily_data {
-  id         String   @id
+  id         String   @id @default(uuid())
   cpn_key    String
   cpn_name   String
   media_id   String
@@ -63,20 +63,21 @@ model execution_logs {
 }
 
 model invites {
-  id         String    @id
-  email      String    @unique
-  token      String    @unique
-  role       String    @default("member")
-  team_name  String?
-  expires_at DateTime
-  used_at    DateTime?
-  created_at DateTime  @default(now())
+  id           String    @id @default(uuid())
+  email        String    @unique
+  token        String    @unique
+  role         String    @default("member")
+  team_name    String?
+  expires_at   DateTime
+  used_at      DateTime?
+  created_at   DateTime  @default(now())
+  media_filter String?
 
   @@index([token])
 }
 
 model judgment_results {
-  id                    String   @id
+  id                    String   @id @default(uuid())
   cpn_key               String
   cpn_name              String
   media_id              String
@@ -101,7 +102,7 @@ model judgment_results {
 }
 
 model media {
-  id               String             @id
+  id               String             @id @default(uuid())
   name             String             @unique
   created_at       DateTime           @default(now())
   updated_at       DateTime
@@ -110,7 +111,7 @@ model media {
 }
 
 model sessions {
-  id            String   @id
+  id            String   @id @default(uuid())
   session_token String   @unique
   user_id       String
   expires       DateTime
@@ -126,7 +127,7 @@ model settings {
 }
 
 model status_overrides {
-  id         String   @id
+  id         String   @id @default(uuid())
   cpn_key    String   @unique
   cpn_name   String
   media      String
@@ -139,7 +140,7 @@ model status_overrides {
 }
 
 model users {
-  id             String     @id
+  id             String     @id @default(uuid())
   name           String?
   email          String     @unique
   email_verified DateTime?
@@ -149,6 +150,7 @@ model users {
   updated_at     DateTime
   password       String?
   team_name      String?
+  media_filter   String?
   accounts       accounts[]
   sessions       sessions[]
 }
@@ -159,6 +161,97 @@ model verification_tokens {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model auto_stop_exclusions {
+  id          String   @id @default(uuid())
+  cpn_name    String   @unique
+  cpn_key     String?
+  reason      String?
+  excluded_by String
+  excluded_at DateTime @default(now())
+
+  @@index([cpn_name])
+}
+
+model auto_stop_history {
+  id            String   @id @default(uuid())
+  cpn_name      String
+  cpn_key       String?
+  campaign_id   String?
+  media         String
+  member_name   String
+  project_name  String
+  rule_name     String
+  conditions    Json
+  metrics       Json
+  stopped_at    DateTime @default(now())
+  status        String
+  error_message String?
+
+  @@index([member_name])
+  @@index([status])
+  @@index([stopped_at])
+}
+
+model auto_stop_rules {
+  id           String   @id @default(uuid())
+  member_name  String
+  project_name String
+  media        String
+  rule_name    String
+  priority     Int
+  conditions   Json
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime
+
+  @@index([is_active])
+  @@index([member_name, project_name, media])
+}
+
+model project_cr_links {
+  id           String   @id @default(uuid())
+  project_name String
+  cpn_name     String   @unique
+  drive_url    String
+  description  String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime
+
+  @@index([project_name])
+}
+
+model project_reports {
+  id              String   @id @default(uuid())
+  project_name    String
+  media           String
+  week_key        String
+  result_comment  String?
+  insight_comment String?
+  next_comment    String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime
+
+  @@unique([project_name, media, week_key])
+  @@index([project_name])
+  @@index([week_key])
+}
+
+model weekly_report_comments {
+  id             String   @id @default(uuid())
+  week_key       String
+  member_name    String
+  todo_comment   String?
+  growth_comment String?
+  shrink_comment String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime
+  todo_list      String?
+
+  @@unique([week_key, member_name])
+  @@index([member_name])
+  @@index([week_key])
 }
 
 model user_settings {

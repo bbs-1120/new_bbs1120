@@ -7,12 +7,12 @@ const prisma = new PrismaClient();
 export async function GET() {
   try {
     // すべてのオーバーライドを取得（無期限）
-    const overrides = await prisma.statusOverride.findMany();
+    const overrides = await prisma.status_overrides.findMany();
 
     // cpnKeyをキーとしたオブジェクトに変換
     const overrideMap: Record<string, string> = {};
     for (const override of overrides) {
-      overrideMap[override.cpnKey] = override.status;
+      overrideMap[override.cpn_key] = override.status;
     }
 
     return NextResponse.json({
@@ -47,19 +47,19 @@ export async function POST(request: Request) {
     expiresAt.setFullYear(expiresAt.getFullYear() + 100);
 
     // upsert（存在すれば更新、なければ作成）
-    await prisma.statusOverride.upsert({
-      where: { cpnKey },
+    await prisma.status_overrides.upsert({
+      where: { cpn_key: cpnKey },
       update: {
         status,
-        changedAt: new Date(),
-        expiresAt,
+        changed_at: new Date(),
+        expires_at: expiresAt,
       },
       create: {
-        cpnKey,
-        cpnName: cpnName || "",
+        cpn_key: cpnKey,
+        cpn_name: cpnName || "",
         media: media || "",
         status,
-        expiresAt,
+        expires_at: expiresAt,
       },
     });
 
@@ -82,9 +82,9 @@ export async function POST(request: Request) {
 // 期限切れのオーバーライドを削除（クリーンアップ用）
 export async function DELETE() {
   try {
-    const result = await prisma.statusOverride.deleteMany({
+    const result = await prisma.status_overrides.deleteMany({
       where: {
-        expiresAt: {
+        expires_at: {
           lt: new Date(),
         },
       },
