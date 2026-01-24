@@ -3,6 +3,7 @@ import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { DataProvider } from "@/components/providers/data-provider";
+import { SessionProvider } from "@/components/providers/session-provider";
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
@@ -11,20 +12,20 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "GrowthDeck - 広告運用ダッシュボード",
+  title: "AdProfit - 広告運用ダッシュボード",
   description: "広告運用を自動化・最適化するインテリジェントプラットフォーム",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "GrowthDeck",
+    title: "AdProfit",
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    icon: "/icons/Cactus-Jack.jpg",
-    apple: "/icons/Cactus-Jack.jpg",
+    icon: "/icons/adprofit-logo.png",
+    apple: "/icons/adprofit-logo.png",
   },
 };
 
@@ -45,14 +46,16 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={`${notoSansJP.variable} font-sans antialiased bg-[#f8f8f8]`}>
+        <SessionProvider>
         <DataProvider>
           <Sidebar />
-          <main className="lg:pl-64">
-            <div className="min-h-screen pt-16 lg:pt-0 px-4 py-4 lg:p-8">
+          <main>
+            <div className="min-h-screen pt-16 px-4 py-4 lg:pt-20 lg:px-8 lg:py-6">
               {children}
             </div>
           </main>
         </DataProvider>
+        </SessionProvider>
       </body>
     </html>
   );

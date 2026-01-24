@@ -2,23 +2,44 @@ import { NextResponse } from "next/server";
 import { getFullAnalysisData } from "@/lib/googleSheets";
 import { judgeAllCpns, getJudgmentSummary, AnalysisCpnData, JUDGMENT } from "@/lib/judgment";
 import { getCache, setCache } from "@/lib/cache";
+import { auth } from "@/lib/auth";
 
 const CACHE_KEY = "judgment_results";
 
 // GET: 判定結果を取得
 export async function GET(request: Request) {
   try {
+    // ユーザーセッションを取得
+    const session = await auth();
+    const userRole = session?.user?.role || "member";
+    const userTeamName = session?.user?.teamName || null;
+    const userMediaFilter = session?.user?.mediaFilter || null;
+
     const { searchParams } = new URL(request.url);
     const judgment = searchParams.get("judgment"); // フィルター用
 
-    // キャッシュをチェック
-    let results = getCache<ReturnType<typeof judgeAllCpns>>(CACHE_KEY);
+    // キャッシュをチェック（ユーザー別キャッシュ）
+    const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
+      ? CACHE_KEY 
+      : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
+    let results = getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
 
     if (!results) {
       // マイ分析と同じデータソースからデータを取得
-      const analysisData = await getFullAnalysisData();
+      let analysisData = await getFullAnalysisData();
 
-      // CPN データを判定用の形式に変換
+      // メンバーの場合、担当者名でCPNをフィルタリング
+      if (userRole !== "admin" && userTeamName) {
+        const filterPattern = `新規グロース部_${userTeamName}_`;
+        analysisData = analysisData.filter(row => row.cpnName?.includes(filterPattern));
+      }
+
+      // 媒体フィルターが設定されている場合、特定媒体のみ表示
+      if (userMediaFilter) {
+        analysisData = analysisData.filter(row => row.media === userMediaFilter);
+      }
+
+      // CPN データを判定用の形式に変換（accountName追加）
       const cpnList: AnalysisCpnData[] = analysisData.map((cpn: {
         cpnKey: string;
         cpnName: string;
@@ -27,6 +48,8 @@ export async function GET(request: Request) {
         profit7Days: number;
         roas7Days: number;
         consecutiveLoss: number;
+        consecutiveProfit: number;
+        accountName?: string;
       }) => ({
         cpnKey: cpn.cpnKey,
         cpnName: cpn.cpnName,
@@ -35,13 +58,15 @@ export async function GET(request: Request) {
         profit7Days: cpn.profit7Days,
         roas7Days: cpn.roas7Days,
         consecutiveLoss: cpn.consecutiveLoss,
+        consecutiveProfit: cpn.consecutiveProfit || 0,
+        accountName: cpn.accountName || "",
       }));
 
       // 判定実行
       results = judgeAllCpns(cpnList);
 
-      // キャッシュに保存（3分）
-      setCache(CACHE_KEY, results, 30 * 60 * 1000); // 30分
+      // キャッシュに保存（60分）
+      setCache(cacheKeyWithUser, results, 60 * 60 * 1000);
     }
 
     // フィルター適用
@@ -62,11 +87,16 @@ export async function GET(request: Request) {
     // サマリーを計算
     const summary = getJudgmentSummary(results);
 
+    // キャッシュヘッダー付きレスポンス（パフォーマンス改善）
     return NextResponse.json({
       success: true,
       date: new Date().toISOString().split("T")[0],
       summary,
       results: filteredResults,
+    }, {
+      headers: {
+        "Cache-Control": "private, max-age=300, stale-while-revalidate=600",
+      },
     });
   } catch (error) {
     console.error("Get judgment results error:", error);
@@ -83,7 +113,7 @@ export async function POST() {
     // マイ分析と同じデータソースからデータを取得
     const analysisData = await getFullAnalysisData();
 
-    // CPN データを判定用の形式に変換
+    // CPN データを判定用の形式に変換（accountName追加）
     const cpnList: AnalysisCpnData[] = analysisData.map((cpn: {
       cpnKey: string;
       cpnName: string;
@@ -92,6 +122,8 @@ export async function POST() {
       profit7Days: number;
       roas7Days: number;
       consecutiveLoss: number;
+      consecutiveProfit: number;
+      accountName?: string;
     }) => ({
       cpnKey: cpn.cpnKey,
       cpnName: cpn.cpnName,
@@ -100,6 +132,8 @@ export async function POST() {
       profit7Days: cpn.profit7Days,
       roas7Days: cpn.roas7Days,
       consecutiveLoss: cpn.consecutiveLoss,
+      consecutiveProfit: cpn.consecutiveProfit || 0,
+      accountName: cpn.accountName || "",
     }));
 
     // 判定実行

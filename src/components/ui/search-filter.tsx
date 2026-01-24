@@ -77,7 +77,7 @@ export function SearchFilter({
             value={searchQuery}
             onChange={handleSearchChange}
             placeholder="CPN名、案件名で検索..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm text-slate-800 placeholder:text-slate-400"
           />
           {searchQuery && (
             <button
@@ -95,14 +95,14 @@ export function SearchFilter({
           onClick={() => setShowFilters(!showFilters)}
           className={`px-4 py-2 border rounded-lg flex items-center gap-2 text-sm transition-colors ${
             showFilters || activeFilterCount > 0
-              ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
           }`}
         >
           <Filter className="h-4 w-4" />
           フィルター
           {activeFilterCount > 0 && (
-            <span className="px-1.5 py-0.5 bg-indigo-600 text-white text-xs rounded-full">
+            <span className="px-1.5 py-0.5 bg-emerald-600 text-white text-xs rounded-full">
               {activeFilterCount}
             </span>
           )}
@@ -112,7 +112,7 @@ export function SearchFilter({
 
       {/* フィルターパネル */}
       {showFilters && (
-        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 animate-slide-in">
+        <div className="p-4 bg-white rounded-lg border border-slate-200 shadow-sm animate-slide-in">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* 媒体フィルター */}
             <div>
@@ -124,8 +124,8 @@ export function SearchFilter({
                     onClick={() => toggleMedia(media)}
                     className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
                       filters.media.includes(media)
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-300"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-100 border border-slate-200 text-slate-600 hover:border-emerald-300"
                     }`}
                   >
                     {media}
@@ -150,7 +150,7 @@ export function SearchFilter({
                       },
                     })
                   }
-                  className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="w-20 px-2 py-1 text-xs bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800"
                 />
                 <span className="text-slate-400">〜</span>
                 <input
@@ -165,7 +165,7 @@ export function SearchFilter({
                       },
                     })
                   }
-                  className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="w-20 px-2 py-1 text-xs bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800"
                 />
               </div>
             </div>
@@ -186,7 +186,7 @@ export function SearchFilter({
                       },
                     })
                   }
-                  className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="w-20 px-2 py-1 text-xs bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800"
                 />
                 <span className="text-slate-400">〜</span>
                 <input
@@ -201,7 +201,7 @@ export function SearchFilter({
                       },
                     })
                   }
-                  className="w-20 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="w-20 px-2 py-1 text-xs bg-white border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800"
                 />
               </div>
             </div>
@@ -212,7 +212,7 @@ export function SearchFilter({
               <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => handleFilterChange({ profitRange: { min: 0 } })}
-                  className="px-2.5 py-1 text-xs bg-green-100 text-green-700 rounded-full hover:bg-green-200"
+                  className="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200"
                 >
                   黒字のみ
                 </button>
@@ -224,7 +224,7 @@ export function SearchFilter({
                 </button>
                 <button
                   onClick={() => handleFilterChange({ roasRange: { min: 150 } })}
-                  className="px-2.5 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200"
+                  className="px-2.5 py-1 text-xs bg-teal-100 text-teal-700 rounded-full hover:bg-teal-200"
                 >
                   ROAS150%↑
                 </button>

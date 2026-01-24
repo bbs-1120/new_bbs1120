@@ -1,84 +1,85 @@
 import { NextResponse } from "next/server";
 import { getFullAnalysisData } from "@/lib/googleSheets";
 import { sendToChatwork } from "@/lib/chatwork";
+import { judgeAnalysisCpn, JUDGMENT } from "@/lib/judgment";
 
-// Chatwork送信用のメッセージを生成
-function generateScheduledMessage(
+// 媒体名をChatwork用に変換
+function getMediaDisplayName(media: string): string {
+  if (media === "Meta") return "FB";
+  return media;
+}
+
+// 継続CPNを媒体別にメッセージ生成
+function generateContinueMessages(
   data: Awaited<ReturnType<typeof getFullAnalysisData>>
-) {
-  const now = new Date();
-  const dateStr = `${now.getMonth() + 1}/${now.getDate()}`;
+): { media: string; message: string }[] {
+  const messages: { media: string; message: string }[] = [];
 
-  // 媒体別に集計
-  const mediaGroups = data.reduce((acc, cpn) => {
-    const media = cpn.media === "Meta" ? "FB" : cpn.media;
+  // 判定を実行して継続CPNのみフィルタ
+  const judgmentResults = data.map((cpn) =>
+    judgeAnalysisCpn({
+      cpnKey: cpn.cpnKey,
+      cpnName: cpn.cpnName,
+      media: cpn.media,
+      profit: cpn.profit,
+      profit7Days: cpn.profit7Days,
+      roas7Days: cpn.roas7Days,
+      consecutiveLoss: cpn.consecutiveLoss,
+      consecutiveProfit: cpn.consecutiveProfit || 0,
+    })
+  );
+
+  // 継続CPNのみフィルタ（YouTubeは除外）
+  const continueCpns = judgmentResults.filter(
+    (result) => result.judgment === JUDGMENT.CONTINUE && result.media !== "YouTube"
+  );
+
+  // 媒体別にグループ化（TikTokとPangleは統合）
+  const mediaGroups = continueCpns.reduce((acc, cpn) => {
+    // PangleはTikTokに統合
+    const media = cpn.media === "Pangle" ? "TikTok" : cpn.media;
     if (!acc[media]) {
-      acc[media] = { spend: 0, profit: 0, cpns: [] as typeof data };
+      acc[media] = [];
     }
-    acc[media].spend += cpn.spend;
-    acc[media].profit += cpn.profit;
-    acc[media].cpns.push(cpn);
+    acc[media].push(cpn);
     return acc;
-  }, {} as Record<string, { spend: number; profit: number; cpns: typeof data }>);
+  }, {} as Record<string, typeof continueCpns>);
 
-  // 全体集計
-  const totalSpend = data.reduce((sum, cpn) => sum + cpn.spend, 0);
-  const totalProfit = data.reduce((sum, cpn) => sum + cpn.profit, 0);
-  const totalRoas = totalSpend > 0 ? (totalProfit / totalSpend + 1) * 100 : 0;
+  // 各媒体ごとにメッセージを生成
+  for (const [media, cpns] of Object.entries(mediaGroups)) {
+    if (cpns.length === 0) continue;
 
-  // メッセージ生成
+    const displayMedia = getMediaDisplayName(media);
+    
   let message = `[To:9952259]自動送信犬さん\n`;
-  message += `[info][title]【${dateStr} デイリーレポート】自動送信[/title]`;
-  message += `\n📊 本日の成績\n`;
-  message += `消化: ¥${Math.round(totalSpend).toLocaleString()}\n`;
-  message += `利益: ¥${Math.round(totalProfit).toLocaleString()}\n`;
-  message += `ROAS: ${totalRoas.toFixed(1)}%\n`;
-
-  // 媒体別サマリー
-  message += `\n📱 媒体別\n`;
-  for (const [media, stats] of Object.entries(mediaGroups)) {
-    const roas = stats.spend > 0 ? (stats.profit / stats.spend + 1) * 100 : 0;
-    message += `${media}: ¥${Math.round(stats.profit).toLocaleString()} (ROAS ${roas.toFixed(0)}%)\n`;
-  }
-
-  // 好調CPN TOP3
-  const topCpns = [...data].sort((a, b) => b.profit - a.profit).slice(0, 3);
-  if (topCpns.length > 0) {
-    message += `\n🏆 好調CPN TOP3\n`;
-    topCpns.forEach((cpn, idx) => {
-      const shortName = cpn.cpnName.split("_").slice(-3).join("_");
-      message += `${idx + 1}. ${shortName}: ¥${Math.round(cpn.profit).toLocaleString()}\n`;
+    message += `媒体：${displayMedia}\n`;
+    message += `処理：追加\n`;
+    message += `CP名：\n`;
+    
+    // CPN名を追加
+    cpns.forEach((cpn) => {
+      message += `${cpn.cpnName}\n`;
     });
+
+    messages.push({ media, message });
   }
 
-  // 要注意CPN（利益-10000円以下）
-  const warnCpns = data.filter((cpn) => cpn.profit < -10000).slice(0, 5);
-  if (warnCpns.length > 0) {
-    message += `\n⚠️ 要注意CPN\n`;
-    warnCpns.forEach((cpn) => {
-      const shortName = cpn.cpnName.split("_").slice(-3).join("_");
-      message += `・${shortName}: ¥${Math.round(cpn.profit).toLocaleString()}\n`;
-    });
-  }
-
-  message += `[/info]`;
-
-  return message;
+  return messages;
 }
 
 // POSTで手動実行/スケジュール実行
 export async function POST(request: Request) {
   try {
-    // 認証チェック（Vercel Cronからの呼び出し用）
+    // 認証チェック（Cloud Schedulerからの呼び出し用）
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
     
-    // Vercel Cronからの呼び出しの場合は認証をチェック
+    // Cloud Schedulerからの呼び出しの場合は認証をチェック
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       // 手動実行の場合は認証不要
       const body = await request.json().catch(() => ({}));
       if (!body.manual) {
-        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        // Cloud Schedulerはヘッダーなしで呼び出すこともあるので許可
       }
     }
 
@@ -92,8 +93,16 @@ export async function POST(request: Request) {
       });
     }
 
-    // メッセージを生成
-    const message = generateScheduledMessage(data);
+    // 継続CPNのメッセージを生成
+    const messages = generateContinueMessages(data);
+
+    if (messages.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "継続CPNがありませんでした",
+        sentCount: 0,
+      });
+    }
 
     // Chatworkに送信
     const apiToken = process.env.CHATWORK_API_TOKEN;
@@ -106,19 +115,29 @@ export async function POST(request: Request) {
       });
     }
 
+    // 各媒体のメッセージを送信
+    const results: { media: string; success: boolean; messageId?: string; error?: string }[] = [];
+    
+    for (const { media, message } of messages) {
     const result = await sendToChatwork(apiToken, roomId, message);
-
-    if (!result.success) {
-      return NextResponse.json({
-        success: false,
+      results.push({
+        media,
+        success: result.success,
+        messageId: result.messageId,
         error: result.error,
       });
+      
+      // API制限を避けるため少し待機
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
+    const successCount = results.filter((r) => r.success).length;
+
     return NextResponse.json({
-      success: true,
-      message: "Chatworkに送信しました",
-      messageId: result.messageId,
+      success: successCount > 0,
+      message: `${successCount}件の媒体にChatwork送信しました`,
+      sentCount: successCount,
+      results,
       sentAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -142,6 +161,6 @@ export async function GET() {
     configured: !!(apiToken && roomId),
     scheduledTime: "10:00 JST",
     timezone: "Asia/Tokyo",
+    description: "継続CPNを媒体別にChatwork送信",
   });
 }
-

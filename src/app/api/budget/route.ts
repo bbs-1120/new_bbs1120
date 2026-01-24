@@ -124,7 +124,7 @@ async function updateMetaBudget(
   for (const accessToken of tokens) {
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${campaignId}`,
+        `https://graph.facebook.com/v22.0/${campaignId}`,
         {
           method: "POST",
           headers: {
@@ -157,20 +157,25 @@ async function updateMetaBudget(
   return { success: false, error: lastError };
 }
 
-// TikTok Ads API - 広告アカウント名から広告主ID特定 + Smart Performance Campaign対応
+// TikTok Ads API - 複数トークン対応 + 広告アカウント名から広告主ID特定 + Smart Performance Campaign対応
 async function updateTikTokBudget(
   campaignId: string | undefined,
   newBudget: number,
   knownAdvertiserId: string | null = null
 ): Promise<{ success: boolean; error?: string }> {
-  const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
+  // 複数のアクセストークンを取得（新しいビジネスセンター対応）
+  const accessTokens = [
+    process.env.TIKTOK_ACCESS_TOKEN,
+    process.env.TIKTOK_ACCESS_TOKEN_2,
+    process.env.TIKTOK_ACCESS_TOKEN_3,
+  ].filter(Boolean) as string[];
   
   console.log("TikTok budget update - starting...");
-  console.log("AccessToken exists:", !!accessToken);
+  console.log("AccessTokens count:", accessTokens.length);
   console.log("CampaignId:", campaignId);
   console.log("Known Advertiser ID:", knownAdvertiserId);
   
-  if (!accessToken) {
+  if (accessTokens.length === 0) {
     return { success: false, error: "TikTok APIの認証情報が設定されていません。.envにTIKTOK_ACCESS_TOKENを追加してください。" };
   }
 
@@ -188,7 +193,7 @@ async function updateTikTokBudget(
   } else {
     // フォールバック: 全広告主IDを試す（最大10個）
     const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
-    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
     console.log("Falling back to advertiser ID list, trying first 10");
   }
 
@@ -198,57 +203,69 @@ async function updateTikTokBudget(
 
   let lastError = "広告主IDが見つかりませんでした";
   
-  for (let i = 0; i < advertiserIds.length; i++) {
-    const advertiserId = advertiserIds[i].trim();
-    console.log(`[${i + 1}/${advertiserIds.length}] Trying advertiser: ${advertiserId}`);
+  // 各トークンで試行（複数ビジネスセンター対応）
+  for (let t = 0; t < accessTokens.length; t++) {
+    const accessToken = accessTokens[t];
+    console.log(`[Token ${t + 1}/${accessTokens.length}] Trying...`);
     
-    // 1. まず通常のキャンペーン更新APIを試す
-    try {
-      const response = await fetch(
-        "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Token": accessToken,
-          },
-          body: JSON.stringify({
-            advertiser_id: advertiserId,
-            campaign_id: campaignId,
-            budget: newBudget,
-            budget_mode: "BUDGET_MODE_DAY",
-            operation_status: "ENABLE",
-          }),
-        }
-      );
-
-      const data = await response.json();
-      console.log(`Response code: ${data.code}, message: ${data.message}`);
-
-      if (data.code === 0) {
-        console.log("Success!");
-        return { success: true };
-      } else {
-        lastError = data.message || "TikTok APIエラー";
-        
-        // Smart Performance Campaignエラーの場合はSPC APIを試す
-        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
-          console.log("Trying SPC API...");
-          const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId, campaignId, newBudget);
-          if (spcResult.success) {
-            return { success: true };
+    for (let i = 0; i < advertiserIds.length; i++) {
+      const advertiserId = advertiserIds[i].trim();
+      console.log(`  [Advertiser ${i + 1}/${advertiserIds.length}] ${advertiserId}`);
+      
+      // 1. まず通常のキャンペーン更新APIを試す
+      try {
+        const response = await fetch(
+          "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Token": accessToken,
+            },
+            body: JSON.stringify({
+              advertiser_id: advertiserId,
+              campaign_id: campaignId,
+              budget: newBudget,
+              budget_mode: "BUDGET_MODE_DAY",
+              operation_status: "ENABLE",
+            }),
           }
-          lastError = spcResult.error || lastError;
+        );
+
+        const data = await response.json();
+        console.log(`  Response code: ${data.code}, message: ${data.message}`);
+
+        if (data.code === 0) {
+          console.log("  Success!");
+          return { success: true };
+        } else {
+          lastError = data.message || "TikTok APIエラー";
+          
+          // Smart Performance Campaign または Upgraded Smart Plus エラーの場合はSPC APIを試す
+          if (data.message?.includes("Smart Performance Campaign") || 
+              data.message?.includes("spc") ||
+              data.message?.includes("Upgraded Smart Plus") ||
+              data.message?.includes("Smart Plus")) {
+            console.log("  Trying SPC API for Smart Plus campaign...");
+            const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId, campaignId, newBudget);
+            if (spcResult.success) {
+              return { success: true };
+            }
+            console.log(`  SPC API failed: ${spcResult.error}`);
+            lastError = spcResult.error || lastError;
+            // SPC APIも失敗した場合は次のトークン/広告主IDを試す
+            continue;
+          }
+          
+          // 権限エラーやキャンペーンが見つからない場合は次を試す
+          if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
+            continue;
+          }
         }
-        
-        // 権限エラーやキャンペーンが見つからない場合は次の広告主IDを試す
-        if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
-          continue;
-        }
+      } catch (error) {
+        console.error("  TikTok API error:", error);
+        lastError = "TikTok APIへの接続に失敗しました";
       }
-    } catch (error) {
-      console.error("TikTok API error:", error);
-      lastError = "TikTok APIへの接続に失敗しました";
     }
   }
 
@@ -326,7 +343,7 @@ async function updatePangleBudget(
     console.log("Using known advertiser ID from account name mapping");
   } else {
     const advertiserIdsStr = process.env.PANGLE_ADVERTISER_IDS || process.env.TIKTOK_ADVERTISER_IDS || "";
-    advertiserIds = advertiserIdsStr.split(",").filter(Boolean).slice(0, 10);
+    advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
   }
 
   if (advertiserIds.length === 0) {
@@ -364,12 +381,18 @@ async function updatePangleBudget(
       } else {
         lastError = data.message || "Pangle APIエラー";
         
-        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
+        // Smart Performance Campaign または Upgraded Smart Plus エラーの場合はSPC APIを試す
+        if (data.message?.includes("Smart Performance Campaign") || 
+            data.message?.includes("spc") ||
+            data.message?.includes("Upgraded Smart Plus") ||
+            data.message?.includes("Smart Plus")) {
+          console.log("Pangle: Trying SPC API for Smart Plus campaign...");
           const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId, campaignId, newBudget);
           if (spcResult.success) {
             return { success: true };
           }
           lastError = spcResult.error || lastError;
+          continue;
         }
         
         if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {

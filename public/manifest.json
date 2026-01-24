@@ -1,6 +1,6 @@
 {
-  "name": "GrowthDeck - 広告運用ダッシュボード",
-  "short_name": "GrowthDeck",
+  "name": "AdProfit - 広告運用ダッシュボード",
+  "short_name": "AdProfit",
   "description": "広告運用を自動化・最適化するインテリジェントプラットフォーム",
   "start_url": "/analysis",
   "display": "standalone",
@@ -9,21 +9,21 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icons/Cactus-Jack.jpg",
+      "src": "/icons/adprofit-logo.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/Cactus-Jack.jpg",
+      "src": "/icons/adprofit-logo.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/Cactus-Jack.jpg",
+      "src": "/icons/adprofit-logo.png",
       "sizes": "180x180",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -31,4 +31,3 @@
   "lang": "ja",
   "dir": "ltr"
 }
-

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getFullAnalysisData, getMonthlyProfit, getDailyTrendData, getProjectMonthlyData } from "@/lib/googleSheets";
 import { getCache, setCache } from "@/lib/cache";
+import { auth } from "@/lib/auth";
 
 const CACHE_KEY = "analysis_data";
-const CACHE_TTL = 5 * 60 * 1000; // 5分間キャッシュ（高速レスポンス）
+const CACHE_TTL = 60 * 60 * 1000; // 60分間キャッシュ（パフォーマンス改善）
 
 interface CachedData {
   sheetData: Awaited<ReturnType<typeof getFullAnalysisData>>;
@@ -157,18 +158,19 @@ function generateAIAdvice(
   }
 
   // 8. 月間累計
+  const currentMonth = new Date().getMonth() + 1; // 現在の月を動的に取得
   if (summary.monthlyProfit > 0) {
     advice.push({
       type: "success",
       title: "📅 今月の累計は黒字です",
-      message: `12月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。${summary.monthlyProfit > 500000 ? "素晴らしい成績です！" : "このペースを維持しましょう。"}`,
+      message: `${currentMonth}月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。${summary.monthlyProfit > 500000 ? "素晴らしい成績です！" : "このペースを維持しましょう。"}`,
       priority: 5,
     });
   } else if (summary.monthlyProfit < 0) {
     advice.push({
       type: "danger",
       title: "📅 今月の累計が赤字です",
-      message: `12月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。早急な対策が必要です。`,
+      message: `${currentMonth}月の累計利益は¥${Math.round(summary.monthlyProfit).toLocaleString()}です。早急な対策が必要です。`,
       priority: 1,
     });
   }
@@ -179,27 +181,52 @@ function generateAIAdvice(
 
 export async function GET(request: Request) {
   try {
+    // ユーザーセッションを取得
+    const session = await auth();
+    const userRole = session?.user?.role || "member";
+    const userTeamName = session?.user?.teamName || null;
+    const userMediaFilter = session?.user?.mediaFilter || null;
+
     // URLパラメータでキャッシュをスキップできる
     const { searchParams } = new URL(request.url);
     const skipCache = searchParams.get("refresh") === "true";
 
-    // キャッシュからデータを取得
-    let cachedData = skipCache ? null : getCache<CachedData>(CACHE_KEY);
+    // キャッシュからデータを取得（管理者と一般ユーザーで別キャッシュ）
+    const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
+      ? CACHE_KEY 
+      : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
+    let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
+
+    // メンバーの場合のフィルタリング用teamName
+    const filterTeamName = userRole !== "admin" ? userTeamName : null;
 
     if (!cachedData) {
       // キャッシュがない場合はスプレッドシートから取得
+      // メンバーの場合はteamNameでフィルタリング
       const [sheetData, monthlyProfit, dailyTrend, projectMonthly] = await Promise.all([
         getFullAnalysisData(),
-        getMonthlyProfit(),
-        getDailyTrendData(),
-        getProjectMonthlyData(),
+        getMonthlyProfit(filterTeamName),
+        getDailyTrendData(filterTeamName),
+        getProjectMonthlyData(filterTeamName),
       ]);
 
       cachedData = { sheetData, monthlyProfit, dailyTrend, projectMonthly };
-      setCache(CACHE_KEY, cachedData, CACHE_TTL);
+      setCache(cacheKeyWithUser, cachedData, CACHE_TTL);
     }
 
-    const { sheetData, monthlyProfit, dailyTrend, projectMonthly } = cachedData;
+    let { sheetData, monthlyProfit, dailyTrend, projectMonthly } = cachedData;
+
+    // メンバーの場合、担当者名でCPNをフィルタリング
+    // CPN名に「新規グロース部_{担当者名}_」が含まれるもののみ表示
+    if (filterTeamName) {
+      const filterPattern = `新規グロース部_${filterTeamName}_`;
+      sheetData = sheetData.filter(row => row.cpnName?.includes(filterPattern));
+    }
+
+    // 媒体フィルターが設定されている場合、特定媒体のみ表示
+    if (userMediaFilter) {
+      sheetData = sheetData.filter(row => row.media === userMediaFilter);
+    }
 
     // 1. 当日合計を計算
     let totalClicks = 0;
@@ -212,7 +239,7 @@ export async function GET(request: Request) {
       roas: 0,
       cpa: 0,
       cvr: 0,
-      monthlyProfit: monthlyProfit, // 12月利益
+      monthlyProfit: monthlyProfit, // 今月利益（動的）
     };
 
     // データを集計
@@ -238,27 +265,54 @@ export async function GET(request: Request) {
     }
 
     // 2. CPN別データ
-    const cpnList = sheetData.map((row) => ({
-      cpnKey: row.cpnKey || "",
-      cpnName: row.cpnName || "",
-      accountName: row.accountName || "",
-      dailyBudget: row.dailyBudget || "-",
-      budgetSchedule: row.budgetSchedule || "-",
-      profit7Days: row.profit7Days || 0,
-      roas7Days: row.roas7Days || 0,
-      consecutiveZeroMcv: row.consecutiveZeroMcv || 0,
-      consecutiveLoss: row.consecutiveLoss || 0,
-      spend: row.spend || 0,
-      mcv: row.mcv || 0,
-      cv: row.cv || 0,
-      media: row.media || "",
-      revenue: row.revenue || 0,
-      profit: row.profit || 0,
-      roas: row.roas || 0,
-      cpa: row.cpa || 0,
-      status: row.status || "",
-      campaignId: row.campaignId || "", // CPID（キャンペーンID）
-    }));
+    const cpnList = sheetData.map((row) => {
+      const spend = row.spend || 0;
+      const mcv = row.mcv || 0;
+      const cv = row.cv || 0;
+      const revenue = row.revenue || 0;
+      const impressions = row.impressions || 0;
+      const clicks = row.clicks || 0;
+      
+      // 計算フィールド
+      const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+      const cpc = clicks > 0 ? spend / clicks : 0;
+      const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+      const cvr = clicks > 0 ? (cv / clicks) * 100 : 0;
+      const mcvr = clicks > 0 ? (mcv / clicks) * 100 : 0;
+      const mcpa = mcv > 0 ? spend / mcv : 0;
+      const cpa = cv > 0 ? spend / cv : 0;
+      
+      return {
+        cpnKey: row.cpnKey || "",
+        cpnName: row.cpnName || "",
+        accountName: row.accountName || "",
+        dailyBudget: row.dailyBudget || "-",
+        budgetSchedule: row.budgetSchedule || "-",
+        profit7Days: row.profit7Days || 0,
+        roas7Days: row.roas7Days || 0,
+        consecutiveZeroMcv: row.consecutiveZeroMcv || 0,
+        consecutiveLoss: row.consecutiveLoss || 0,
+        spend,
+        mcv,
+        cv,
+        media: row.media || "",
+        revenue,
+        profit: row.profit || 0,
+        roas: row.roas || 0,
+        cpa,
+        status: row.status || "",
+        campaignId: row.campaignId || "",
+        // 追加フィールド
+        impressions,
+        clicks,
+        cpm,
+        cpc,
+        ctr,
+        cvr,
+        mcvr,
+        mcpa,
+      };
+    });
 
     // 3. 案件名別の集計（スプレッドシートのprojectName列を使用）
     const projectMap = new Map<string, {
@@ -350,9 +404,9 @@ export async function GET(request: Request) {
       cachedAt: new Date().toISOString(),
     });
 
-    // より積極的なキャッシュ設定（高速表示のため）
-    // ブラウザキャッシュ2分、CDNキャッシュ5分、stale-while-revalidate 10分
-    response.headers.set("Cache-Control", "public, max-age=120, s-maxage=300, stale-while-revalidate=600");
+    // 積極的なキャッシュ設定（高速表示のため）
+    // ブラウザキャッシュ5分、CDNキャッシュ10分、stale-while-revalidate 30分
+    response.headers.set("Cache-Control", "public, max-age=300, s-maxage=600, stale-while-revalidate=1800");
     
     return response;
   } catch (error) {
