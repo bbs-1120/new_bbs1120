@@ -9,7 +9,6 @@ env:
   PROJECT_ID: phonic-envoy-481605-b1
   SERVICE_NAME: adpilot
   REGION: asia-northeast1
-  IMAGE_NAME: gcr.io/phonic-envoy-481605-b1/adpilot
 
 jobs:
   deploy:
@@ -38,23 +37,32 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Create Artifact Registry if not exists
+        run: |
+          gcloud artifacts repositories describe adpilot-repo \
+            --location=${{ env.REGION }} 2>/dev/null || \
+          gcloud artifacts repositories create adpilot-repo \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --description="AdPilot Docker Repository"
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/adpilot-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/adpilot-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/adpilot-repo/${{ env.SERVICE_NAME }}:latest
 
       - name: Push Docker image
         run: |
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/adpilot-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/adpilot-repo/${{ env.SERVICE_NAME }}:latest
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/adpilot-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
@@ -62,10 +70,11 @@ jobs:
             --cpu 1 \
             --min-instances 0 \
             --max-instances 2 \
-            --set-env-vars 'AUTH_SECRET=cY0UdD3b0nuBT0XT9n9yyCEhdpwzFhgh9Wc5QIBr3n4=,NEXTAUTH_URL=https://adpilot-311489166272.asia-northeast1.run.app,NEXTAUTH_SECRET=cY0UdD3b0nuBT0XT9n9yyCEhdpwzFhgh9Wc5QIBr3n4=' \
+            --set-env-vars 'AUTH_SECRET=cY0UdD3b0nuBT0XT9n9yyCEhdpwzFhgh9Wc5QIBr3n4=,NEXTAUTH_URL=https://adpilot-468482280458.asia-northeast1.run.app,NEXTAUTH_SECRET=cY0UdD3b0nuBT0XT9n9yyCEhdpwzFhgh9Wc5QIBr3n4=' \
             --set-secrets 'DATABASE_URL=DATABASE_URL:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,CHATWORK_API_TOKEN=CHATWORK_API_TOKEN:latest,CHATWORK_ROOM_ID=CHATWORK_ROOM_ID:latest,CHATWORK_ERROR_ROOM_ID=CHATWORK_ERROR_ROOM_ID:latest,GOOGLE_SHEETS_CLIENT_EMAIL=GOOGLE_SHEETS_CLIENT_EMAIL:latest,GOOGLE_SHEETS_PRIVATE_KEY=GOOGLE_SHEETS_PRIVATE_KEY:latest,GOOGLE_SHEETS_SPREADSHEET_ID=GOOGLE_SHEETS_SPREADSHEET_ID:latest,GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID=GOOGLE_SHEETS_HISTORICAL_SPREADSHEET_ID:latest,META_ACCESS_TOKEN=META_ACCESS_TOKEN:latest,TIKTOK_ACCESS_TOKEN=TIKTOK_ACCESS_TOKEN:latest,TIKTOK_ADVERTISER_IDS=TIKTOK_ADVERTISER_IDS:latest,META_TOKEN_BUSINESS01=META_TOKEN_BUSINESS01:latest,META_TOKEN_BUSINESS03=META_TOKEN_BUSINESS03:latest,META_TOKEN_BUSINESS08=META_TOKEN_BUSINESS08:latest,META_TOKEN_BUSINESS11=META_TOKEN_BUSINESS11:latest,META_TOKEN_BUSINESS13=META_TOKEN_BUSINESS13:latest,META_TOKEN_BUSINESS14=META_TOKEN_BUSINESS14:latest'
 
       - name: Show deployed URL
         run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
           echo "✅ Deployed successfully!"
-          echo "🌐 URL: https://adpilot-311489166272.asia-northeast1.run.app"
+          echo "🌐 URL: $URL"
