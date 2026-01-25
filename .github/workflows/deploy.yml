@@ -41,13 +41,12 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - name: Create Artifact Registry if not exists
+        continue-on-error: true
         run: |
-          gcloud artifacts repositories describe adpilot-repo \
-            --location=${{ env.REGION }} 2>/dev/null || \
           gcloud artifacts repositories create adpilot-repo \
             --repository-format=docker \
             --location=${{ env.REGION }} \
-            --description="AdPilot Docker Repository"
+            --description="AdPilot Docker Repository" 2>/dev/null || true
 
       - name: Build Docker image
         run: |
