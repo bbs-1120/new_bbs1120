@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getFullAnalysisData, getMonthlyProfit, getDailyTrendData, getProjectMonthlyData } from "@/lib/googleSheets";
 import { getCache, setCache } from "@/lib/cache";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const CACHE_KEY = "analysis_data";
 const CACHE_TTL = 60 * 60 * 1000; // 60分間キャッシュ（パフォーマンス改善）
@@ -212,6 +213,26 @@ export async function GET(request: Request) {
 
       cachedData = { sheetData, monthlyProfit, dailyTrend, projectMonthly };
       setCache(cacheKeyWithUser, cachedData, CACHE_TTL);
+      
+      // CPNマッピングをDBに保存（非同期）
+      const mappingsToSave = sheetData
+        .filter(row => row.cpnName && row.campaignId)
+        .map(row => ({
+          cpnName: row.cpnName,
+          campaignId: row.campaignId,
+          media: row.media === "Meta" ? "FB" : row.media || "その他",
+          accountName: row.accountName,
+        }));
+      
+      if (mappingsToSave.length > 0) {
+        Promise.all(mappingsToSave.map(m => 
+          prisma.cpn_campaign_mapping.upsert({
+            where: { cpn_name: m.cpnName },
+            update: { campaign_id: m.campaignId, media: m.media, account_name: m.accountName },
+            create: { cpn_name: m.cpnName, campaign_id: m.campaignId, media: m.media, account_name: m.accountName },
+          }).catch(() => {})
+        )).catch(() => {});
+      }
     }
 
     let { sheetData, monthlyProfit, dailyTrend, projectMonthly } = cachedData;

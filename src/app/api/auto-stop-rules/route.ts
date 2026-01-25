@@ -41,28 +41,40 @@ export async function GET(request: Request) {
     let members: string[] = [];
     
     if (includeProjects) {
-      const allData = await getFullAnalysisData();
-      const projectSet = new Set<string>();
-      const memberSet = new Set<string>();
-      
-      for (const row of allData) {
-        const cpnName = row.cpnName || "";
+      try {
+        const allData = await getFullAnalysisData();
+        const projectSet = new Set<string>();
+        const memberSet = new Set<string>();
         
-        // メンバー抽出
-        const memberMatch = cpnName.match(/新規グロース部_([^_]+)_/);
-        if (memberMatch) {
-          memberSet.add(memberMatch[1]);
+        for (const row of allData) {
+          const cpnName = row.cpnName || "";
+          
+          // メンバー抽出
+          const memberMatch = cpnName.match(/新規グロース部_([^_]+)_/);
+          if (memberMatch) {
+            memberSet.add(memberMatch[1]);
+          }
+          
+          // 案件抽出
+          const projectMatch = cpnName.match(/新規グロース部_[^_]+_([^_]+)_/);
+          if (projectMatch) {
+            projectSet.add(projectMatch[1]);
+          }
         }
         
-        // 案件抽出
-        const projectMatch = cpnName.match(/新規グロース部_[^_]+_([^_]+)_/);
-        if (projectMatch) {
-          projectSet.add(projectMatch[1]);
-        }
+        projects = Array.from(projectSet).sort();
+        members = Array.from(memberSet).sort();
+      } catch (error) {
+        console.error("Failed to fetch analysis data:", error);
+        // フォールバック: 既知のメンバーリストを返す
+        members = ["悠太", "圭市", "正弥", "祐輝"];
+        projects = [];
       }
       
-      projects = Array.from(projectSet).sort();
-      members = Array.from(memberSet).sort();
+      // メンバーが取得できなかった場合のフォールバック
+      if (members.length === 0) {
+        members = ["悠太", "圭市", "正弥", "祐輝"];
+      }
     }
     
     // 停止履歴を取得

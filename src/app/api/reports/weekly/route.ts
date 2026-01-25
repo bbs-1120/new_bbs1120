@@ -40,6 +40,52 @@ export async function GET(request: Request) {
     
     const allData = await getWeeklyData(weekKey);
     
+    // DBからcampaignIdマッピングを取得
+    const dbMappings = await prisma.cpn_campaign_mapping.findMany().catch(() => []);
+    const campaignIdMap = new Map<string, { campaignId: string; media: string }>();
+    for (const m of dbMappings) {
+      campaignIdMap.set(m.cpn_name, { campaignId: m.campaign_id, media: m.media });
+    }
+    
+    // 当日データから新しいマッピングを取得して保存
+    const { getFullAnalysisData } = await import("@/lib/googleSheets");
+    const todayData = await getFullAnalysisData().catch(() => []);
+    const newMappings: Array<{
+      cpnName: string;
+      campaignId: string;
+      media: string;
+      accountName?: string;
+    }> = [];
+    
+    for (const row of todayData) {
+      if (row.cpnName && row.campaignId) {
+        // まだマッピングに存在しない場合は追加
+        if (!campaignIdMap.has(row.cpnName)) {
+          campaignIdMap.set(row.cpnName, { 
+            campaignId: row.campaignId, 
+            media: row.media === "Meta" ? "FB" : row.media || "その他" 
+          });
+          newMappings.push({
+            cpnName: row.cpnName,
+            campaignId: row.campaignId,
+            media: row.media === "Meta" ? "FB" : row.media || "その他",
+            accountName: row.accountName,
+          });
+        }
+      }
+    }
+    
+    // 新しいマッピングをDBに保存（非同期で実行）
+    if (newMappings.length > 0) {
+      Promise.all(newMappings.map(m => 
+        prisma.cpn_campaign_mapping.upsert({
+          where: { cpn_name: m.cpnName },
+          update: { campaign_id: m.campaignId, media: m.media, account_name: m.accountName },
+          create: { cpn_name: m.cpnName, campaign_id: m.campaignId, media: m.media, account_name: m.accountName },
+        }).catch(() => {})
+      )).catch(() => {});
+    }
+    
     // メンバー一覧
     const memberSet = new Set<string>();
     for (const row of allData) {
@@ -59,16 +105,14 @@ export async function GET(request: Request) {
     const mediaMap = new Map<string, { spend: number; revenue: number; profit: number; cv: number; mcv: number }>();
     const projectMediaMap = new Map<string, { project: string; media: string; spend: number; revenue: number; profit: number; cv: number; mcv: number }>();
     
-    // CPN別データ（詳細指標付き）
-    const cpnList: {
+    // CPN別データ（同じCPN名は合算）
+    const cpnMap = new Map<string, {
       cpnKey: string; cpnName: string; media: string; memberName: string;
-      spend: number; revenue: number; profit: number; roas: number;
+      spend: number; revenue: number; profit: number;
       cv: number; mcv: number;
       impressions: number; clicks: number;
-      cpm: number; cpc: number; ctr: number; cpa: number;
-      mcvr: number; mcpa: number; cvr: number;
       campaignId?: string;
-    }[] = [];
+    }>();
     
     for (const row of filteredData) {
       const cpnName = row.cpnName || "";
@@ -118,36 +162,55 @@ export async function GET(request: Request) {
       mediaExisting.mcv += row.mcv || 0;
       mediaMap.set(media, mediaExisting);
       
-      // CPN追加（詳細指標含む）
+      // CPN合算（同じCPN名をキーに集計）
       const spend = row.spend || 0;
       const mcvVal = row.mcv || 0;
       const cvVal = row.cv || 0;
       const impressions = (row as { impressions?: number }).impressions || 0;
       const clicks = (row as { clicks?: number }).clicks || 0;
       
-      cpnList.push({
-        cpnKey: row.cpnKey || "",
-        cpnName,
-        media,
-        memberName,
-        spend,
-        revenue: row.revenue || 0,
-        profit: row.profit || 0,
-        roas: row.roas || 0,
-        cv: cvVal,
-        mcv: mcvVal,
-        impressions,
-        clicks,
-        cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
-        cpc: clicks > 0 ? spend / clicks : 0,
-        ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-        cpa: cvVal > 0 ? spend / cvVal : 0,
-        mcvr: clicks > 0 ? (mcvVal / clicks) * 100 : 0,
-        mcpa: mcvVal > 0 ? spend / mcvVal : 0,
-        cvr: mcvVal > 0 ? (cvVal / mcvVal) * 100 : 0,
-        campaignId: row.campaignId,
-      });
+      const cpnExisting = cpnMap.get(cpnName);
+      if (cpnExisting) {
+        cpnExisting.spend += spend;
+        cpnExisting.revenue += row.revenue || 0;
+        cpnExisting.profit += row.profit || 0;
+        cpnExisting.cv += cvVal;
+        cpnExisting.mcv += mcvVal;
+        cpnExisting.impressions += impressions;
+        cpnExisting.clicks += clicks;
+      } else {
+        // campaignIdはマッピングから取得（履歴データには含まれていないため）
+        const mapping = campaignIdMap.get(cpnName);
+        const mappedCampaignId = mapping?.campaignId || row.campaignId || "";
+        cpnMap.set(cpnName, {
+          cpnKey: row.cpnKey || cpnName,
+          cpnName,
+          media,
+          memberName,
+          spend,
+          revenue: row.revenue || 0,
+          profit: row.profit || 0,
+          cv: cvVal,
+          mcv: mcvVal,
+          impressions,
+          clicks,
+          campaignId: mappedCampaignId,
+        });
+      }
     }
+    
+    // CPNリストを生成（派生指標を計算）
+    const cpnList = Array.from(cpnMap.values()).map(cpn => ({
+      ...cpn,
+      roas: cpn.spend > 0 ? (cpn.revenue / cpn.spend) * 100 : 0,
+      cpm: cpn.impressions > 0 ? (cpn.spend / cpn.impressions) * 1000 : 0,
+      cpc: cpn.clicks > 0 ? cpn.spend / cpn.clicks : 0,
+      ctr: cpn.impressions > 0 ? (cpn.clicks / cpn.impressions) * 100 : 0,
+      cpa: cpn.cv > 0 ? cpn.spend / cpn.cv : 0,
+      mcvr: cpn.clicks > 0 ? (cpn.mcv / cpn.clicks) * 100 : 0,
+      mcpa: cpn.mcv > 0 ? cpn.spend / cpn.mcv : 0,
+      cvr: cpn.mcv > 0 ? (cpn.cv / cpn.mcv) * 100 : 0,
+    }));
     
     // ランキング
     const memberRankings = Array.from(memberMap.entries())

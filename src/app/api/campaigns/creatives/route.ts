@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 // Meta API からクリエイティブデータを取得
 async function getMetaCreatives(campaignId: string) {
   const accessTokens = [
-    process.env.META_ACCESS_TOKEN_BUSINESS_01,
-    process.env.META_ACCESS_TOKEN_BUSINESS_03,
-    process.env.META_ACCESS_TOKEN_BUSINESS_08,
-    process.env.META_ACCESS_TOKEN_BUSINESS_11,
-    process.env.META_ACCESS_TOKEN_BUSINESS_13,
-    process.env.META_ACCESS_TOKEN_BUSINESS_14,
+    process.env.META_TOKEN_BUSINESS01,
+    process.env.META_TOKEN_BUSINESS03,
+    process.env.META_TOKEN_BUSINESS08,
+    process.env.META_TOKEN_BUSINESS11,
+    process.env.META_TOKEN_BUSINESS13,
+    process.env.META_TOKEN_BUSINESS14,
+    process.env.META_ACCESS_TOKEN, // フォールバック
   ].filter(Boolean);
 
   for (const accessToken of accessTokens) {

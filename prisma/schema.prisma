@@ -296,3 +296,18 @@ model scheduled_on_history {
   
   @@index([executed_at])
 }
+
+// CPNとcampaignIdのマッピング（永続化）
+model cpn_campaign_mapping {
+  id            String   @id @default(uuid())
+  cpn_name      String   @unique
+  campaign_id   String
+  media         String
+  account_name  String?
+  advertiser_id String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([cpn_name])
+  @@index([campaign_id])
+}
