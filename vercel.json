@@ -1,4 +1,9 @@
 {
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/scheduled-on/execute",
+      "schedule": "0 15 * * *"
+    }
+  ]
 }
 

@@ -24,6 +24,7 @@ import {
   Plus,
   Minus,
   FileText,
+  Power,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -54,6 +55,13 @@ const navigation: NavCategory[] = [
       { name: "マイ分析", href: "/analysis", icon: BarChart3 },
       { name: "CPN診断", href: "/results/stop", icon: Stethoscope },
       { name: "判定結果一覧", href: "/results", icon: ListChecks },
+    ],
+  },
+  {
+    category: "自動化",
+    icon: Power,
+    items: [
+      { name: "翌日ON予約", href: "/scheduled-on", icon: Power },
     ],
   },
   {

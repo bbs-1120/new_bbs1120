@@ -265,3 +265,32 @@ model user_settings {
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 }
+
+// 翌日ON予約
+model scheduled_on {
+  id           String   @id @default(uuid())
+  cpn_name     String
+  media        String   // Meta, TikTok, Pangle
+  campaign_id  String?
+  scheduled_at DateTime @db.Date // 実行予定日
+  status       String   @default("pending") // pending, completed, failed
+  created_at   DateTime @default(now())
+  executed_at  DateTime?
+  error_message String?
+
+  @@index([scheduled_at])
+  @@index([status])
+  @@index([media])
+}
+
+// 翌日ON実行履歴
+model scheduled_on_history {
+  id             String   @id @default(uuid())
+  executed_at    DateTime @default(now())
+  total_count    Int
+  success_count  Int
+  failed_count   Int
+  details        Json     // 各CPNの結果詳細
+  
+  @@index([executed_at])
+}
