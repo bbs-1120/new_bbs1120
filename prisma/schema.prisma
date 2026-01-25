@@ -268,14 +268,16 @@ model user_settings {
 
 // 翌日ON予約
 model scheduled_on {
-  id           String   @id @default(uuid())
-  cpn_name     String
-  media        String   // Meta, TikTok, Pangle
-  campaign_id  String?
-  scheduled_at DateTime @db.Date // 実行予定日
-  status       String   @default("pending") // pending, completed, failed
-  created_at   DateTime @default(now())
-  executed_at  DateTime?
+  id            String   @id @default(uuid())
+  cpn_name      String
+  media         String   // Meta, TikTok, Pangle
+  campaign_id   String?  // キャンペーンID（CPID）
+  advertiser_id String?  // 広告主ID（TikTok/Pangle用）
+  account_name  String?  // 広告アカウント名
+  scheduled_at  DateTime @db.Date // 実行予定日
+  status        String   @default("pending") // pending, completed, failed
+  created_at    DateTime @default(now())
+  executed_at   DateTime?
   error_message String?
 
   @@index([scheduled_at])

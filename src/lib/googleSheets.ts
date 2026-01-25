@@ -844,4 +844,86 @@ export async function getComparisonData() {
   }
 }
 
+/**
+ * 指定期間の履歴データを取得（週次レポート用）
+ */
+export async function getHistoricalData(startDate: Date, endDate: Date) {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+  }
+
+  try {
+    const historicalData = await fetchHistoricalData(spreadsheetId);
+    
+    // 日付範囲でフィルタリング
+    const startTime = startDate.getTime();
+    const endTime = endDate.getTime() + 24 * 60 * 60 * 1000; // 終了日を含める
+    
+    const filteredData = historicalData.filter(row => {
+      const rowTime = row.date.getTime();
+      return rowTime >= startTime && rowTime < endTime;
+    });
+    
+    // CPN単位で集計
+    const cpnMap = new Map<string, {
+      cpnKey: string;
+      cpnName: string;
+      media: string;
+      spend: number;
+      revenue: number;
+      profit: number;
+      cv: number;
+      mcv: number;
+      impressions: number;
+      clicks: number;
+      teamName: string;
+      personName: string;
+      projectName: string;
+      campaignId: string;
+    }>();
+    
+    for (const row of filteredData) {
+      const key = row.cpnKey || row.cpnName;
+      if (!key) continue;
+      
+      const existing = cpnMap.get(key) || {
+        cpnKey: row.cpnKey,
+        cpnName: row.cpnName,
+        media: row.media,
+        spend: 0,
+        revenue: 0,
+        profit: 0,
+        cv: 0,
+        mcv: 0,
+        impressions: 0,
+        clicks: 0,
+        teamName: row.teamName,
+        personName: row.personName,
+        projectName: row.projectName,
+        campaignId: row.campaignId,
+      };
+      
+      existing.spend += row.spend || 0;
+      existing.revenue += row.revenue || 0;
+      existing.profit += row.profit || 0;
+      existing.cv += row.cv || 0;
+      existing.mcv += row.mcv || 0;
+      existing.impressions += row.impressions || 0;
+      existing.clicks += row.clicks || 0;
+      
+      cpnMap.set(key, existing);
+    }
+    
+    return Array.from(cpnMap.values()).map(cpn => ({
+      ...cpn,
+      roas: cpn.spend > 0 ? (cpn.revenue / cpn.spend) * 100 : 0,
+    }));
+  } catch (error) {
+    console.error("Error getting historical data:", error);
+    // フォールバック: 当日データを返す
+    return getFullAnalysisData();
+  }
+}
+
 export type { RawRowData };

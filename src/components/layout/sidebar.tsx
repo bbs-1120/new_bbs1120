@@ -8,23 +8,19 @@ import { cn } from "@/lib/utils";
 import {
   ListChecks,
   Settings,
-  History,
-  RefreshCw,
-  Send,
   BarChart3,
   PieChart,
   ChevronDown,
-  MessageSquare,
   Menu,
   X,
   Clock,
   LogOut,
   Home,
   Stethoscope,
-  Plus,
-  Minus,
   FileText,
   Power,
+  Users,
+  AlertTriangle,
 } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
@@ -53,6 +49,7 @@ const navigation: NavCategory[] = [
     icon: PieChart,
     items: [
       { name: "マイ分析", href: "/analysis", icon: BarChart3 },
+      { name: "チーム分析", href: "/team-analysis", icon: Users },
       { name: "CPN診断", href: "/results/stop", icon: Stethoscope },
       { name: "判定結果一覧", href: "/results", icon: ListChecks },
     ],
@@ -62,6 +59,7 @@ const navigation: NavCategory[] = [
     icon: Power,
     items: [
       { name: "翌日ON予約", href: "/scheduled-on", icon: Power },
+      { name: "自動停止ルール", href: "/auto-stop-rules", icon: AlertTriangle },
     ],
   },
   {
@@ -72,19 +70,9 @@ const navigation: NavCategory[] = [
     ],
   },
   {
-    category: "操作",
-    icon: Send,
-    items: [
-      { name: "追加用送信", href: "/send/add", icon: Plus },
-      { name: "削除用送信", href: "/send/delete", icon: Minus },
-      { name: "データ同期", href: "/sync", icon: RefreshCw },
-    ],
-  },
-  {
     category: "システム",
     icon: Settings,
     items: [
-      { name: "実行履歴", href: "/history", icon: History },
       { name: "設定", href: "/settings", icon: Settings },
     ],
   },

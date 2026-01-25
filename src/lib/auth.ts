@@ -9,7 +9,7 @@ import type { Provider } from "next-auth/providers";
 const prisma = new PrismaClient();
 
 // 許可するメールドメイン
-const ALLOWED_DOMAINS = ["shibuya-ad.com"];
+const ALLOWED_DOMAINS = ["shibuya-ad.com", "a-x.co.jp"];
 
 // プロバイダーを動的に構築
 const providers: Provider[] = [];
@@ -60,8 +60,7 @@ providers.push(
         email: user.email,
         name: user.name,
         role: user.role,
-        team_name: user.team_name,
-        mediaFilter: user,
+        teamName: user.team_name,
       };
     },
   })
@@ -132,34 +131,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true;
     },
     async jwt({ token, user, trigger, session }) {
-      // Credentialsログインの場合は直接user情報を使用
-      if (user && user.role) {
-        token.id = user.id;
-        token.role = user.role || "member";
-        token.team_name = user.team_name || null;
-        token = user || null;
-      } else if (user && user.email) {
-        // Googleログインの場合はDBから取得
-        const dbUser = await prisma.users.findUnique({
-          where: { email: user.email },
-        });
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.role = dbUser.role;
-          token.team_name = dbUser.team_name;
-          token = dbUser;
+      // 初回ログイン時
+      if (user) {
+        // Credentialsログインの場合
+        if (user.role) {
+          token.id = user.id;
+          token.role = user.role;
+          token.teamName = user.teamName || null;
+        } else if (user.email) {
+          // Googleログインの場合はDBから取得
+          const dbUser = await prisma.users.findUnique({
+            where: { email: user.email },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+            token.teamName = dbUser.team_name;
+          }
         }
       }
 
       // セッション更新時にDBから最新情報を取得
-      if (trigger === "update" && session) {
+      if (trigger === "update" && token.id) {
         const dbUser = await prisma.users.findUnique({
           where: { id: token.id as string },
         });
         if (dbUser) {
           token.role = dbUser.role;
-          token.team_name = dbUser.team_name;
-          token = dbUser;
+          token.teamName = dbUser.team_name;
         }
       }
 
@@ -168,9 +167,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.team_name = token.team_name as string | null;
-        session.user = token as string | null;
+        session.user.role = (token.role as string) || "member";
+        session.user.teamName = (token.teamName as string) || null;
       }
       return session;
     },

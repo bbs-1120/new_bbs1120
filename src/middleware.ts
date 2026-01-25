@@ -12,12 +12,13 @@ export default auth((req) => {
   const isAuthApi = pathname.startsWith("/api/auth");
   const isPublicApi = pathname.startsWith("/api/status");
   const isScheduledApi = pathname.startsWith("/api/scheduled-send");
+  const isScheduledOnExecute = pathname === "/api/scheduled-on/execute";
   const isSetupApi = pathname.startsWith("/api/admin/setup");
   const isRegisterApi = pathname.startsWith("/api/register");
   const isDebugApi = pathname.startsWith("/api/debug-consecutive");
 
   // 公開API・ページは常に許可
-  if (isAuthApi || isPublicApi || isScheduledApi || isSetupApi || isRegisterApi || isDebugApi) {
+  if (isAuthApi || isPublicApi || isScheduledApi || isScheduledOnExecute || isSetupApi || isRegisterApi || isDebugApi) {
     return NextResponse.next();
   }
 

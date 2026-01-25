@@ -1,5 +1,60 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { fetchTodayData } from "@/lib/googleSheets";
+import { getAdvertiserIdByAccountName } from "@/lib/advertiserMapping";
+
+// 日本時間の今日の日付を取得
+function getJSTDate(): Date {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const jstTime = new Date(now.getTime() + jstOffset);
+  return new Date(Date.UTC(jstTime.getUTCFullYear(), jstTime.getUTCMonth(), jstTime.getUTCDate()));
+}
+
+// CPN名からキャンペーンIDと広告主IDを取得するためのキャッシュ
+let cpnDataCache: {
+  data: Map<string, { campaignId: string; accountName: string; media: string }>;
+  timestamp: number;
+} | null = null;
+
+const CACHE_TTL = 30 * 60 * 1000; // 30分
+
+// Googleシートからデータを取得してキャッシュ
+async function getCpnDataMap() {
+  const now = Date.now();
+  
+  if (cpnDataCache && (now - cpnDataCache.timestamp) < CACHE_TTL) {
+    return cpnDataCache.data;
+  }
+
+  try {
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    if (!spreadsheetId) {
+      console.error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+      return new Map();
+    }
+
+    const todayData = await fetchTodayData(spreadsheetId);
+    const cpnMap = new Map<string, { campaignId: string; accountName: string; media: string }>();
+
+    for (const row of todayData) {
+      if (row.cpnName && row.campaignId) {
+        cpnMap.set(row.cpnName, {
+          campaignId: row.campaignId,
+          accountName: row.accountName,
+          media: row.media,
+        });
+      }
+    }
+
+    cpnDataCache = { data: cpnMap, timestamp: now };
+    console.log(`CPN data cache updated: ${cpnMap.size} entries`);
+    return cpnMap;
+  } catch (error) {
+    console.error("Error fetching CPN data for mapping:", error);
+    return cpnDataCache?.data || new Map();
+  }
+}
 
 // GET: 予約一覧と履歴を取得
 export async function GET(request: Request) {
@@ -8,7 +63,6 @@ export async function GET(request: Request) {
     const type = searchParams.get("type") || "pending";
 
     if (type === "history") {
-      // 実行履歴を取得
       const history = await prisma.scheduled_on_history.findMany({
         orderBy: { executed_at: "desc" },
         take: 30,
@@ -20,19 +74,9 @@ export async function GET(request: Request) {
       });
     }
 
-    // 翌日の予約を取得
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    // pending状態の予約を全て取得
     const scheduled = await prisma.scheduled_on.findMany({
       where: {
-        scheduled_at: {
-          gte: today,
-        },
         status: "pending",
       },
       orderBy: [{ media: "asc" }, { cpn_name: "asc" }],
@@ -65,7 +109,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: 予約を登録（コピペ一括登録対応）
+// POST: 予約を登録
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -73,12 +117,12 @@ export async function POST(request: Request) {
 
     if (!cpnNames || !media) {
       return NextResponse.json(
-        { success: false, error: "cpnNamesとmediaは必須です" },
+        { success: false, error: "CPN名と媒体を指定してください" },
         { status: 400 }
       );
     }
 
-    // 改行で分割してCPN名リストを作成
+    // CPN名をリスト化（改行区切り）
     const cpnList = cpnNames
       .split("\n")
       .map((name: string) => name.trim())
@@ -91,23 +135,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // 翌日の日付を設定
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
+    // 日本時間の今日の日付
+    const todayJST = getJSTDate();
 
-    // 重複チェックして登録
-    const results = [];
+    // CPN名からキャンペーンIDを取得するためのマップ
+    const cpnDataMap = await getCpnDataMap();
+
+    const results: { 
+      cpnName: string; 
+      status: string; 
+      campaignId?: string | null;
+      advertiserId?: string | null;
+      accountName?: string | null;
+    }[] = [];
     let addedCount = 0;
     let duplicateCount = 0;
+    let unmappedCount = 0;
 
     for (const cpnName of cpnList) {
-      // 同じ日に同じCPNが既に登録されていないかチェック
+      // 同じCPNが既にpendingで登録されていないかチェック
       const existing = await prisma.scheduled_on.findFirst({
         where: {
           cpn_name: cpnName,
-          media,
-          scheduled_at: tomorrow,
           status: "pending",
         },
       });
@@ -118,24 +167,44 @@ export async function POST(request: Request) {
         continue;
       }
 
+      // キャンペーンIDと広告主IDを自動取得
+      const cpnData = cpnDataMap.get(cpnName);
+      const campaignId = cpnData?.campaignId || null;
+      const accountName = cpnData?.accountName || null;
+      
+      // TikTok/Pangleの場合は広告主IDを取得
+      let advertiserId: string | null = null;
+      if ((media === "TikTok" || media === "Pangle") && accountName) {
+        advertiserId = getAdvertiserIdByAccountName(accountName);
+      }
+
+      if (!campaignId) {
+        unmappedCount++;
+      }
+
+      // 予約を作成（scheduled_atは今日の日付、0:00に実行される）
       await prisma.scheduled_on.create({
         data: {
           cpn_name: cpnName,
-          media,
-          scheduled_at: tomorrow,
+          media: media === "TikTok/Pangle" ? "TikTok" : media,
+          campaign_id: campaignId,
+          advertiser_id: advertiserId,
+          account_name: accountName,
+          scheduled_at: todayJST,
           status: "pending",
         },
       });
 
       addedCount++;
-      results.push({ cpnName, status: "added" });
+      results.push({ cpnName, status: "added", campaignId, advertiserId, accountName });
     }
 
     return NextResponse.json({
       success: true,
-      message: `${addedCount}件追加、${duplicateCount}件重複`,
+      message: `${addedCount}件追加、${duplicateCount}件重複、${unmappedCount}件未紐付け`,
       addedCount,
       duplicateCount,
+      unmappedCount,
       results,
     });
   } catch (error) {
@@ -153,50 +222,44 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const media = searchParams.get("media");
-    const all = searchParams.get("all");
 
-    // 全削除
-    if (all === "true") {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-
-      const result = await prisma.scheduled_on.deleteMany({
-        where: {
-          scheduled_at: tomorrow,
-          status: "pending",
-          ...(media ? { media } : {}),
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        deleted: result.count,
-      });
-    }
-
-    // 個別削除
     if (id) {
+      // 単一削除
       await prisma.scheduled_on.delete({
         where: { id },
       });
 
       return NextResponse.json({
         success: true,
-        message: "削除しました",
+        message: "予約を削除しました",
       });
-    }
+    } else if (media) {
+      // 媒体別全削除
+      const mediaToDelete = media === "TikTok/Pangle" ? ["TikTok", "Pangle"] : [media];
+      
+      const deleted = await prisma.scheduled_on.deleteMany({
+        where: {
+          media: { in: mediaToDelete },
+          status: "pending",
+        },
+      });
 
-    return NextResponse.json(
-      { success: false, error: "idまたはallパラメータが必要です" },
-      { status: 400 }
-    );
+      return NextResponse.json({
+        success: true,
+        message: `${deleted.count}件の予約を削除しました`,
+        deletedCount: deleted.count,
+      });
+    } else {
+      return NextResponse.json(
+        { success: false, error: "削除対象を指定してください" },
+        { status: 400 }
+      );
+    }
   } catch (error) {
     console.error("Delete scheduled ON error:", error);
     return NextResponse.json(
-      { success: false, error: "削除に失敗しました" },
+      { success: false, error: "予約の削除に失敗しました" },
       { status: 500 }
     );
   }
 }
-

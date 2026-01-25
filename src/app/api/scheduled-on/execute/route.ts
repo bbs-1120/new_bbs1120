@@ -2,24 +2,33 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendErrorNotification } from "@/lib/chatwork";
 
+// 日本時間の今日の日付を取得
+function getJSTDate(): Date {
+  const now = new Date();
+  // JSTはUTC+9
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const jstTime = new Date(now.getTime() + jstOffset);
+  // 日付のみ（時刻を0:00に）
+  return new Date(Date.UTC(jstTime.getUTCFullYear(), jstTime.getUTCMonth(), jstTime.getUTCDate()));
+}
+
 // Meta APIでキャンペーンをONにする
 async function turnOnMetaCampaign(
   cpnName: string,
   campaignId?: string | null
 ): Promise<{ success: boolean; error?: string }> {
-  // キャンペーンIDがない場合はスキップ
   if (!campaignId) {
     return { success: false, error: "キャンペーンIDがありません" };
   }
 
   const tokens = [
     process.env.META_ACCESS_TOKEN,
-    process.env.META_TOKEN_BUSINESS01,
-    process.env.META_TOKEN_BUSINESS03,
-    process.env.META_TOKEN_BUSINESS08,
-    process.env.META_TOKEN_BUSINESS11,
-    process.env.META_TOKEN_BUSINESS13,
-    process.env.META_TOKEN_BUSINESS14,
+    process.env.META_ACCESS_TOKEN_BUSINESS_01,
+    process.env.META_ACCESS_TOKEN_BUSINESS_03,
+    process.env.META_ACCESS_TOKEN_BUSINESS_08,
+    process.env.META_ACCESS_TOKEN_BUSINESS_11,
+    process.env.META_ACCESS_TOKEN_BUSINESS_13,
+    process.env.META_ACCESS_TOKEN_BUSINESS_14,
   ].filter(Boolean);
 
   for (const token of tokens) {
@@ -94,20 +103,22 @@ async function turnOnTikTokCampaign(
   }
 }
 
-// POST: 0:00に実行される自動ON処理
-export async function POST(request: Request) {
+// POST: 0:00 JSTに実行される自動ON処理
+export async function POST() {
   try {
-    // 今日の日付を取得
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // 日本時間の今日の日付を取得
+    const todayJST = getJSTDate();
+    
+    console.log(`[Scheduled ON] Executing at JST date: ${todayJST.toISOString()}`);
 
-    // 今日実行予定の予約を取得
+    // 今日実行予定の予約を取得（pending状態のもの全て）
     const scheduled = await prisma.scheduled_on.findMany({
       where: {
-        scheduled_at: today,
         status: "pending",
       },
     });
+
+    console.log(`[Scheduled ON] Found ${scheduled.length} pending items`);
 
     if (scheduled.length === 0) {
       return NextResponse.json({
@@ -132,14 +143,12 @@ export async function POST(request: Request) {
       if (item.media === "Meta") {
         result = await turnOnMetaCampaign(item.cpn_name, item.campaign_id);
       } else if (item.media === "TikTok" || item.media === "Pangle") {
-        // TikTok/Pangleの場合は広告主IDも必要
-        // TODO: advertiserIdのマッピングを追加
-        result = await turnOnTikTokCampaign(item.cpn_name, item.campaign_id, null);
+        result = await turnOnTikTokCampaign(item.cpn_name, item.campaign_id, item.advertiser_id);
       } else {
         result = { success: false, error: "不明な媒体です" };
       }
 
-      // ステータスを更新
+      // ステータスを更新（完了または失敗）
       await prisma.scheduled_on.update({
         where: { id: item.id },
         data: {
@@ -176,6 +185,14 @@ export async function POST(request: Request) {
       },
     });
 
+    // 実行後、古いpendingレコードを削除（リセット）
+    // 失敗したものは次回確認のため残しておくが、completedは削除
+    await prisma.scheduled_on.deleteMany({
+      where: {
+        status: "completed",
+      },
+    });
+
     // 失敗があった場合はChatworkに通知
     if (failedCount > 0) {
       const failedItems = results.filter((r) => !r.success);
@@ -204,7 +221,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Execute scheduled ON error:", error);
 
-    // エラー通知
     await sendErrorNotification(
       "system",
       "翌日ON自動実行でシステムエラーが発生しました",
@@ -223,12 +239,8 @@ export async function POST(request: Request) {
 
 // GET: ステータス確認
 export async function GET() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const pendingCount = await prisma.scheduled_on.count({
     where: {
-      scheduled_at: today,
       status: "pending",
     },
   });
@@ -239,4 +251,3 @@ export async function GET() {
     description: "予約されたCPNを自動でONにする",
   });
 }
-
