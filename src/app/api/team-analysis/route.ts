@@ -236,8 +236,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Team analysis API error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "チームデータの取得に失敗しました" },
+      { success: false, error: "チームデータの取得に失敗しました", details: errorMessage },
       { status: 500 }
     );
   }

@@ -5,17 +5,25 @@ function getGoogleSheetsClient() {
   const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n");
   const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
 
-  if (!privateKey || !clientEmail) {
-    throw new Error("Google Sheets API credentials are not configured");
+  if (!privateKey) {
+    throw new Error("GOOGLE_SHEETS_PRIVATE_KEY is not configured");
+  }
+  if (!clientEmail) {
+    throw new Error("GOOGLE_SHEETS_CLIENT_EMAIL is not configured");
   }
 
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
+  try {
+    const auth = new google.auth.JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    });
 
-  return google.sheets({ version: "v4", auth });
+    return google.sheets({ version: "v4", auth });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Failed to initialize Google Sheets client: ${message}`);
+  }
 }
 
 // RAWシートのカラムマッピング
