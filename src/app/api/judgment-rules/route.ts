@@ -2,6 +2,29 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// ルール変更ログを保存
+async function saveRuleChangeLog(
+  userName: string,
+  actionType: string,
+  ruleName: string,
+  ruleType: string
+) {
+  try {
+    await prisma.execution_logs.create({
+      data: {
+        executed_by: userName,
+        action_type: `rule_${actionType}`,
+        target_count: 1,
+        rule_version: ruleType,
+        status: "success",
+        error_message: `ルール「${ruleName}」を${actionType === "create" ? "作成" : actionType === "update" ? "更新" : "削除"}`,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to save rule change log:", e);
+  }
+}
+
 // GET: ユーザーの判定ルールを取得
 export async function GET() {
   try {
@@ -60,6 +83,14 @@ export async function POST(request: Request) {
       },
     });
 
+    // ログを保存
+    await saveRuleChangeLog(
+      session.user.teamName || session.user.name || "unknown",
+      "create",
+      rule_name,
+      rule_type
+    );
+
     return NextResponse.json({ success: true, rule });
   } catch (error) {
     console.error("Judgment rules POST error:", error);
@@ -114,6 +145,14 @@ export async function PUT(request: Request) {
       },
     });
 
+    // ログを保存
+    await saveRuleChangeLog(
+      session.user.teamName || session.user.name || "unknown",
+      "update",
+      rule.rule_name,
+      rule.rule_type
+    );
+
     return NextResponse.json({ success: true, rule });
   } catch (error) {
     console.error("Judgment rules PUT error:", error);
@@ -158,6 +197,14 @@ export async function DELETE(request: Request) {
     }
 
     await prisma.member_judgment_rules.delete({ where: { id } });
+
+    // ログを保存
+    await saveRuleChangeLog(
+      session.user.teamName || session.user.name || "unknown",
+      "delete",
+      existingRule.rule_name,
+      existingRule.rule_type
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

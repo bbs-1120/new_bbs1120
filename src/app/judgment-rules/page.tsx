@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Save, AlertCircle, CheckCircle, Settings, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Save, AlertCircle, CheckCircle, Settings, ArrowLeft, History, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 interface RuleCondition {
@@ -20,6 +20,17 @@ interface JudgmentRule {
   priority: number;
   conditions: RuleCondition[];
   is_active: boolean;
+}
+
+interface LogEntry {
+  id: string;
+  executed_at: string;
+  executed_by: string;
+  action_type: string;
+  target_count: number;
+  rule_version: string;
+  status: string;
+  error_message: string | null;
 }
 
 const FIELD_OPTIONS = [
@@ -49,11 +60,13 @@ const RULE_TYPE_OPTIONS = [
 
 export default function JudgmentRulesPage() {
   const [rules, setRules] = useState<JudgmentRule[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingRule, setEditingRule] = useState<JudgmentRule | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   // 新規ルールのテンプレート
   const createNewRule = (): JudgmentRule => ({
@@ -64,6 +77,19 @@ export default function JudgmentRulesPage() {
     conditions: [{ field: "profit7Days", operator: "<=", value: -30000 }],
     is_active: true,
   });
+
+  // ログを取得
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch("/api/judgment-rules/logs?limit=20");
+      const data = await res.json();
+      if (data.success) {
+        setLogs(data.logs);
+      }
+    } catch (error) {
+      console.error("Failed to fetch logs:", error);
+    }
+  };
 
   // ルールを取得
   useEffect(() => {
@@ -81,6 +107,7 @@ export default function JudgmentRulesPage() {
       }
     };
     fetchRules();
+    fetchLogs();
   }, []);
 
   // ルールを保存
@@ -104,6 +131,7 @@ export default function JudgmentRulesPage() {
         setMessage({ type: "success", text: "ルールを保存しました" });
         setEditingRule(null);
         setShowAddModal(false);
+        fetchLogs(); // ログを再取得
       } else {
         setMessage({ type: "error", text: data.error || "保存に失敗しました" });
       }
@@ -126,6 +154,7 @@ export default function JudgmentRulesPage() {
       if (data.success) {
         setRules(rules.filter(r => r.id !== id));
         setMessage({ type: "success", text: "ルールを削除しました" });
+        fetchLogs(); // ログを再取得
       } else {
         setMessage({ type: "error", text: data.error || "削除に失敗しました" });
       }
@@ -431,6 +460,65 @@ export default function JudgmentRulesPage() {
             </Card>
           </div>
         )}
+
+        {/* 操作履歴セクション */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <History className="h-5 w-5" />
+              操作履歴
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { fetchLogs(); setShowLogs(!showLogs); }}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              {showLogs ? "非表示" : "表示"}
+            </Button>
+          </div>
+
+          {showLogs && (
+            <Card>
+              <CardContent className="py-4">
+                {logs.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-4">操作履歴はまだありません</p>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {logs.map((log) => (
+                      <div key={log.id} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                          log.action_type === "judgment_refresh" ? "bg-blue-500" :
+                          log.action_type === "rule_create" ? "bg-emerald-500" :
+                          log.action_type === "rule_update" ? "bg-amber-500" :
+                          log.action_type === "rule_delete" ? "bg-red-500" : "bg-slate-500"
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium text-slate-800">
+                              {log.action_type === "judgment_refresh" ? "判定更新" :
+                               log.action_type === "rule_create" ? "ルール作成" :
+                               log.action_type === "rule_update" ? "ルール更新" :
+                               log.action_type === "rule_delete" ? "ルール削除" : log.action_type}
+                            </span>
+                            <span className="text-slate-400">•</span>
+                            <span className="text-slate-500">{log.executed_by}</span>
+                          </div>
+                          {log.error_message && (
+                            <p className="text-xs text-slate-600 mt-0.5">{log.error_message}</p>
+                          )}
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {new Date(log.executed_at).toLocaleString("ja-JP")}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </main>
     </div>
   );

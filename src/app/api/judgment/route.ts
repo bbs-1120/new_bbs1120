@@ -7,6 +7,29 @@ import { prisma } from "@/lib/prisma";
 
 const CACHE_KEY = "judgment_results";
 
+// ログを保存する関数
+async function saveJudgmentLog(
+  userId: string,
+  userName: string,
+  actionType: string,
+  details: Record<string, unknown>
+) {
+  try {
+    await prisma.execution_logs.create({
+      data: {
+        executed_by: userName || userId,
+        action_type: actionType,
+        target_count: (details.count as number) || 0,
+        rule_version: "custom",
+        status: "success",
+        error_message: details.customRulesCount ? `カスタムルール${details.customRulesCount}件適用` : null,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to save judgment log:", e);
+  }
+}
+
 // GET: 判定結果を取得
 export async function GET(request: Request) {
   try {
@@ -18,6 +41,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const judgment = searchParams.get("judgment"); // フィルター用
+    const forceRefresh = searchParams.get("refresh") === "true"; // 強制更新
 
     // ユーザーのカスタム判定ルールを取得
     let customRules: CustomRule[] = [];
@@ -47,7 +71,7 @@ export async function GET(request: Request) {
     const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
       ? CACHE_KEY 
       : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
-    let results = hasCustomRules ? null : getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
+    let results = (hasCustomRules || forceRefresh) ? null : getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
 
     if (!results) {
       // マイ分析と同じデータソースからデータを取得
@@ -93,7 +117,19 @@ export async function GET(request: Request) {
       } else {
         results = judgeAllCpns(cpnList);
         // キャッシュに保存（60分）- カスタムルールがない場合のみ
-        setCache(cacheKeyWithUser, results, 60 * 60 * 1000);
+        if (!forceRefresh) {
+          setCache(cacheKeyWithUser, results, 60 * 60 * 1000);
+        }
+      }
+
+      // 強制更新の場合はログを保存
+      if (forceRefresh && session?.user?.id) {
+        saveJudgmentLog(
+          session.user.id,
+          session.user.teamName || session.user.name || "unknown",
+          "judgment_refresh",
+          { count: results.length, customRulesCount: customRules.length }
+        );
       }
     }
 

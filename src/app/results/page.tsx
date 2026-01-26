@@ -26,6 +26,7 @@ const judgmentOptions = ["全て", "停止", "作り替え", "継続", "エラ�
 export default function ResultsPage() {
   const [results, setResults] = useState<JudgmentResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMedia, setSelectedMedia] = useState("全て");
   const [selectedJudgment, setSelectedJudgment] = useState("全て");
@@ -33,24 +34,40 @@ export default function ResultsPage() {
   const [sortKey, setSortKey] = useState<string>("todayProfit");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // データを取得
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch("/api/judgment");
-        const data = await response.json();
-        
-        if (data.success) {
-          setResults(data.results);
-        }
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchData = async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setIsRefreshing(true);
       }
-    };
+      const url = forceRefresh ? "/api/judgment?refresh=true" : "/api/judgment";
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success) {
+        setResults(data.results);
+        setLastUpdated(new Date());
+        if (forceRefresh) {
+          setRefreshMessage({ type: "success", text: `${data.results.length}件のCPNを再判定しました` });
+          setTimeout(() => setRefreshMessage(null), 3000);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      if (forceRefresh) {
+        setRefreshMessage({ type: "error", text: "更新に失敗しました" });
+        setTimeout(() => setRefreshMessage(null), 3000);
+      }
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -226,6 +243,32 @@ export default function ResultsPage() {
         title="仕分け結果"
         description={`CPN仕分け結果の一覧表示（${results.length}件）`}
       />
+
+      {/* 更新ボタンとステータス */}
+      <div className="flex items-center justify-between mb-4 bg-white rounded-xl border border-slate-200 p-3">
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => fetchData(true)}
+            disabled={isRefreshing}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "更新中..." : "ルール適用・更新"}
+          </Button>
+          {lastUpdated && (
+            <span className="text-xs text-slate-500">
+              最終更新: {lastUpdated.toLocaleTimeString("ja-JP")}
+            </span>
+          )}
+        </div>
+        {refreshMessage && (
+          <div className={`text-sm px-3 py-1 rounded-full ${
+            refreshMessage.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+          }`}>
+            {refreshMessage.text}
+          </div>
+        )}
+      </div>
 
       {/* 媒体タブ - スマホ対応 */}
       <div className="flex flex-wrap gap-1.5 lg:gap-2 mb-4 lg:mb-6 overflow-x-auto scrollbar-hide -mx-4 px-4 lg:mx-0 lg:px-0">
