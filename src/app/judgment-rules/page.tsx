@@ -196,7 +196,7 @@ export default function JudgmentRulesPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50">
-        <Header title="判定ルール設定" subtitle="カスタム判定条件の管理" />
+        <Header title="判定ルール設定" description="カスタム判定条件の管理" />
         <main className="container mx-auto px-4 py-8">
           <div className="animate-pulse space-y-4">
             <div className="h-32 bg-slate-200 rounded-xl" />
@@ -209,7 +209,7 @@ export default function JudgmentRulesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header title="判定ルール設定" subtitle="カスタム判定条件の管理" />
+      <Header title="判定ルール設定" description="カスタム判定条件の管理" />
       
       <main className="container mx-auto px-4 py-6">
         {/* 戻るリンク */}
@@ -295,14 +295,14 @@ export default function JudgmentRulesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => setEditingRule(rule)}
                       >
                         編集
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => deleteRule(rule.id)}
                         className="text-red-600 hover:text-red-700"
@@ -416,7 +416,7 @@ export default function JudgmentRulesPage() {
                     ))}
                   </div>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => addCondition(editingRule)}
                     className="mt-2"
@@ -441,7 +441,7 @@ export default function JudgmentRulesPage() {
                 {/* ボタン */}
                 <div className="flex gap-2 pt-4">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => { setEditingRule(null); setShowAddModal(false); }}
                     className="flex-1"
                   >
@@ -469,7 +469,7 @@ export default function JudgmentRulesPage() {
               操作履歴
             </h2>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => { fetchLogs(); setShowLogs(!showLogs); }}
             >

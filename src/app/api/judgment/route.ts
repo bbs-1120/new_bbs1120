@@ -56,7 +56,7 @@ export async function GET(request: Request) {
           rule_type: r.rule_type as "stop" | "replace" | "continue",
           rule_name: r.rule_name,
           priority: r.priority,
-          conditions: r.conditions as RuleCondition[],
+          conditions: r.conditions as unknown as RuleCondition[],
           is_active: r.is_active,
         }));
       } catch (e) {
