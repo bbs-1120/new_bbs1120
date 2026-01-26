@@ -73,6 +73,7 @@ interface CpnData {
 }
 
 interface CreativeData {
+  adId?: string;
   name: string;
   spend: number;
   impressions: number;
@@ -157,6 +158,8 @@ export default function WeeklyReportsPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "project-media" | "cpn-list">("overview");
   const [selectedProjectMedia, setSelectedProjectMedia] = useState<{project: string; media: string} | null>(null);
   const [projectComments, setProjectComments] = useState<Record<string, ProjectComment>>({});
+  const [videoModal, setVideoModal] = useState<{ url: string; name: string } | null>(null);
+  const [videoLoading, setVideoLoading] = useState<string | null>(null);
   const [creatives, setCreatives] = useState<CreativeData[]>([]);
   const [creativesLoading, setCreativesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -203,12 +206,37 @@ export default function WeeklyReportsPage() {
     if (selectedWeek) fetchData(selectedWeek, selectedMember);
   }, [selectedWeek, selectedMember, fetchData]);
   
-  const fetchCreatives = async (cpn: CpnData) => {
-    if (!cpn.campaignId) return;
+  // 週の開始日と終了日を計算する関数
+  const getWeekDates = useCallback((weekKey: string) => {
+    const match = weekKey.match(/(\d{4})-W(\d{2})/);
+    if (!match) return { startDate: "", endDate: "" };
+    
+    const year = parseInt(match[1], 10);
+    const week = parseInt(match[2], 10);
+    
+    // ISO週の最初の日（月曜日）を計算
+    const jan4 = new Date(year, 0, 4);
+    const dayOfWeek = jan4.getDay() || 7;
+    const firstMonday = new Date(jan4);
+    firstMonday.setDate(jan4.getDate() - dayOfWeek + 1);
+    
+    const weekStart = new Date(firstMonday);
+    weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
+    
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    const formatDate = (d: Date) => d.toISOString().split("T")[0];
+    return { startDate: formatDate(weekStart), endDate: formatDate(weekEnd) };
+  }, []);
+
+  const fetchCreatives = useCallback(async (cpn: CpnData) => {
+    if (!cpn.campaignId || !selectedWeek) return;
     setCreativesLoading(true);
     setCreatives([]);
     try {
-      const res = await fetch(`/api/campaigns/creatives?campaignId=${cpn.campaignId}&media=${cpn.media}`);
+      const { startDate, endDate } = getWeekDates(selectedWeek);
+      const res = await fetch(`/api/campaigns/creatives?campaignId=${cpn.campaignId}&media=${cpn.media}&startDate=${startDate}&endDate=${endDate}`);
       const data = await res.json();
       if (data.success) setCreatives(data.creatives || []);
     } catch (error) {
@@ -216,11 +244,45 @@ export default function WeeklyReportsPage() {
     } finally {
       setCreativesLoading(false);
     }
-  };
+  }, [selectedWeek, getWeekDates]);
   
   useEffect(() => {
     if (selectedCpnDetail) fetchCreatives(selectedCpnDetail);
-  }, [selectedCpnDetail]);
+  }, [selectedCpnDetail, fetchCreatives]);
+
+  // 動画を読み込んで再生モーダルを開く
+  const openVideoModal = async (cr: CreativeData) => {
+    if (cr.videoUrl) {
+      setVideoModal({ url: cr.videoUrl, name: cr.name });
+      return;
+    }
+    
+    // videoUrlがない場合はAPIから取得を試みる
+    if (!selectedCpnDetail?.campaignId) return;
+    
+    setVideoLoading(cr.name);
+    try {
+      // adIdがある場合は広告IDで取得、なければキャンペーンIDで取得
+      const adIdParam = cr.adId ? `&adId=${cr.adId}` : "";
+      const res = await fetch(`/api/campaigns/video?campaignId=${selectedCpnDetail.campaignId}&media=${selectedCpnDetail.media}${adIdParam}`);
+      const data = await res.json();
+      if (data.success && data.videoUrl) {
+        setVideoModal({ url: data.videoUrl, name: cr.name });
+      } else {
+        // サムネイルがあれば画像モーダルとして表示
+        if (cr.thumbnailUrl) {
+          window.open(cr.thumbnailUrl, "_blank");
+        } else {
+          alert("動画を取得できませんでした。Meta APIの権限制限の可能性があります。");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch video:", error);
+      alert("動画の取得に失敗しました");
+    } finally {
+      setVideoLoading(null);
+    }
+  };
   
   const saveComments = async () => {
     setIsSaving(true);
@@ -380,7 +442,7 @@ export default function WeeklyReportsPage() {
               
               <div className="flex justify-center"><Button onClick={saveComments} disabled={isSaving} className="px-8"><Save className="h-4 w-4 mr-2" />{isSaving ? "保存中..." : "コメントを保存"}</Button></div>
               
-              <Card><CardHeader className="bg-blue-600 text-white py-3 rounded-t-lg"><CardTitle className="text-base">📝 今週やること（{selectedMember}）</CardTitle></CardHeader><CardContent className="p-4"><div className="flex gap-2 mb-4"><input type="text" value={newTask} onChange={(e) => setNewTask(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="タスクを追加..." className="flex-1 px-4 py-2 border rounded-lg" /><Button onClick={addTask}><Plus className="h-4 w-4" /></Button></div><div className="space-y-2">{tasks.map((task) => (<div key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border ${task.completed ? "bg-slate-100" : "bg-white"}`}><button onClick={() => toggleTask(task.id)} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${task.completed ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300"}`}>{task.completed && <Check className="h-4 w-4" />}</button><span className={`flex-1 ${task.completed ? "line-through text-slate-400" : ""}`}>{task.content}</span><button onClick={() => deleteTask(task.id)} className="text-red-500 p-1"><Trash2 className="h-4 w-4" /></button></div>))}</div></CardContent></Card>
+              <Card><CardHeader className="bg-blue-600 text-white py-3 rounded-t-lg"><CardTitle className="text-base">📝 今週やること（{selectedMember}）</CardTitle></CardHeader><CardContent className="p-4"><div className="flex gap-2 mb-4"><input type="text" value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="タスクを追加..." className="flex-1 px-4 py-2 border rounded-lg" /><Button onClick={addTask} className="px-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4 mr-1" />追加</Button></div><div className="space-y-2">{tasks.map((task) => (<div key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border ${task.completed ? "bg-slate-100" : "bg-white"}`}><button onClick={() => toggleTask(task.id)} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${task.completed ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300"}`}>{task.completed && <Check className="h-4 w-4" />}</button><span className={`flex-1 ${task.completed ? "line-through text-slate-400" : ""}`}>{task.content}</span><button onClick={() => deleteTask(task.id)} className="text-red-500 p-1"><Trash2 className="h-4 w-4" /></button></div>))}</div></CardContent></Card>
               
               {/* TOP10テーブル */}
               <Card>
@@ -489,18 +551,18 @@ export default function WeeklyReportsPage() {
                     <CardHeader className="bg-slate-700 text-white py-3 rounded-t-lg">
                       <CardTitle className="text-base">📋 {selectedProjectMedia.project}（{selectedProjectMedia.media}）のCPN一覧 ({selectedProjectCpns.length}件)</CardTitle>
                     </CardHeader>
-                    <CardContent className="p-0 overflow-x-auto max-h-[600px]">
+                    <CardContent className="p-0 overflow-x-auto overflow-y-auto max-h-[600px]">
                       {selectedProjectCpns.length === 0 ? (
                         <div className="p-8 text-center text-slate-500">該当するCPNがありません</div>
                       ) : (
-                        <table className="w-full text-xs whitespace-nowrap">
+                        <table className="text-xs whitespace-nowrap min-w-max">
                           <thead className="bg-slate-100 sticky top-0">
-                            <tr><th className="p-2 text-left">CPN名</th><th className="p-2 text-right">消化</th><th className="p-2 text-right">MCV</th><th className="p-2 text-right">CV</th><th className="p-2 text-right">売上</th><th className="p-2 text-right">利益</th><th className="p-2 text-right">ROAS</th><th className="p-2 text-right">CPA</th><th className="p-2 text-right">CPM</th><th className="p-2 text-right">Imp.</th><th className="p-2 text-right">Clicks</th><th className="p-2 text-right">CTR</th><th className="p-2 text-right">CPC</th><th className="p-2 text-right">MCVR</th><th className="p-2 text-right">MCPA</th><th className="p-2 text-right">CVR</th></tr>
+                            <tr><th className="p-2 text-left sticky left-0 bg-slate-100 z-10">CPN名</th><th className="p-2 text-right">消化</th><th className="p-2 text-right">MCV</th><th className="p-2 text-right">CV</th><th className="p-2 text-right">売上</th><th className="p-2 text-right">利益</th><th className="p-2 text-right">ROAS</th><th className="p-2 text-right">CPA</th><th className="p-2 text-right">CPM</th><th className="p-2 text-right">Imp.</th><th className="p-2 text-right">Clicks</th><th className="p-2 text-right">CTR</th><th className="p-2 text-right">CPC</th><th className="p-2 text-right">MCVR</th><th className="p-2 text-right">MCPA</th><th className="p-2 text-right">CVR</th></tr>
                           </thead>
                           <tbody>
                             {selectedProjectCpns.map((cpn, idx) => (
                               <tr key={cpn.cpnKey} className={`cursor-pointer hover:bg-indigo-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`} onClick={() => setSelectedCpnDetail(cpn)}>
-                                <td className="p-2 max-w-sm">{cpn.cpnName}</td>
+                                <td className="p-2 sticky left-0 bg-inherit z-10">{cpn.cpnName}</td>
                                 <td className="p-2 text-right">{formatCurrency(cpn.spend)}</td>
                                 <td className="p-2 text-right">{cpn.mcv}</td>
                                 <td className="p-2 text-right">{cpn.cv}</td>
@@ -546,14 +608,14 @@ export default function WeeklyReportsPage() {
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0 max-h-[800px] overflow-auto">
+              <CardContent className="p-0 max-h-[800px] overflow-x-auto overflow-y-auto">
                 {filteredCpnList.length === 0 ? (
                   <div className="p-8 text-center text-slate-500">この週のCPNデータがありません</div>
                 ) : (
-                  <table className="w-full text-xs">
+                  <table className="text-xs whitespace-nowrap min-w-max">
                     <thead className="bg-slate-100 sticky top-0">
                       <tr>
-                        <th className="p-2 text-left">CPN名</th>
+                        <th className="p-2 text-left sticky left-0 bg-slate-100 z-10">CPN名</th>
                         <th className="p-2 text-left">媒体</th>
                         <SortHeader label="消化" sortKey="spend" />
                         <SortHeader label="MCV" sortKey="mcv" />
@@ -579,7 +641,7 @@ export default function WeeklyReportsPage() {
                           className={`cursor-pointer hover:bg-indigo-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
                           onClick={() => setSelectedCpnDetail(cpn)}
                         >
-                          <td className="p-2">{cpn.cpnName}</td>
+                          <td className="p-2 sticky left-0 bg-inherit z-10">{cpn.cpnName}</td>
                           <td className="p-2"><span className={`px-1 py-0.5 rounded text-xs ${cpn.media === "FB" ? "bg-blue-100 text-blue-700" : cpn.media === "TikTok" ? "bg-slate-800 text-white" : "bg-cyan-100 text-cyan-700"}`}>{cpn.media}</span></td>
                           <td className="p-2 text-right">{formatCurrency(cpn.spend)}</td>
                           <td className="p-2 text-right">{cpn.mcv}</td>
@@ -690,12 +752,27 @@ export default function WeeklyReportsPage() {
                           <td className="p-2 border text-right">{formatCurrency(cr.cpm)}</td>
                           <td className="p-2 border text-right">{formatCurrency(cr.cpc)}</td>
                           <td className="p-2 border text-center">
-                            {cr.videoUrl ? (
-                              <a href={cr.videoUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800">
-                                <Play className="h-4 w-4 inline" />
-                              </a>
-                            ) : cr.thumbnailUrl ? (
-                              <img src={cr.thumbnailUrl} alt="" className="w-8 h-8 object-cover rounded mx-auto" />
+                            {cr.videoUrl || cr.thumbnailUrl ? (
+                              <button
+                                onClick={() => openVideoModal(cr)}
+                                disabled={videoLoading === cr.name}
+                                className="relative group cursor-pointer"
+                              >
+                                {cr.thumbnailUrl ? (
+                                  <img src={cr.thumbnailUrl} alt="" className="w-10 h-10 object-cover rounded mx-auto group-hover:opacity-75 transition-opacity" />
+                                ) : (
+                                  <div className="w-10 h-10 bg-slate-200 rounded mx-auto flex items-center justify-center">
+                                    <Play className="h-4 w-4 text-slate-600" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  {videoLoading === cr.name ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                  ) : (
+                                    <Play className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                                  )}
+                                </div>
+                              </button>
                             ) : "-"}
                           </td>
                         </tr>
@@ -720,6 +797,30 @@ export default function WeeklyReportsPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 動画再生モーダル */}
+      {videoModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4" onClick={() => setVideoModal(null)}>
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="font-bold text-lg truncate flex-1 mr-4">{videoModal.name}</h3>
+              <button onClick={() => setVideoModal(null)} className="p-1 hover:bg-slate-100 rounded-full">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-4 bg-black">
+              <video
+                src={videoModal.url}
+                controls
+                autoPlay
+                className="w-full max-h-[70vh] mx-auto"
+              >
+                お使いのブラウザは動画再生に対応していません
+              </video>
             </div>
           </div>
         </div>

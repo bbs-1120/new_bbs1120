@@ -134,27 +134,100 @@ async function getTikTokVideoUrl(campaignId: string): Promise<string | null> {
   }
 }
 
+// 広告IDから直接動画を取得
+async function getMetaVideoByAdId(adId: string): Promise<string | null> {
+  const tokens = [
+    process.env.META_TOKEN_BUSINESS01,
+    process.env.META_TOKEN_BUSINESS03,
+    process.env.META_TOKEN_BUSINESS08,
+    process.env.META_TOKEN_BUSINESS11,
+    process.env.META_TOKEN_BUSINESS13,
+    process.env.META_TOKEN_BUSINESS14,
+    process.env.META_ACCESS_TOKEN_BUSINESS_01,
+    process.env.META_ACCESS_TOKEN_BUSINESS_03,
+    process.env.META_ACCESS_TOKEN_BUSINESS_08,
+    process.env.META_ACCESS_TOKEN_BUSINESS_11,
+    process.env.META_ACCESS_TOKEN_BUSINESS_13,
+    process.env.META_ACCESS_TOKEN_BUSINESS_14,
+    process.env.META_ACCESS_TOKEN,
+  ].filter(Boolean);
+
+  for (const accessToken of tokens) {
+    try {
+      // 広告からクリエイティブ情報を取得
+      const adRes = await fetch(
+        `https://graph.facebook.com/v19.0/${adId}?fields=creative{video_id,object_story_spec}&access_token=${accessToken}`
+      );
+      
+      if (!adRes.ok) continue;
+      
+      const adData = await adRes.json();
+      
+      // video_idがある場合
+      if (adData.creative?.video_id) {
+        const videoRes = await fetch(
+          `https://graph.facebook.com/v19.0/${adData.creative.video_id}?fields=source&access_token=${accessToken}`
+        );
+        
+        if (videoRes.ok) {
+          const videoData = await videoRes.json();
+          if (videoData.source) return videoData.source;
+        }
+      }
+      
+      // object_story_specからvideo_idを取得
+      if (adData.creative?.object_story_spec?.video_data?.video_id) {
+        const videoId = adData.creative.object_story_spec.video_data.video_id;
+        const videoRes = await fetch(
+          `https://graph.facebook.com/v19.0/${videoId}?fields=source&access_token=${accessToken}`
+        );
+        
+        if (videoRes.ok) {
+          const videoData = await videoRes.json();
+          if (videoData.source) return videoData.source;
+        }
+      }
+    } catch (error) {
+      console.error(`Video by adId error:`, error);
+      continue;
+    }
+  }
+  
+  return null;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const campaignId = searchParams.get("campaignId");
     const media = searchParams.get("media");
+    const adId = searchParams.get("adId");
     
-    if (!campaignId) {
-      return NextResponse.json({ success: false, error: "Campaign ID is required" }, { status: 400 });
+    if (!campaignId && !adId) {
+      return NextResponse.json({ success: false, error: "Campaign ID or Ad ID is required" }, { status: 400 });
     }
     
     let videoUrl: string | null = null;
     
-    if (media === "FB" || media === "Meta") {
-      videoUrl = await getMetaVideoUrl(campaignId);
-    } else if (media === "TikTok" || media === "Pangle") {
-      videoUrl = await getTikTokVideoUrl(campaignId);
-    } else {
-      // 両方試す
-      videoUrl = await getMetaVideoUrl(campaignId);
-      if (!videoUrl) {
+    // adIdがある場合は直接取得を試みる
+    if (adId && (media === "FB" || media === "Meta")) {
+      videoUrl = await getMetaVideoByAdId(adId);
+      if (videoUrl) {
+        return NextResponse.json({ success: true, videoUrl });
+      }
+    }
+    
+    // キャンペーンIDで取得
+    if (campaignId) {
+      if (media === "FB" || media === "Meta") {
+        videoUrl = await getMetaVideoUrl(campaignId);
+      } else if (media === "TikTok" || media === "Pangle") {
         videoUrl = await getTikTokVideoUrl(campaignId);
+      } else {
+        videoUrl = await getMetaVideoUrl(campaignId);
+        if (!videoUrl) {
+          videoUrl = await getTikTokVideoUrl(campaignId);
+        }
       }
     }
     
