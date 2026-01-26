@@ -185,13 +185,13 @@ export async function GET(request: Request) {
     // ユーザーセッションを取得
     const session = await auth();
     const userRole = session?.user?.role || "member";
-    const userTeamName = session?.user?.teamName || null;
+    // team_nameがない場合はユーザー名を使用（CPN名のパターン「新規グロース部_{名前}_」に対応）
+    const userTeamName = session?.user?.teamName || session?.user?.name || null;
     const userMediaFilter = session?.user?.mediaFilter || null;
 
     // URLパラメータでキャッシュをスキップできる
     const { searchParams } = new URL(request.url);
     const skipCache = searchParams.get("refresh") === "true";
-    const isHomePage = searchParams.get("home") === "true"; // ホーム画面は全体データを表示
 
     // キャッシュからデータを取得（管理者と一般ユーザーで別キャッシュ）
     const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
@@ -200,8 +200,7 @@ export async function GET(request: Request) {
     let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
 
     // メンバーの場合のフィルタリング用teamName
-    // ホーム画面（home=true）の場合は全体データを表示
-    const filterTeamName = (userRole !== "admin" && !isHomePage) ? userTeamName : null;
+    const filterTeamName = userRole !== "admin" ? userTeamName : null;
 
     if (!cachedData) {
       // キャッシュがない場合はスプレッドシートから取得
