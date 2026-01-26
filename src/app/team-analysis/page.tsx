@@ -17,10 +17,16 @@ import { AnalysisPageSkeleton } from "@/components/ui/skeleton";
 import { getRoasColorClass } from "@/lib/utils";
 import { GoalProgress } from "@/components/ui/goal-progress";
 import { ExportButton } from "@/components/ui/export-button";
-import { SearchFilter, FilterOptions } from "@/components/ui/search-filter";
+// FilterOptionsを独自定義
+interface LocalFilterOptions {
+  searchQuery: string;
+  mediaFilter: string;
+  statusFilter: string;
+  profitFilter: string;
+}
 import { CpnMemo } from "@/components/ui/cpn-memo";
 import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
-import { DashboardConfig, getWidgetConfig, DashboardWidget } from "@/components/ui/dashboard-config";
+import { DashboardConfigModal, getWidgetConfig, DashboardWidget } from "@/components/ui/dashboard-config";
 
 // 媒体ロゴコンポーネント
 function MediaLogo({ media, size = 14 }: { media: string; size?: number }) {
@@ -63,6 +69,9 @@ interface CpnData {
   mcvr?: number;
   mcpa?: number;
 }
+
+// CpnData with memberName
+type CpnDataWithMember = CpnData & { memberName: string };
 
 interface MemberData {
   name: string;
@@ -154,7 +163,7 @@ export default function TeamAnalysisPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [showDashboardConfig, setShowDashboardConfig] = useState(false);
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+  const [filterOptions, setFilterOptions] = useState<LocalFilterOptions>({
     searchQuery: "",
     mediaFilter: "all",
     statusFilter: "all",
@@ -460,7 +469,6 @@ export default function TeamAnalysisPage() {
         addChangeRecord({
           type: "status",
           cpnName: cpn.cpnName,
-          cpnKey: cpn.cpnKey,
           media: cpn.media,
           oldValue: cpn.status,
           newValue: newStatus,
@@ -471,7 +479,6 @@ export default function TeamAnalysisPage() {
         addChangeRecord({
           type: "status",
           cpnName: cpn.cpnName,
-          cpnKey: cpn.cpnKey,
           media: cpn.media,
           oldValue: cpn.status,
           newValue: newStatus,
@@ -512,7 +519,6 @@ export default function TeamAnalysisPage() {
         addChangeRecord({
           type: "budget",
           cpnName: cpn.cpnName,
-          cpnKey: cpn.cpnKey,
           media: cpn.media,
           oldValue: cpn.dailyBudget,
           newValue: parseInt(newBudget),
@@ -524,7 +530,6 @@ export default function TeamAnalysisPage() {
         addChangeRecord({
           type: "budget",
           cpnName: cpn.cpnName,
-          cpnKey: cpn.cpnKey,
           media: cpn.media,
           oldValue: cpn.dailyBudget,
           newValue: parseInt(newBudget),
@@ -713,16 +718,53 @@ export default function TeamAnalysisPage() {
 
       {/* 目標進捗 */}
       <div className="mb-6">
-        <GoalProgress currentProfit={summary.monthlyProfit || summary.totalProfit} />
+        <GoalProgress currentValue={summary.monthlyProfit || summary.totalProfit} />
       </div>
 
       {/* 検索フィルター */}
-      <div className="mb-6">
-        <SearchFilter
-          options={filterOptions}
-          onChange={setFilterOptions}
-          mediaOptions={mediaList.map(m => m.media)}
-        />
+      <div className="mb-6 bg-white rounded-lg shadow-sm border p-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="CPN名で検索..."
+                value={filterOptions.searchQuery}
+                onChange={(e) => setFilterOptions(prev => ({ ...prev, searchQuery: e.target.value }))}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+          <select
+            value={filterOptions.mediaFilter}
+            onChange={(e) => setFilterOptions(prev => ({ ...prev, mediaFilter: e.target.value }))}
+            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">全媒体</option>
+            {mediaList.map(m => (
+              <option key={m.media} value={m.media}>{m.media}</option>
+            ))}
+          </select>
+          <select
+            value={filterOptions.statusFilter}
+            onChange={(e) => setFilterOptions(prev => ({ ...prev, statusFilter: e.target.value }))}
+            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">全ステータス</option>
+            <option value="ACTIVE">ON</option>
+            <option value="PAUSED">OFF</option>
+          </select>
+          <select
+            value={filterOptions.profitFilter}
+            onChange={(e) => setFilterOptions(prev => ({ ...prev, profitFilter: e.target.value }))}
+            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">全利益</option>
+            <option value="positive">黒字のみ</option>
+            <option value="negative">赤字のみ</option>
+          </select>
+        </div>
       </div>
 
       {/* サマリーカード（マイ分析と同じスタイル） */}
@@ -1384,12 +1426,11 @@ export default function TeamAnalysisPage() {
       )}
 
       {/* ダッシュボード設定モーダル */}
-      {showDashboardConfig && (
-        <DashboardConfig
-          onClose={() => setShowDashboardConfig(false)}
-          onSave={(newWidgets) => setWidgets(newWidgets)}
-        />
-      )}
+      <DashboardConfigModal
+        isOpen={showDashboardConfig}
+        onClose={() => setShowDashboardConfig(false)}
+        onSave={(newWidgets) => setWidgets(newWidgets)}
+      />
 
       {/* 予算スケジュールモーダル */}
       {showBudgetScheduleModal && budgetScheduleCpn && (
