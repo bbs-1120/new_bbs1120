@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
-// Meta API からクリエイティブデータを取得（改善版）
-async function getMetaCreatives(campaignId: string, startDate?: string, endDate?: string) {
-  // 全てのアクセストークンを収集（両方の命名規則に対応）
+// Meta API からクリエイティブ（広告）データを取得
+// unitPrice: CPN単価（売上額/CV から算出）
+async function getMetaCreatives(campaignId: string, startDate?: string, endDate?: string, unitPrice: number = 20000) {
+  // 全てのアクセストークンを収集
   const accessTokens = [
     process.env.META_TOKEN_BUSINESS01,
     process.env.META_TOKEN_BUSINESS03,
@@ -19,87 +20,193 @@ async function getMetaCreatives(campaignId: string, startDate?: string, endDate?
     process.env.META_ACCESS_TOKEN,
   ].filter(Boolean);
 
-  console.log(`[Creatives API] Trying ${accessTokens.length} tokens for campaign ${campaignId}`);
+  console.log(`[Creatives API] Trying ${accessTokens.length} tokens for campaign ${campaignId}, unitPrice: ${unitPrice}`);
 
   for (const accessToken of accessTokens) {
     try {
-      // 方法1: キャンペーンから直接広告を取得（より確実）
-      const timeRange = startDate && endDate 
-        ? `&time_range={"since":"${startDate}","until":"${endDate}"}`
-        : `&date_preset=last_7d`;
+      // time_range パラメータを構築
+      const timeRangeParam = startDate && endDate 
+        ? `time_range={"since":"${startDate}","until":"${endDate}"}`
+        : `date_preset=last_7d`;
       
-      // キャンペーンのinsightsを広告レベルで取得
-      const insightsUrl = `https://graph.facebook.com/v19.0/${campaignId}/insights?level=ad&fields=ad_id,ad_name,spend,impressions,clicks,actions&${timeRange}&access_token=${accessToken}`;
-      const insightsRes = await fetch(insightsUrl);
-      const insightsData = await insightsRes.json();
+      // キャンペーンから広告セットを取得し、その広告セットから広告を取得
+      // まずキャンペーンの広告セットを取得
+      const adSetsUrl = `https://graph.facebook.com/v19.0/${campaignId}/adsets?fields=id,name&limit=100&access_token=${accessToken}`;
+      const adSetsRes = await fetch(adSetsUrl);
+      const adSetsData = await adSetsRes.json();
       
-      if (insightsData.error) {
-        console.log(`[Creatives API] Insights error:`, insightsData.error.message);
+      if (adSetsData.error) {
+        console.log(`[Creatives API] AdSets error:`, adSetsData.error.message);
         continue;
       }
+
+      const allAds: {
+        adId: string;
+        name: string;
+        spend: number;
+        impressions: number;
+        clicks: number;
+        cv: number;
+        cpa: number;
+        revenue: number;
+        profit: number;
+        roas: number;
+        ctr: number;
+        cpm: number;
+        cpc: number;
+        videoUrl?: string;
+        thumbnailUrl?: string;
+      }[] = [];
+
+      // 各広告セットの広告を取得
+      const adSetList = adSetsData.data || [];
+      console.log(`[Creatives API] Found ${adSetList.length} ad sets`);
       
-      if (!insightsData.data || insightsData.data.length === 0) {
-        console.log(`[Creatives API] No insights data found, trying alternative method`);
+      for (const adSet of adSetList) {
+        // 広告セットのinsightsを広告レベルで取得
+        const insightsUrl = `https://graph.facebook.com/v19.0/${adSet.id}/insights?level=ad&fields=ad_id,ad_name,spend,impressions,clicks,actions,action_values&${timeRangeParam}&limit=500&access_token=${accessToken}`;
+        const insightsRes = await fetch(insightsUrl);
+        const insightsData = await insightsRes.json();
         
-        // 方法2: 広告セット経由で広告を取得
-        const adsUrl = `https://graph.facebook.com/v19.0/${campaignId}/ads?fields=id,name,creative{id,video_id,thumbnail_url,image_url,object_story_spec}&limit=100&access_token=${accessToken}`;
-        const adsRes = await fetch(adsUrl);
-        const adsData = await adsRes.json();
-        
-        if (adsData.error) {
-          console.log(`[Creatives API] Ads error:`, adsData.error.message);
+        if (insightsData.error) {
+          console.log(`[Creatives API] Insights error for adset ${adSet.id}:`, insightsData.error.message);
           continue;
         }
         
-        if (!adsData.data || adsData.data.length === 0) {
+        if (!insightsData.data || insightsData.data.length === 0) {
           continue;
         }
         
-        // 各広告のinsightsを個別に取得
-        const allAds = [];
-        for (const ad of adsData.data) {
-          const adInsightsUrl = `https://graph.facebook.com/v19.0/${ad.id}/insights?fields=spend,impressions,clicks,actions${timeRange}&access_token=${accessToken}`;
-          const adInsightsRes = await fetch(adInsightsUrl);
-          const adInsightsData = await adInsightsRes.json();
+        console.log(`[Creatives API] Found ${insightsData.data.length} ads in adset ${adSet.name}`);
+        
+        for (const insight of insightsData.data) {
+          const spend = parseFloat(insight.spend || "0");
+          const impressions = parseInt(insight.impressions || "0", 10);
+          const clicks = parseInt(insight.clicks || "0", 10);
           
-          const insights = adInsightsData.data?.[0] || {};
-          const spend = parseFloat(insights.spend || "0");
-          const impressions = parseInt(insights.impressions || "0", 10);
-          const clicks = parseInt(insights.clicks || "0", 10);
+          // CVを取得: 様々なaction_typeに対応
+          const actions = insight.actions || [];
+          let cv = 0;
           
-          const actions = insights.actions || [];
-          const cvAction = actions.find((a: { action_type: string }) => 
-            a.action_type === "offsite_conversion.fb_pixel_purchase" ||
-            a.action_type === "omni_purchase" ||
-            a.action_type === "purchase" ||
-            a.action_type === "lead"
-          );
-          const cv = parseInt(cvAction?.value || "0", 10);
+          // 優先順位でCVを探す
+          const cvActionTypes = [
+            "offsite_conversion.fb_pixel_purchase",
+            "omni_purchase", 
+            "purchase",
+            "offsite_conversion.fb_pixel_lead",
+            "lead",
+            "onsite_conversion.lead_grouped",
+            "complete_registration",
+            "offsite_conversion.fb_pixel_complete_registration",
+            "submit_application",
+            "offsite_conversion.custom",
+          ];
           
-          // サムネイル/動画URL取得
-          let videoUrl = undefined;
-          let thumbnailUrl = ad.creative?.thumbnail_url || ad.creative?.image_url;
-          
-          if (ad.creative?.video_id) {
-            try {
-              const videoRes = await fetch(`https://graph.facebook.com/v19.0/${ad.creative.video_id}?fields=source,thumbnails&access_token=${accessToken}`);
-              const videoData = await videoRes.json();
-              videoUrl = videoData.source;
-              if (!thumbnailUrl && videoData.thumbnails?.data?.[0]?.uri) {
-                thumbnailUrl = videoData.thumbnails.data[0].uri;
-              }
-            } catch (e) {
-              console.log(`[Creatives API] Video fetch error:`, e);
+          for (const actionType of cvActionTypes) {
+            const action = actions.find((a: { action_type: string; value: string }) => a.action_type === actionType);
+            if (action) {
+              cv = parseInt(action.value || "0", 10);
+              console.log(`[Creatives API] Found CV: ${cv} from action_type: ${actionType}`);
+              break;
             }
           }
           
-          const unitPrice = 20000;
+          // CVが見つからない場合、全てのoffsite_conversionを合計
+          if (cv === 0) {
+            const offsiteConversions = actions.filter((a: { action_type: string }) => 
+              a.action_type.startsWith("offsite_conversion")
+            );
+            cv = offsiteConversions.reduce((sum: number, a: { value: string }) => sum + parseInt(a.value || "0", 10), 0);
+          }
+          
+          // 派生指標を計算
+          const revenue = cv * unitPrice;
+          const profit = revenue - spend;
+          const cpa = cv > 0 ? spend / cv : 0;
+          const roas = spend > 0 ? (revenue / spend) * 100 : 0;
+          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+          const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+          const cpc = clicks > 0 ? spend / clicks : 0;
+          
+          // 広告のクリエイティブ情報を取得
+          let videoUrl: string | undefined = undefined;
+          let thumbnailUrl: string | undefined = undefined;
+          
+          if (insight.ad_id) {
+            try {
+              const adDetailUrl = `https://graph.facebook.com/v19.0/${insight.ad_id}?fields=creative{video_id,thumbnail_url,image_url,effective_object_story_id}&access_token=${accessToken}`;
+              const adDetailRes = await fetch(adDetailUrl);
+              const adDetailData = await adDetailRes.json();
+              
+              thumbnailUrl = adDetailData.creative?.thumbnail_url || adDetailData.creative?.image_url;
+              
+              if (adDetailData.creative?.video_id) {
+                const videoRes = await fetch(`https://graph.facebook.com/v19.0/${adDetailData.creative.video_id}?fields=source,thumbnails&access_token=${accessToken}`);
+                const videoData = await videoRes.json();
+                videoUrl = videoData.source;
+                if (!thumbnailUrl && videoData.thumbnails?.data?.[0]?.uri) {
+                  thumbnailUrl = videoData.thumbnails.data[0].uri;
+                }
+              }
+            } catch (e) {
+              console.log(`[Creatives API] Ad detail fetch error:`, e);
+            }
+          }
+          
+          allAds.push({
+            adId: insight.ad_id,
+            name: insight.ad_name || "不明",
+            spend,
+            impressions,
+            clicks,
+            cv,
+            cpa,
+            revenue,
+            profit,
+            roas,
+            ctr,
+            cpm,
+            cpc,
+            videoUrl,
+            thumbnailUrl,
+          });
+        }
+      }
+      
+      if (allAds.length > 0) {
+        console.log(`[Creatives API] Total ${allAds.length} ads found for campaign ${campaignId}`);
+        return allAds;
+      }
+      
+      // 広告セットが見つからない場合、キャンペーン直下から取得を試みる
+      console.log(`[Creatives API] No ads found via adsets, trying campaign level insights`);
+      
+      const campaignInsightsUrl = `https://graph.facebook.com/v19.0/${campaignId}/insights?level=ad&fields=ad_id,ad_name,spend,impressions,clicks,actions&${timeRangeParam}&limit=500&access_token=${accessToken}`;
+      const campaignInsightsRes = await fetch(campaignInsightsUrl);
+      const campaignInsightsData = await campaignInsightsRes.json();
+      
+      if (!campaignInsightsData.error && campaignInsightsData.data && campaignInsightsData.data.length > 0) {
+        for (const insight of campaignInsightsData.data) {
+          const spend = parseFloat(insight.spend || "0");
+          const impressions = parseInt(insight.impressions || "0", 10);
+          const clicks = parseInt(insight.clicks || "0", 10);
+          
+          const actions = insight.actions || [];
+          let cv = 0;
+          for (const actionType of ["offsite_conversion.fb_pixel_purchase", "purchase", "lead", "complete_registration"]) {
+            const action = actions.find((a: { action_type: string; value: string }) => a.action_type === actionType);
+            if (action) {
+              cv = parseInt(action.value || "0", 10);
+              break;
+            }
+          }
+          
           const revenue = cv * unitPrice;
           const profit = revenue - spend;
           
           allAds.push({
-            adId: ad.id,
-            name: ad.name || "不明",
+            adId: insight.ad_id,
+            name: insight.ad_name || "不明",
             spend,
             impressions,
             clicks,
@@ -111,82 +218,15 @@ async function getMetaCreatives(campaignId: string, startDate?: string, endDate?
             ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
             cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
             cpc: clicks > 0 ? spend / clicks : 0,
-            videoUrl,
-            thumbnailUrl,
+            videoUrl: undefined,
+            thumbnailUrl: undefined,
           });
         }
         
         if (allAds.length > 0) {
-          console.log(`[Creatives API] Found ${allAds.length} ads via alternative method`);
+          console.log(`[Creatives API] Found ${allAds.length} ads via campaign level insights`);
           return allAds;
         }
-        continue;
-      }
-      
-      // insightsデータから広告情報を構築
-      const allAds = [];
-      for (const insight of insightsData.data) {
-        const spend = parseFloat(insight.spend || "0");
-        const impressions = parseInt(insight.impressions || "0", 10);
-        const clicks = parseInt(insight.clicks || "0", 10);
-        
-        const actions = insight.actions || [];
-        const cvAction = actions.find((a: { action_type: string }) => 
-          a.action_type === "offsite_conversion.fb_pixel_purchase" ||
-          a.action_type === "omni_purchase" ||
-          a.action_type === "purchase" ||
-          a.action_type === "lead"
-        );
-        const cv = parseInt(cvAction?.value || "0", 10);
-        
-        // 広告のクリエイティブ情報を取得
-        let videoUrl = undefined;
-        let thumbnailUrl = undefined;
-        
-        if (insight.ad_id) {
-          try {
-            const adDetailUrl = `https://graph.facebook.com/v19.0/${insight.ad_id}?fields=creative{video_id,thumbnail_url,image_url}&access_token=${accessToken}`;
-            const adDetailRes = await fetch(adDetailUrl);
-            const adDetailData = await adDetailRes.json();
-            
-            thumbnailUrl = adDetailData.creative?.thumbnail_url || adDetailData.creative?.image_url;
-            
-            if (adDetailData.creative?.video_id) {
-              const videoRes = await fetch(`https://graph.facebook.com/v19.0/${adDetailData.creative.video_id}?fields=source&access_token=${accessToken}`);
-              const videoData = await videoRes.json();
-              videoUrl = videoData.source;
-            }
-          } catch (e) {
-            console.log(`[Creatives API] Ad detail fetch error:`, e);
-          }
-        }
-        
-        const unitPrice = 20000;
-        const revenue = cv * unitPrice;
-        const profit = revenue - spend;
-        
-        allAds.push({
-          adId: insight.ad_id,
-          name: insight.ad_name || "不明",
-          spend,
-          impressions,
-          clicks,
-          cv,
-          cpa: cv > 0 ? spend / cv : 0,
-          revenue,
-          profit,
-          roas: spend > 0 ? (revenue / spend) * 100 : 0,
-          ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-          cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
-          cpc: clicks > 0 ? spend / clicks : 0,
-          videoUrl,
-          thumbnailUrl,
-        });
-      }
-      
-      if (allAds.length > 0) {
-        console.log(`[Creatives API] Found ${allAds.length} ads via insights method`);
-        return allAds;
       }
     } catch (error) {
       console.error("[Creatives API] Meta API error:", error);
@@ -198,7 +238,7 @@ async function getMetaCreatives(campaignId: string, startDate?: string, endDate?
 }
 
 // TikTok API からクリエイティブデータを取得
-async function getTikTokCreatives(campaignId: string, startDate?: string, endDate?: string) {
+async function getTikTokCreatives(campaignId: string, startDate?: string, endDate?: string, unitPrice: number = 20000) {
   const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
   if (!accessToken) return [];
   
@@ -290,8 +330,6 @@ async function getTikTokCreatives(campaignId: string, startDate?: string, endDat
           const clicks = parseInt(metrics.clicks || "0", 10);
           const cv = parseInt(metrics.conversion || "0", 10);
           
-          // 仮の単価
-          const unitPrice = 20000;
           const revenue = cv * unitPrice;
           const profit = revenue - spend;
           
@@ -331,13 +369,18 @@ export async function GET(request: Request) {
   const media = searchParams.get("media");
   const startDate = searchParams.get("startDate") || undefined;
   const endDate = searchParams.get("endDate") || undefined;
+  const unitPriceParam = searchParams.get("unitPrice");
+  const unitPrice = unitPriceParam ? parseFloat(unitPriceParam) : 20000;
   
   if (!campaignId) {
     return NextResponse.json({ success: false, error: "campaignId is required" }, { status: 400 });
   }
   
+  console.log(`[Creatives API] Request: campaignId=${campaignId}, media=${media}, dates=${startDate}-${endDate}, unitPrice=${unitPrice}`);
+  
   try {
     let creatives: {
+      adId?: string;
       name: string;
       spend: number;
       impressions: number;
@@ -355,9 +398,9 @@ export async function GET(request: Request) {
     }[] = [];
     
     if (media === "FB" || media === "Meta") {
-      creatives = await getMetaCreatives(campaignId, startDate, endDate);
+      creatives = await getMetaCreatives(campaignId, startDate, endDate, unitPrice);
     } else if (media === "TikTok" || media === "Pangle") {
-      creatives = await getTikTokCreatives(campaignId, startDate, endDate);
+      creatives = await getTikTokCreatives(campaignId, startDate, endDate, unitPrice);
     }
     
     return NextResponse.json({

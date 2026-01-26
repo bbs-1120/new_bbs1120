@@ -255,7 +255,9 @@ export default function WeeklyReportsPage() {
     setCreatives([]);
     try {
       const { startDate, endDate } = getWeekDates(selectedWeek);
-      const res = await fetch(`/api/campaigns/creatives?campaignId=${cpn.campaignId}&media=${cpn.media}&startDate=${startDate}&endDate=${endDate}`);
+      // CPNの単価を計算 (売上 / CV)、CVが0の場合はデフォルト値を使用
+      const unitPrice = cpn.cv > 0 ? Math.round(cpn.revenue / cpn.cv) : 20000;
+      const res = await fetch(`/api/campaigns/creatives?campaignId=${cpn.campaignId}&media=${cpn.media}&startDate=${startDate}&endDate=${endDate}&unitPrice=${unitPrice}`);
       const data = await res.json();
       if (data.success) setCreatives(data.creatives || []);
     } catch (error) {
