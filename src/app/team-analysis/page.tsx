@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   RefreshCw, TrendingUp, TrendingDown, DollarSign, Target, BarChart3, 
   Power, PowerOff, Users, ChevronDown, ChevronUp, Calendar, Zap,
-  CheckCircle, AlertTriangle
+  CheckCircle, AlertTriangle, Search, History, Settings, X
 } from "lucide-react";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -15,7 +15,12 @@ import {
 } from "recharts";
 import { AnalysisPageSkeleton } from "@/components/ui/skeleton";
 import { getRoasColorClass } from "@/lib/utils";
-// import { ExportButton } from "@/components/ui/export-button";
+import { GoalProgress } from "@/components/ui/goal-progress";
+import { ExportButton } from "@/components/ui/export-button";
+import { SearchFilter, FilterOptions } from "@/components/ui/search-filter";
+import { CpnMemo } from "@/components/ui/cpn-memo";
+import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
+import { DashboardConfig, getWidgetConfig, DashboardWidget } from "@/components/ui/dashboard-config";
 
 // 媒体ロゴコンポーネント
 function MediaLogo({ media, size = 14 }: { media: string; size?: number }) {
@@ -49,6 +54,14 @@ interface CpnData {
   profit7Days: number;
   roas7Days: number;
   dailyBudget: string;
+  // 追加指標
+  impressions?: number;
+  clicks?: number;
+  cpm?: number;
+  cpc?: number;
+  ctr?: number;
+  mcvr?: number;
+  mcpa?: number;
 }
 
 interface MemberData {
@@ -138,6 +151,42 @@ export default function TeamAnalysisPage() {
   const [budgetUpdating, setBudgetUpdating] = useState<Record<string, boolean>>({});
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
   const [expandedMedia, setExpandedMedia] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showDashboardConfig, setShowDashboardConfig] = useState(false);
+  const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    searchQuery: "",
+    mediaFilter: "all",
+    statusFilter: "all",
+    profitFilter: "all",
+  });
+  
+  // 予算スケジュールモーダル用
+  const [showBudgetScheduleModal, setShowBudgetScheduleModal] = useState(false);
+  const [budgetScheduleCpn, setBudgetScheduleCpn] = useState<CpnDataWithMember | null>(null);
+  const [budgetScheduleForm, setBudgetScheduleForm] = useState({
+    startDate: "",
+    startTime: "",
+    endDate: "",
+    endTime: "",
+    budgetAmount: "",
+  });
+  const [budgetScheduleSubmitting, setBudgetScheduleSubmitting] = useState(false);
+  const [budgetScheduleMessage, setBudgetScheduleMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
+  // 設定済みスケジュール表示用
+  interface ScheduleInfo {
+    id: string;
+    time_start: number;
+    time_stop: number;
+    budget_value: string;
+  }
+  const [scheduleCache, setScheduleCache] = useState<Record<string, ScheduleInfo[]>>({});
+  
+  // ウィジェット設定を読み込み
+  useEffect(() => {
+    setWidgets(getWidgetConfig());
+  }, []);
 
   const currentMonth = useMemo(() => {
     const now = new Date();
@@ -177,6 +226,119 @@ export default function TeamAnalysisPage() {
     await fetchData();
   };
 
+  // 予算スケジュールモーダルを開く
+  const openBudgetScheduleModal = (cpn: CpnDataWithMember) => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const nextSlotMinutes = Math.ceil((currentHour * 60 + currentMinute) / 15) * 15 + 15;
+    const defaultStartHour = Math.floor(nextSlotMinutes / 60) % 24;
+    const defaultStartMinute = nextSlotMinutes % 60;
+    const defaultStartTime = `${String(defaultStartHour).padStart(2, "0")}:${String(defaultStartMinute).padStart(2, "0")}`;
+    const startDate = nextSlotMinutes >= 24 * 60 ? tomorrow : now;
+    
+    setBudgetScheduleCpn(cpn);
+    setBudgetScheduleForm({
+      startDate: startDate.toISOString().split("T")[0],
+      startTime: defaultStartTime,
+      endDate: tomorrow.toISOString().split("T")[0],
+      endTime: "23:45",
+      budgetAmount: "",
+    });
+    setBudgetScheduleMessage(null);
+    setShowBudgetScheduleModal(true);
+  };
+
+  // 予算スケジュールを送信
+  const submitBudgetSchedule = async () => {
+    if (!budgetScheduleCpn) return;
+
+    const { startDate, startTime, endDate, endTime, budgetAmount } = budgetScheduleForm;
+    
+    if (!startDate || !startTime || !endDate || !endTime || !budgetAmount) {
+      setBudgetScheduleMessage({ type: "error", text: "すべての項目を入力してください" });
+      return;
+    }
+
+    const amount = parseInt(budgetAmount.replace(/[¥,]/g, ""), 10);
+    if (isNaN(amount) || amount <= 0) {
+      setBudgetScheduleMessage({ type: "error", text: "予算は正の数値で入力してください" });
+      return;
+    }
+
+    setBudgetScheduleSubmitting(true);
+    setBudgetScheduleMessage(null);
+
+    try {
+      const startDateTime = `${startDate}T${startTime}:00`;
+      const endDateTime = `${endDate}T${endTime}:00`;
+
+      const response = await fetch("/api/budget-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaignId: budgetScheduleCpn.campaignId,
+          accountId: budgetScheduleCpn.accountName,
+          budgetAmount: amount,
+          startTime: startDateTime,
+          endTime: endDateTime,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setBudgetScheduleMessage({ type: "success", text: "予算スケジュールを設定しました" });
+        // キャッシュをクリアして再取得
+        if (budgetScheduleCpn?.campaignId) {
+          setScheduleCache(prev => {
+            const newCache = { ...prev };
+            delete newCache[budgetScheduleCpn.campaignId!];
+            return newCache;
+          });
+        }
+        // 成功したら2秒後にモーダルを閉じる
+        setTimeout(() => {
+          setShowBudgetScheduleModal(false);
+          setBudgetScheduleCpn(null);
+        }, 2000);
+      } else {
+        setBudgetScheduleMessage({ type: "error", text: result.error || "設定に失敗しました" });
+      }
+    } catch {
+      setBudgetScheduleMessage({ type: "error", text: "通信エラーが発生しました" });
+    } finally {
+      setBudgetScheduleSubmitting(false);
+    }
+  };
+
+  // スケジュール情報をフォーマット
+  const formatScheduleInfo = (schedules: ScheduleInfo[]) => {
+    if (!schedules || schedules.length === 0) return null;
+    
+    const now = Date.now() / 1000;
+    const activeSchedules = schedules.filter(s => s.time_stop > now);
+    
+    if (activeSchedules.length === 0) return null;
+    
+    const nextSchedule = activeSchedules.sort((a, b) => a.time_start - b.time_start)[0];
+    const startDate = new Date(nextSchedule.time_start * 1000);
+    const endDate = new Date(nextSchedule.time_stop * 1000);
+    
+    const formatDateTime = (date: Date) => {
+      return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    };
+    
+    return {
+      budget: `¥${parseInt(nextSchedule.budget_value).toLocaleString()}`,
+      period: `${formatDateTime(startDate)} - ${formatDateTime(endDate)}`,
+      isActive: nextSchedule.time_start <= now && nextSchedule.time_stop > now,
+    };
+  };
+
   const formatCurrency = (value: number) => {
     const sign = value < 0 ? "-" : value > 0 ? "+" : "";
     return `${sign}¥${Math.abs(Math.round(value)).toLocaleString("ja-JP")}`;
@@ -199,11 +361,38 @@ export default function TeamAnalysisPage() {
 
   // フィルタリングされたCPN
   const filteredCpns = useMemo(() => {
+    let cpns = allCpns;
+    
+    // メンバーフィルター
     if (selectedMember && selectedMember !== "all") {
-      return allCpns.filter(cpn => cpn.memberName === selectedMember);
+      cpns = cpns.filter(cpn => cpn.memberName === selectedMember);
     }
-    return allCpns;
-  }, [allCpns, selectedMember]);
+    
+    // 検索フィルター
+    if (filterOptions.searchQuery) {
+      const query = filterOptions.searchQuery.toLowerCase();
+      cpns = cpns.filter(cpn => cpn.cpnName.toLowerCase().includes(query));
+    }
+    
+    // 媒体フィルター
+    if (filterOptions.mediaFilter !== "all") {
+      cpns = cpns.filter(cpn => cpn.media === filterOptions.mediaFilter);
+    }
+    
+    // ステータスフィルター
+    if (filterOptions.statusFilter !== "all") {
+      cpns = cpns.filter(cpn => cpn.status === filterOptions.statusFilter);
+    }
+    
+    // 利益フィルター
+    if (filterOptions.profitFilter === "positive") {
+      cpns = cpns.filter(cpn => cpn.profit >= 0);
+    } else if (filterOptions.profitFilter === "negative") {
+      cpns = cpns.filter(cpn => cpn.profit < 0);
+    }
+    
+    return cpns;
+  }, [allCpns, selectedMember, filterOptions]);
 
   // ソート済みCPN
   const sortedCpns = useMemo(() => {
@@ -267,8 +456,27 @@ export default function TeamAnalysisPage() {
             c.cpnKey === cpn.cpnKey ? { ...c, status: newStatus } : c
           ),
         })));
+        // 変更履歴を記録
+        addChangeRecord({
+          type: "status",
+          cpnName: cpn.cpnName,
+          cpnKey: cpn.cpnKey,
+          media: cpn.media,
+          oldValue: cpn.status,
+          newValue: newStatus,
+          success: true,
+        });
       } else {
         alert(`エラー: ${data.error}`);
+        addChangeRecord({
+          type: "status",
+          cpnName: cpn.cpnName,
+          cpnKey: cpn.cpnKey,
+          media: cpn.media,
+          oldValue: cpn.status,
+          newValue: newStatus,
+          success: false,
+        });
       }
     } catch (error) {
       console.error("Status update failed:", error);
@@ -300,9 +508,28 @@ export default function TeamAnalysisPage() {
       const data = await response.json();
       if (data.success) {
         alert("予算を更新しました");
+        // 変更履歴を記録
+        addChangeRecord({
+          type: "budget",
+          cpnName: cpn.cpnName,
+          cpnKey: cpn.cpnKey,
+          media: cpn.media,
+          oldValue: cpn.dailyBudget,
+          newValue: parseInt(newBudget),
+          success: true,
+        });
         setBudgetInputs(prev => ({ ...prev, [cpn.cpnKey]: "" }));
       } else {
         alert(`エラー: ${data.error}`);
+        addChangeRecord({
+          type: "budget",
+          cpnName: cpn.cpnName,
+          cpnKey: cpn.cpnKey,
+          media: cpn.media,
+          oldValue: cpn.dailyBudget,
+          newValue: parseInt(newBudget),
+          success: false,
+        });
       }
     } catch (error) {
       console.error("Budget update failed:", error);
@@ -451,17 +678,51 @@ export default function TeamAnalysisPage() {
               {summary.memberCount}人 / {summary.totalCpnCount} CPN
             </span>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="h-8"
-          >
-            <RefreshCw className={`h-3 w-3 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
-            更新
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowDashboardConfig(true)}
+              className="h-8"
+            >
+              <Settings className="h-3 w-3 mr-1" />
+              表示設定
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowHistory(true)}
+              className="h-8"
+            >
+              <History className="h-3 w-3 mr-1" />
+              変更履歴
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="h-8"
+            >
+              <RefreshCw className={`h-3 w-3 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+              更新
+            </Button>
+          </div>
         </div>
+      </div>
+
+      {/* 目標進捗 */}
+      <div className="mb-6">
+        <GoalProgress currentProfit={summary.monthlyProfit || summary.totalProfit} />
+      </div>
+
+      {/* 検索フィルター */}
+      <div className="mb-6">
+        <SearchFilter
+          options={filterOptions}
+          onChange={setFilterOptions}
+          mediaOptions={mediaList.map(m => m.media)}
+        />
       </div>
 
       {/* サマリーカード（マイ分析と同じスタイル） */}
@@ -839,6 +1100,7 @@ export default function TeamAnalysisPage() {
                       <th className="p-2 text-center w-20">ON/OFF</th>
                       <th className="p-2 text-right w-24">現在予算</th>
                       <th className="p-2 text-center w-32">予算変更</th>
+                      <th className="p-2 text-center w-28">スケジュール</th>
                       <th className="p-2 text-right cursor-pointer hover:bg-slate-100" onClick={() => toggleSort("profit")}>
                         利益 <SortIcon columnKey="profit" />
                       </th>
@@ -857,6 +1119,13 @@ export default function TeamAnalysisPage() {
                         7日利益 <SortIcon columnKey="profit7Days" />
                       </th>
                       <th className="p-2 text-right">7日ROAS</th>
+                      <th className="p-2 text-right">CPM</th>
+                      <th className="p-2 text-right">CPC</th>
+                      <th className="p-2 text-right">CTR</th>
+                      <th className="p-2 text-right">CVR</th>
+                      <th className="p-2 text-right">MCVR</th>
+                      <th className="p-2 text-right">MCPA</th>
+                      <th className="p-2 text-center">メモ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -926,6 +1195,42 @@ export default function TeamAnalysisPage() {
                             </button>
                           </div>
                         </td>
+                        {/* 予算スケジュール */}
+                        <td className="p-2 text-center">
+                          {cpn.media === "Meta" ? (
+                            (() => {
+                              const formattedSchedule = scheduleCache[cpn.campaignId] 
+                                ? formatScheduleInfo(scheduleCache[cpn.campaignId])
+                                : null;
+                              
+                              if (formattedSchedule) {
+                                return (
+                                  <div className={`text-xs p-1 rounded ${formattedSchedule.isActive ? "bg-green-100" : "bg-purple-50"}`}>
+                                    <div className="font-bold text-purple-700">{formattedSchedule.budget}</div>
+                                    <div className="text-[8px] text-purple-600">{formattedSchedule.period}</div>
+                                    <button
+                                      onClick={() => openBudgetScheduleModal(cpn)}
+                                      className="text-[9px] text-purple-600 hover:underline"
+                                    >
+                                      編集
+                                    </button>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={() => openBudgetScheduleModal(cpn)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
+                                >
+                                  <Calendar className="h-3 w-3" />
+                                  追加
+                                </button>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
+                        </td>
                         <td className="p-2 text-right">
                           <span className={`font-bold ${cpn.profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                             ¥{formatNumber(cpn.profit)}
@@ -949,6 +1254,27 @@ export default function TeamAnalysisPage() {
                           <span className={cpn.roas7Days >= 100 ? "text-emerald-600" : "text-red-600"}>
                             {cpn.roas7Days.toFixed(1)}%
                           </span>
+                        </td>
+                        <td className="p-2 text-right text-sm">
+                          {cpn.cpm ? `¥${Math.round(cpn.cpm).toLocaleString()}` : "-"}
+                        </td>
+                        <td className="p-2 text-right text-sm">
+                          {cpn.cpc ? `¥${Math.round(cpn.cpc).toLocaleString()}` : "-"}
+                        </td>
+                        <td className="p-2 text-right text-sm">
+                          {cpn.ctr ? `${cpn.ctr.toFixed(2)}%` : "-"}
+                        </td>
+                        <td className="p-2 text-right text-sm">
+                          {cpn.cvr ? `${cpn.cvr.toFixed(2)}%` : "-"}
+                        </td>
+                        <td className="p-2 text-right text-sm">
+                          {cpn.mcvr ? `${cpn.mcvr.toFixed(2)}%` : "-"}
+                        </td>
+                        <td className="p-2 text-right text-sm">
+                          {cpn.mcpa ? `¥${Math.round(cpn.mcpa).toLocaleString()}` : "-"}
+                        </td>
+                        <td className="p-2 text-center">
+                          <CpnMemo cpnKey={cpn.cpnKey} cpnName={cpn.cpnName} />
                         </td>
                       </tr>
                     ))}
@@ -1049,6 +1375,147 @@ export default function TeamAnalysisPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* 変更履歴モーダル */}
+      {showHistory && (
+        <ChangeHistory onClose={() => setShowHistory(false)} />
+      )}
+
+      {/* ダッシュボード設定モーダル */}
+      {showDashboardConfig && (
+        <DashboardConfig
+          onClose={() => setShowDashboardConfig(false)}
+          onSave={(newWidgets) => setWidgets(newWidgets)}
+        />
+      )}
+
+      {/* 予算スケジュールモーダル */}
+      {showBudgetScheduleModal && budgetScheduleCpn && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                <h3 className="font-bold text-lg">予算スケジュール設定</h3>
+              </div>
+              <button
+                onClick={() => setShowBudgetScheduleModal(false)}
+                className="p-1 hover:bg-slate-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-sm font-medium text-slate-700">{budgetScheduleCpn.cpnName}</p>
+                <p className="text-xs text-slate-500">{budgetScheduleCpn.memberName}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">開始日</label>
+                  <input
+                    type="date"
+                    value={budgetScheduleForm.startDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">開始時刻</label>
+                  <select
+                    value={budgetScheduleForm.startTime}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, startTime: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {Array.from({ length: 24 * 4 }, (_, i) => {
+                      const hour = Math.floor(i / 4);
+                      const minute = (i % 4) * 15;
+                      const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+                      return <option key={time} value={time}>{time}</option>;
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">終了日</label>
+                  <input
+                    type="date"
+                    value={budgetScheduleForm.endDate}
+                    min={budgetScheduleForm.startDate || new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">終了時刻</label>
+                  <select
+                    value={budgetScheduleForm.endTime}
+                    onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, endTime: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {Array.from({ length: 24 * 4 }, (_, i) => {
+                      const hour = Math.floor(i / 4);
+                      const minute = (i % 4) * 15;
+                      const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+                      return <option key={time} value={time}>{time}</option>;
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">予算額 (円)</label>
+                <input
+                  type="text"
+                  placeholder="例: 10000"
+                  value={budgetScheduleForm.budgetAmount}
+                  onChange={(e) => setBudgetScheduleForm(prev => ({ ...prev, budgetAmount: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">指定期間中の追加予算額を入力</p>
+              </div>
+
+              {budgetScheduleMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  budgetScheduleMessage.type === "success" 
+                    ? "bg-green-50 text-green-700" 
+                    : "bg-red-50 text-red-700"
+                }`}>
+                  {budgetScheduleMessage.text}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-2">
+              <button
+                onClick={() => setShowBudgetScheduleModal(false)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={submitBudgetSchedule}
+                disabled={budgetScheduleSubmitting}
+                className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
+              >
+                {budgetScheduleSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    設定中...
+                  </>
+                ) : (
+                  "スケジュールを設定"
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
