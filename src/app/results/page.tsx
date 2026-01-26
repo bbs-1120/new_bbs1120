@@ -32,6 +32,7 @@ export default function ResultsPage() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<string>("todayProfit");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
 
   // データを取得
   useEffect(() => {
@@ -123,10 +124,26 @@ export default function ResultsPage() {
     return <span className="text-indigo-600 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
   };
 
-  const toggleSelect = (key: string) => {
-    setSelectedKeys((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
+  // Shift+クリックで範囲選択対応
+  const handleCheckboxClick = (index: number, key: string, event: React.MouseEvent) => {
+    if (event.shiftKey && lastClickedIndex !== null) {
+      // Shift+クリック: 範囲選択
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      const rangeKeys = sortedResults.slice(start, end + 1).map(r => r.cpnKey);
+      
+      setSelectedKeys(prev => {
+        const newSelected = new Set(prev);
+        rangeKeys.forEach(k => newSelected.add(k));
+        return Array.from(newSelected);
+      });
+    } else {
+      // 通常クリック: トグル
+      setSelectedKeys(prev =>
+        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+      );
+    }
+    setLastClickedIndex(index);
   };
 
   const toggleSelectAll = () => {
@@ -362,7 +379,7 @@ export default function ResultsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {sortedResults.map((result) => (
+              {sortedResults.map((result, index) => (
                 <tr
                   key={result.cpnKey}
                   className={`hover:bg-slate-50 ${
@@ -373,8 +390,9 @@ export default function ResultsPage() {
                     <input
                       type="checkbox"
                       checked={selectedKeys.includes(result.cpnKey)}
-                      onChange={() => toggleSelect(result.cpnKey)}
-                      className="rounded border-slate-300 h-3 w-3 lg:h-4 lg:w-4"
+                      onClick={(e) => handleCheckboxClick(index, result.cpnKey, e)}
+                      onChange={() => {}} // React controlled input
+                      className="rounded border-slate-300 h-3 w-3 lg:h-4 lg:w-4 cursor-pointer"
                     />
                   </td>
                   <td className="px-2 lg:px-3 py-2 lg:py-3 min-w-[100px] lg:min-w-[180px]">

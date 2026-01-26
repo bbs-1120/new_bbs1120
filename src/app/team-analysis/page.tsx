@@ -127,6 +127,7 @@ export default function TeamAnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [selectedCpns, setSelectedCpns] = useState<Set<string>>(new Set());
+  const [lastClickedCpnIndex, setLastClickedCpnIndex] = useState<number | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [cpnSortKey, setCpnSortKey] = useState<string>("profit");
   const [cpnSortDir, setCpnSortDir] = useState<"asc" | "desc">("desc");
@@ -311,14 +312,28 @@ export default function TeamAnalysisPage() {
     }
   };
 
-  const toggleCpnSelection = (cpnKey: string) => {
-    const newSelected = new Set(selectedCpns);
-    if (newSelected.has(cpnKey)) {
-      newSelected.delete(cpnKey);
+  // Shift+クリックで範囲選択対応
+  const handleCpnCheckboxClick = (index: number, cpnKey: string, event: React.MouseEvent, cpnList: { cpnKey: string }[]) => {
+    if (event.shiftKey && lastClickedCpnIndex !== null) {
+      // Shift+クリック: 範囲選択
+      const start = Math.min(lastClickedCpnIndex, index);
+      const end = Math.max(lastClickedCpnIndex, index);
+      const rangeKeys = cpnList.slice(start, end + 1).map(c => c.cpnKey);
+      
+      const newSelected = new Set(selectedCpns);
+      rangeKeys.forEach(k => newSelected.add(k));
+      setSelectedCpns(newSelected);
     } else {
-      newSelected.add(cpnKey);
+      // 通常クリック: トグル
+      const newSelected = new Set(selectedCpns);
+      if (newSelected.has(cpnKey)) {
+        newSelected.delete(cpnKey);
+      } else {
+        newSelected.add(cpnKey);
+      }
+      setSelectedCpns(newSelected);
     }
-    setSelectedCpns(newSelected);
+    setLastClickedCpnIndex(index);
   };
 
   const handleBulkStatusChange = async (status: "ACTIVE" | "PAUSED") => {
@@ -845,7 +860,7 @@ export default function TeamAnalysisPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedCpns.slice(0, 100).map((cpn) => (
+                    {sortedCpns.slice(0, 100).map((cpn, index) => (
                       <tr 
                         key={cpn.cpnKey} 
                         className={`border-b hover:bg-slate-50 ${selectedCpns.has(cpn.cpnKey) ? "bg-indigo-50" : ""}`}
@@ -854,8 +869,9 @@ export default function TeamAnalysisPage() {
                           <input
                             type="checkbox"
                             checked={selectedCpns.has(cpn.cpnKey)}
-                            onChange={() => toggleCpnSelection(cpn.cpnKey)}
-                            className="rounded"
+                            onClick={(e) => handleCpnCheckboxClick(index, cpn.cpnKey, e, sortedCpns.slice(0, 100))}
+                            onChange={() => {}} // React controlled input
+                            className="rounded cursor-pointer"
                           />
                         </td>
                         <td className="p-2 text-slate-800 break-all max-w-xs">
