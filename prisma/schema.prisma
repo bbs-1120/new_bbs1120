@@ -311,3 +311,20 @@ model cpn_campaign_mapping {
   @@index([cpn_name])
   @@index([campaign_id])
 }
+
+// メンバー別判定ルール
+model member_judgment_rules {
+  id          String   @id @default(uuid())
+  user_id     String   // ユーザーID
+  rule_type   String   // "stop" | "replace" | "continue"
+  rule_name   String   // ルール名（表示用）
+  priority    Int      @default(0) // 優先度（高い順に適用）
+  conditions  Json     // 条件（JSON形式）
+  // 例: { "profit7Days": { "operator": "<=", "value": -30000 }, "isRe": true }
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@index([user_id, is_active])
+  @@index([rule_type])
+}

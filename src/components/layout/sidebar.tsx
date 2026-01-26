@@ -60,6 +60,7 @@ const navigation: NavCategory[] = [
     items: [
       { name: "翌日ON予約", href: "/scheduled-on", icon: Power },
       { name: "自動停止ルール", href: "/auto-stop-rules", icon: AlertTriangle },
+      { name: "判定ルール設定", href: "/judgment-rules", icon: ListChecks },
     ],
   },
   {

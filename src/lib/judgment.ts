@@ -8,6 +8,22 @@ export const JUDGMENT = {
 
 export type JudgmentType = (typeof JUDGMENT)[keyof typeof JUDGMENT];
 
+// カスタムルールの条件型
+export interface RuleCondition {
+  field: string; // "profit7Days" | "roas7Days" | "consecutiveLoss" | "todayProfit" | "isRe"
+  operator: "<" | "<=" | ">" | ">=" | "==" | "!=" | "contains";
+  value: number | string | boolean;
+}
+
+export interface CustomRule {
+  id: string;
+  rule_type: "stop" | "replace" | "continue";
+  rule_name: string;
+  priority: number;
+  conditions: RuleCondition[];
+  is_active: boolean;
+}
+
 // 理由タグの定数
 export const REASON = {
   RE_7DAYS_LOSS_OVER_30K: "Re有+7日赤字3万超",
@@ -310,6 +326,137 @@ export function judgeAnalysisCpn(cpnData: AnalysisCpnData): JudgmentResultData {
  */
 export function judgeAllCpns(cpnList: AnalysisCpnData[]): JudgmentResultData[] {
   return cpnList.map((cpn) => judgeAnalysisCpn(cpn));
+}
+
+/**
+ * カスタムルールの条件を評価
+ */
+function evaluateCondition(
+  condition: RuleCondition,
+  cpnData: AnalysisCpnData
+): boolean {
+  const isRe = hasRe(cpnData.cpnName);
+  
+  // フィールドの値を取得
+  let fieldValue: number | string | boolean;
+  switch (condition.field) {
+    case "profit7Days":
+      fieldValue = cpnData.profit7Days;
+      break;
+    case "roas7Days":
+      fieldValue = cpnData.roas7Days;
+      break;
+    case "consecutiveLoss":
+      fieldValue = cpnData.consecutiveLoss;
+      break;
+    case "todayProfit":
+      fieldValue = cpnData.profit;
+      break;
+    case "isRe":
+      fieldValue = isRe;
+      break;
+    case "cpnName":
+      fieldValue = cpnData.cpnName;
+      break;
+    case "media":
+      fieldValue = cpnData.media;
+      break;
+    default:
+      return false;
+  }
+
+  // 演算子で比較
+  switch (condition.operator) {
+    case "<":
+      return typeof fieldValue === "number" && fieldValue < (condition.value as number);
+    case "<=":
+      return typeof fieldValue === "number" && fieldValue <= (condition.value as number);
+    case ">":
+      return typeof fieldValue === "number" && fieldValue > (condition.value as number);
+    case ">=":
+      return typeof fieldValue === "number" && fieldValue >= (condition.value as number);
+    case "==":
+      return fieldValue === condition.value;
+    case "!=":
+      return fieldValue !== condition.value;
+    case "contains":
+      return typeof fieldValue === "string" && fieldValue.includes(String(condition.value));
+    default:
+      return false;
+  }
+}
+
+/**
+ * カスタムルールを適用してCPNを判定
+ */
+export function judgeWithCustomRules(
+  cpnData: AnalysisCpnData,
+  customRules: CustomRule[]
+): JudgmentResultData | null {
+  // 優先度順にソート（高い順）
+  const sortedRules = [...customRules]
+    .filter(r => r.is_active)
+    .sort((a, b) => b.priority - a.priority);
+
+  for (const rule of sortedRules) {
+    // すべての条件を満たすかチェック
+    const allConditionsMet = rule.conditions.every(cond => 
+      evaluateCondition(cond, cpnData)
+    );
+
+    if (allConditionsMet) {
+      const isRe = hasRe(cpnData.cpnName);
+      const judgmentMap: Record<string, JudgmentType> = {
+        stop: JUDGMENT.STOP,
+        replace: JUDGMENT.REPLACE,
+        continue: JUDGMENT.CONTINUE,
+      };
+
+      return {
+        cpnKey: cpnData.cpnKey,
+        cpnName: cpnData.cpnName,
+        media: cpnData.media,
+        todayProfit: cpnData.profit,
+        profit7Days: cpnData.profit7Days,
+        roas7Days: cpnData.roas7Days,
+        consecutiveLossDays: cpnData.consecutiveLoss,
+        consecutiveProfitDays: cpnData.consecutiveProfit || 0,
+        judgment: judgmentMap[rule.rule_type] || JUDGMENT.ERROR,
+        reasons: [`カスタムルール: ${rule.rule_name}`],
+        isRe,
+        accountName: cpnData.accountName,
+      };
+    }
+  }
+
+  return null; // カスタムルールにマッチしない場合はnull
+}
+
+/**
+ * カスタムルールを適用したCPN判定（カスタムルール優先）
+ */
+export function judgeAnalysisCpnWithCustomRules(
+  cpnData: AnalysisCpnData,
+  customRules: CustomRule[]
+): JudgmentResultData {
+  // 1. まずカスタムルールをチェック
+  const customResult = judgeWithCustomRules(cpnData, customRules);
+  if (customResult) {
+    return customResult;
+  }
+
+  // 2. カスタムルールにマッチしない場合はデフォルトのロジックを適用
+  return judgeAnalysisCpn(cpnData);
+}
+
+/**
+ * 複数のCPNをカスタムルール付きで一括判定
+ */
+export function judgeAllCpnsWithCustomRules(
+  cpnList: AnalysisCpnData[],
+  customRules: CustomRule[]
+): JudgmentResultData[] {
+  return cpnList.map((cpn) => judgeAnalysisCpnWithCustomRules(cpn, customRules));
 }
 
 /**

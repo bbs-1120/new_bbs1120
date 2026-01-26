@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getFullAnalysisData } from "@/lib/googleSheets";
-import { judgeAllCpns, getJudgmentSummary, AnalysisCpnData, JUDGMENT } from "@/lib/judgment";
+import { judgeAllCpns, judgeAllCpnsWithCustomRules, getJudgmentSummary, AnalysisCpnData, JUDGMENT, CustomRule, RuleCondition } from "@/lib/judgment";
 import { getCache, setCache } from "@/lib/cache";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const CACHE_KEY = "judgment_results";
 
@@ -18,11 +19,35 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const judgment = searchParams.get("judgment"); // フィルター用
 
-    // キャッシュをチェック（ユーザー別キャッシュ）
+    // ユーザーのカスタム判定ルールを取得
+    let customRules: CustomRule[] = [];
+    if (session?.user?.id) {
+      try {
+        const dbRules = await prisma.member_judgment_rules.findMany({
+          where: { user_id: session.user.id, is_active: true },
+          orderBy: { priority: "desc" },
+        });
+        customRules = dbRules.map(r => ({
+          id: r.id,
+          rule_type: r.rule_type as "stop" | "replace" | "continue",
+          rule_name: r.rule_name,
+          priority: r.priority,
+          conditions: r.conditions as RuleCondition[],
+          is_active: r.is_active,
+        }));
+      } catch (e) {
+        console.error("Failed to fetch custom rules:", e);
+      }
+    }
+
+    // カスタムルールがある場合はキャッシュを使わない（リアルタイム判定）
+    const hasCustomRules = customRules.length > 0;
+    
+    // キャッシュをチェック（ユーザー別キャッシュ、カスタムルールがある場合はスキップ）
     const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
       ? CACHE_KEY 
       : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
-    let results = getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
+    let results = hasCustomRules ? null : getCache<ReturnType<typeof judgeAllCpns>>(cacheKeyWithUser);
 
     if (!results) {
       // マイ分析と同じデータソースからデータを取得
@@ -62,11 +87,14 @@ export async function GET(request: Request) {
         accountName: cpn.accountName || "",
       }));
 
-      // 判定実行
-      results = judgeAllCpns(cpnList);
-
-      // キャッシュに保存（60分）
-      setCache(cacheKeyWithUser, results, 60 * 60 * 1000);
+      // 判定実行（カスタムルールがあれば適用）
+      if (hasCustomRules) {
+        results = judgeAllCpnsWithCustomRules(cpnList, customRules);
+      } else {
+        results = judgeAllCpns(cpnList);
+        // キャッシュに保存（60分）- カスタムルールがない場合のみ
+        setCache(cacheKeyWithUser, results, 60 * 60 * 1000);
+      }
     }
 
     // フィルター適用
