@@ -72,8 +72,8 @@ export default function HomePage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      // キャッシュをスキップして最新データを取得（ユーザー別フィルタリングを確実に適用）
-      const analysisRes = await fetch("/api/analysis?refresh=true", { signal: controller.signal });
+      // ホーム画面は全体の概要を表示（フィルタリングなし）
+      const analysisRes = await fetch("/api/analysis?home=true", { signal: controller.signal });
       clearTimeout(timeoutId);
       
       const analysisData = await analysisRes.json();

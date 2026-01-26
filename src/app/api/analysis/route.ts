@@ -191,6 +191,7 @@ export async function GET(request: Request) {
     // URLパラメータでキャッシュをスキップできる
     const { searchParams } = new URL(request.url);
     const skipCache = searchParams.get("refresh") === "true";
+    const isHomePage = searchParams.get("home") === "true"; // ホーム画面は全体データを表示
 
     // キャッシュからデータを取得（管理者と一般ユーザーで別キャッシュ）
     const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
@@ -199,7 +200,8 @@ export async function GET(request: Request) {
     let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
 
     // メンバーの場合のフィルタリング用teamName
-    const filterTeamName = userRole !== "admin" ? userTeamName : null;
+    // ホーム画面（home=true）の場合は全体データを表示
+    const filterTeamName = (userRole !== "admin" && !isHomePage) ? userTeamName : null;
 
     if (!cachedData) {
       // キャッシュがない場合はスプレッドシートから取得
