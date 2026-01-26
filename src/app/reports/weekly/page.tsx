@@ -255,8 +255,25 @@ export default function WeeklyReportsPage() {
     setCreatives([]);
     try {
       const { startDate, endDate } = getWeekDates(selectedWeek);
-      // CPNの単価を計算 (売上 / CV)、CVが0の場合はデフォルト値を使用
-      const unitPrice = cpn.cv > 0 ? Math.round(cpn.revenue / cpn.cv) : 20000;
+      
+      // CPN名からオファーキーを抽出して単価を取得
+      // 例: 新規グロース部_悠太_Rクリニック女性_新直LINE_FB_AX072...
+      // → Rクリニック女性_新直LINE_FB
+      let unitPrice = 20000; // デフォルト
+      try {
+        const unitPriceRes = await fetch("/api/unit-prices", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cpnName: cpn.cpnName }),
+        });
+        const unitPriceData = await unitPriceRes.json();
+        if (unitPriceData.success && unitPriceData.unitPrice) {
+          unitPrice = unitPriceData.unitPrice;
+        }
+      } catch (e) {
+        console.log("Failed to fetch unit price, using default:", e);
+      }
+      
       const res = await fetch(`/api/campaigns/creatives?campaignId=${cpn.campaignId}&media=${cpn.media}&startDate=${startDate}&endDate=${endDate}&unitPrice=${unitPrice}`);
       const data = await res.json();
       if (data.success) setCreatives(data.creatives || []);

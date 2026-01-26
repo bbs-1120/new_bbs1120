@@ -328,3 +328,20 @@ model member_judgment_rules {
   @@index([user_id, is_active])
   @@index([rule_type])
 }
+
+// オファー単価マスタ
+// offer_key = 案件名_オファー名_媒体名 (例: Rクリニック女性_新直LINE_FB)
+model offer_unit_prices {
+  id              String   @id @default(uuid())
+  offer_key       String   @unique  // 案件名_オファー名_媒体名
+  project_name    String             // 案件名
+  offer_name      String             // オファー名
+  media           String             // 媒体名 (FB, TikTok, pangle, YT, LINE, X)
+  yesterday_price Int      @default(0)  // 前日単価
+  today_price     Int      @default(0)  // 当日単価
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([project_name])
+  @@index([media])
+}
