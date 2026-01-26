@@ -43,7 +43,6 @@ interface ActivityItem {
 }
 
 const CACHE_KEY = "home_data_cache";
-const CACHE_DURATION = 30 * 60 * 1000;
 
 // ストーリーズ風クイックアクセス
 const quickAccess = [
@@ -66,36 +65,15 @@ export default function HomePage() {
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
 
   const userName = session?.user?.name || session?.user?.email?.split("@")[0] || "ユーザー";
-
-  const loadFromCache = useCallback(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
-          setTodaySummary(data.todaySummary);
-          setIsLoading(false);
-          return true;
-        }
-      }
-    } catch {}
-    return false;
-  }, []);
-
-  const saveToCache = useCallback((data: { todaySummary: TodaySummary }) => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-    } catch {}
-  }, []);
+  const userTeamName = session?.user?.teamName || null;
 
   const fetchData = useCallback(async () => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const analysisRes = await fetch("/api/analysis", { signal: controller.signal });
+      // キャッシュをスキップして最新データを取得（ユーザー別フィルタリングを確実に適用）
+      const analysisRes = await fetch("/api/analysis?refresh=true", { signal: controller.signal });
       clearTimeout(timeoutId);
       
       const analysisData = await analysisRes.json();
@@ -111,7 +89,11 @@ export default function HomePage() {
           monthlyProfit: analysisData.summary.monthlyProfit || 0,
         };
         setTodaySummary(newTodaySummary);
-        saveToCache({ todaySummary: newTodaySummary });
+
+        // デバッグ情報をログに出力
+        if (analysisData._debug) {
+          console.log("Analysis API Debug:", analysisData._debug);
+        }
 
         // アクティビティを生成
         const newActivities: ActivityItem[] = [];
@@ -157,15 +139,15 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [saveToCache]);
+  }, []);
 
   useEffect(() => {
-    const hasCachedData = loadFromCache();
-    if (hasCachedData) {
-      setTimeout(() => fetchData(), 2000);
-    } else {
-      fetchData();
+    // ユーザー別データを取得するため、常に最新データを取得
+    // ローカルキャッシュをクリアして新しいデータを取得
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(CACHE_KEY);
     }
+    fetchData();
   }, []);
 
   const toggleLike = (postId: string) => {

@@ -423,6 +423,13 @@ export async function GET(request: Request) {
       projectMonthly,
       aiAdvice,
       cachedAt: new Date().toISOString(),
+      // デバッグ情報（ユーザーフィルタリングの確認用）
+      _debug: {
+        userRole,
+        userTeamName,
+        filterTeamName,
+        cpnCount: cpnList.length,
+      },
     });
 
     // 積極的なキャッシュ設定（高速表示のため）
