@@ -1,17 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { 
-  TrendingUp, 
+  Heart,
+  MessageCircle,
+  Bookmark,
+  MoreHorizontal,
+  TrendingUp,
   TrendingDown,
   BarChart3,
   FileText,
   Power,
-  ChevronRight,
   Settings,
-  Zap,
   Users,
+  Zap,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 
 interface TodaySummary {
@@ -24,32 +32,40 @@ interface TodaySummary {
   monthlyProfit: number;
 }
 
+interface ActivityItem {
+  id: string;
+  type: "profit" | "alert" | "success" | "info";
+  title: string;
+  description: string;
+  value?: string;
+  time: string;
+  icon: "trending" | "alert" | "check" | "info";
+}
+
 const CACHE_KEY = "home_data_cache";
 const CACHE_DURATION = 30 * 60 * 1000;
 
+// ストーリーズ風クイックアクセス
+const quickAccess = [
+  { id: "analysis", label: "マイ分析", href: "/analysis", color: "from-pink-500 to-rose-500", icon: BarChart3 },
+  { id: "team", label: "チーム", href: "/team-analysis", color: "from-purple-500 to-violet-500", icon: Users },
+  { id: "report", label: "レポート", href: "/reports/weekly", color: "from-blue-500 to-cyan-500", icon: FileText },
+  { id: "schedule", label: "予約", href: "/scheduled-on", color: "from-amber-500 to-orange-500", icon: Power },
+  { id: "rules", label: "ルール", href: "/judgment-rules", color: "from-emerald-500 to-teal-500", icon: Zap },
+  { id: "settings", label: "設定", href: "/settings", color: "from-slate-400 to-slate-600", icon: Settings },
+];
+
 export default function HomePage() {
+  const { data: session } = useSession();
   const [todaySummary, setTodaySummary] = useState<TodaySummary>({
     spend: 0, revenue: 0, profit: 0, roas: 0, cv: 0, mcv: 0, monthlyProfit: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [hasCache, setHasCache] = useState(false);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
 
-  const { greeting, currentDate, currentMonth } = useMemo(() => {
-    const now = new Date();
-    const hour = now.getHours();
-    let greet = "Good Afternoon";
-    if (hour >= 5 && hour < 12) greet = "Good Morning";
-    else if (hour >= 18 || hour < 5) greet = "Good Evening";
-    
-    const date = now.toLocaleString("ja-JP", {
-      timeZone: "Asia/Tokyo",
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-    });
-    const month = now.getMonth() + 1;
-    return { greeting: greet, currentDate: date, currentMonth: month };
-  }, []);
+  const userName = session?.user?.name || session?.user?.email?.split("@")[0] || "ユーザー";
 
   const loadFromCache = useCallback(() => {
     if (typeof window === "undefined") return false;
@@ -59,7 +75,6 @@ export default function HomePage() {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_DURATION) {
           setTodaySummary(data.todaySummary);
-          setHasCache(true);
           setIsLoading(false);
           return true;
         }
@@ -85,24 +100,64 @@ export default function HomePage() {
       
       const analysisData = await analysisRes.json();
       
-      const newTodaySummary = analysisData.success ? {
-        spend: analysisData.summary.spend,
-        revenue: analysisData.summary.revenue,
-        profit: analysisData.summary.profit,
-        roas: analysisData.summary.roas,
-        cv: analysisData.summary.cv,
-        mcv: analysisData.summary.mcv,
-        monthlyProfit: analysisData.summary.monthlyProfit || 0,
-      } : todaySummary;
+      if (analysisData.success) {
+        const newTodaySummary = {
+          spend: analysisData.summary.spend,
+          revenue: analysisData.summary.revenue,
+          profit: analysisData.summary.profit,
+          roas: analysisData.summary.roas,
+          cv: analysisData.summary.cv,
+          mcv: analysisData.summary.mcv,
+          monthlyProfit: analysisData.summary.monthlyProfit || 0,
+        };
+        setTodaySummary(newTodaySummary);
+        saveToCache({ todaySummary: newTodaySummary });
 
-      setTodaySummary(newTodaySummary);
-      saveToCache({ todaySummary: newTodaySummary });
+        // アクティビティを生成
+        const newActivities: ActivityItem[] = [];
+        
+        // 利益情報
+        newActivities.push({
+          id: "profit-today",
+          type: newTodaySummary.profit >= 0 ? "profit" : "alert",
+          title: "本日のパフォーマンス",
+          description: `ROAS ${newTodaySummary.roas.toFixed(0)}% | CV ${newTodaySummary.cv}件`,
+          value: `${newTodaySummary.profit >= 0 ? "+" : ""}¥${Math.floor(newTodaySummary.profit).toLocaleString()}`,
+          time: "今日",
+          icon: newTodaySummary.profit >= 0 ? "trending" : "alert",
+        });
+
+        // 月間累計
+        newActivities.push({
+          id: "monthly-profit",
+          type: newTodaySummary.monthlyProfit >= 0 ? "success" : "alert",
+          title: "今月の累計利益",
+          description: `消化: ¥${Math.floor(newTodaySummary.spend).toLocaleString()}`,
+          value: `${newTodaySummary.monthlyProfit >= 0 ? "+" : ""}¥${Math.floor(newTodaySummary.monthlyProfit).toLocaleString()}`,
+          time: "今月",
+          icon: newTodaySummary.monthlyProfit >= 0 ? "check" : "alert",
+        });
+
+        // CV情報
+        if (newTodaySummary.cv > 0) {
+          newActivities.push({
+            id: "cv-info",
+            type: "info",
+            title: "コンバージョン",
+            description: `本日 ${newTodaySummary.cv}件のCVを獲得しました`,
+            time: "今日",
+            icon: "info",
+          });
+        }
+
+        setActivities(newActivities);
+      }
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [todaySummary, saveToCache]);
+  }, [saveToCache]);
 
   useEffect(() => {
     const hasCachedData = loadFromCache();
@@ -113,62 +168,73 @@ export default function HomePage() {
     }
   }, []);
 
+  const toggleLike = (postId: string) => {
+    setLikedPosts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(postId)) {
+        newSet.delete(postId);
+      } else {
+        newSet.add(postId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSave = (postId: string) => {
+    setSavedPosts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(postId)) {
+        newSet.delete(postId);
+      } else {
+        newSet.add(postId);
+      }
+      return newSet;
+    });
+  };
+
   const formatNumber = (value: number) => {
     return Math.floor(Math.abs(value)).toLocaleString("ja-JP");
   };
 
-  const menuItems = [
-    {
-      title: "マイ分析",
-      subtitle: "Daily Analytics",
-      href: "/analysis",
-      icon: BarChart3,
-      color: "from-emerald-500 to-teal-600",
-    },
-    {
-      title: "チーム分析",
-      subtitle: "Team Analytics",
-      href: "/team-analysis",
-      icon: Users,
-      color: "from-violet-500 to-purple-600",
-    },
-    {
-      title: "週次レポート",
-      subtitle: "Weekly Report",
-      href: "/reports/weekly",
-      icon: FileText,
-      color: "from-blue-500 to-indigo-600",
-    },
-    {
-      title: "翌日ON予約",
-      subtitle: "Schedule Activation",
-      href: "/scheduled-on",
-      icon: Power,
-      color: "from-amber-500 to-orange-600",
-    },
-    {
-      title: "設定",
-      subtitle: "Settings",
-      href: "/settings",
-      icon: Settings,
-      color: "from-slate-500 to-slate-700",
-    },
-  ];
+  const getIconComponent = (iconType: string) => {
+    switch (iconType) {
+      case "trending": return TrendingUp;
+      case "alert": return AlertTriangle;
+      case "check": return CheckCircle;
+      default: return Zap;
+    }
+  };
 
   // ローディング
-  if (isLoading && !hasCache) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 -mx-4 lg:-mx-8 -mt-4 lg:-mt-6 px-6 lg:px-8 pt-12 lg:pt-16">
-        <div className="max-w-lg mx-auto">
-          <div className="animate-pulse">
-            <div className="h-4 w-24 bg-slate-800 rounded mb-2" />
-            <div className="h-8 w-32 bg-slate-800 rounded mb-16" />
-            <div className="h-48 bg-slate-800/50 rounded-3xl mb-8" />
-            <div className="space-y-3">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-20 bg-slate-800/50 rounded-2xl" />
+      <div className="min-h-screen bg-white -mx-4 lg:-mx-8 -mt-4 lg:-mt-6">
+        <div className="max-w-2xl mx-auto px-4">
+          {/* ストーリーズスケルトン */}
+          <div className="py-4 border-b border-gray-100">
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 animate-pulse">
+                  <div className="w-16 h-16 rounded-full bg-gray-200" />
+                  <div className="w-12 h-3 bg-gray-200 rounded" />
+                </div>
               ))}
             </div>
+          </div>
+          {/* フィードスケルトン */}
+          <div className="py-4 space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="border border-gray-100 rounded-lg p-4 animate-pulse">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-200" />
+                  <div className="flex-1">
+                    <div className="w-24 h-4 bg-gray-200 rounded mb-2" />
+                    <div className="w-16 h-3 bg-gray-200 rounded" />
+                  </div>
+                </div>
+                <div className="h-32 bg-gray-200 rounded-lg" />
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -176,145 +242,324 @@ export default function HomePage() {
   }
 
   const profitIsPositive = todaySummary.profit >= 0;
-  const monthlyIsPositive = todaySummary.monthlyProfit >= 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 -mx-4 lg:-mx-8 -mt-4 lg:-mt-6 px-6 lg:px-8 pt-10 lg:pt-14 pb-16">
-      <div className="max-w-lg mx-auto">
-        
-        {/* ヘッダー */}
-        <header className="mb-8">
-          <div className="flex items-center gap-2 mb-1">
-            <Zap className="h-4 w-4 text-amber-400" />
-            <p className="text-xs text-slate-500 font-medium tracking-widest uppercase">
-              {greeting}
-            </p>
-          </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">
-            {currentDate}
-          </h1>
-        </header>
-
-        {/* メインカード */}
-        <div className="relative mb-8">
-          {/* 背景のグロー効果 */}
-          <div className={`absolute inset-0 rounded-3xl blur-xl opacity-20 ${
-            profitIsPositive ? "bg-emerald-500" : "bg-red-500"
-          }`} />
+    <div className="min-h-screen bg-white -mx-4 lg:-mx-8 -mt-4 lg:-mt-6">
+      <div className="flex">
+        {/* メインフィード */}
+        <div className="flex-1 max-w-2xl mx-auto border-x border-gray-100">
           
-          <div className="relative bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-xl rounded-3xl border border-slate-700/50 p-6 shadow-2xl">
-            
-            {/* 当日利益 */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-slate-400">
-                  本日の利益
-                </span>
-                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                  todaySummary.roas >= 100 
-                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
-                    : "bg-red-500/20 text-red-400 border border-red-500/30"
-                }`}>
-                  {todaySummary.roas >= 100 ? (
-                    <TrendingUp className="h-3 w-3" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3" />
-                  )}
-                  ROAS {todaySummary.roas.toFixed(0)}%
-                </div>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className={`text-4xl lg:text-5xl font-black tracking-tight ${
-                  profitIsPositive ? "text-white" : "text-red-400"
-                }`}>
-                  {profitIsPositive ? "+" : "-"}¥{formatNumber(todaySummary.profit)}
-                </span>
-              </div>
-            </div>
-
-            {/* 区切り線 */}
-            <div className="h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent mb-6" />
-
-            {/* 月間累計 */}
-            <div className="flex items-end justify-between">
-              <div>
-                <span className="text-sm font-medium text-slate-400 block mb-2">
-                  {currentMonth}月累計
-                </span>
-                <span className={`text-2xl lg:text-3xl font-bold tracking-tight ${
-                  monthlyIsPositive ? "text-emerald-400" : "text-red-400"
-                }`}>
-                  {monthlyIsPositive ? "+" : "-"}¥{formatNumber(todaySummary.monthlyProfit)}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-500 block mb-1">CV</span>
-                <span className="text-2xl font-bold text-white">
-                  {todaySummary.cv}
-                </span>
-              </div>
+          {/* ストーリーズ風クイックアクセス */}
+          <div className="py-4 px-4 border-b border-gray-100 bg-white">
+            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+              {quickAccess.map((item) => (
+                <Link 
+                  key={item.id} 
+                  href={item.href}
+                  className="flex flex-col items-center gap-1.5 flex-shrink-0 group"
+                >
+                  <div className={`p-0.5 rounded-full bg-gradient-to-tr ${item.color}`}>
+                    <div className="p-0.5 rounded-full bg-white">
+                      <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${item.color} flex items-center justify-center group-hover:scale-105 transition-transform`}>
+                        <item.icon className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-600 font-medium">
+                    {item.label}
+                  </span>
+                </Link>
+              ))}
             </div>
           </div>
-        </div>
 
-        {/* ナビゲーションメニュー */}
-        <nav>
-          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] mb-3 px-1">
-            Menu
-          </p>
-          <div className="space-y-2">
-            {menuItems.map((item) => (
-              <Link 
-                key={item.href} 
-                href={item.href}
-                className="group block"
-              >
-                <div className="relative overflow-hidden bg-slate-800/50 hover:bg-slate-800 rounded-2xl border border-slate-700/50 hover:border-slate-600 p-4 transition-all duration-300 active:scale-[0.98]">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                      <item.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-[15px] font-bold text-white">
-                        {item.title}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {item.subtitle}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-1 transition-all duration-300" />
+          {/* フィード */}
+          <div className="divide-y divide-gray-100">
+            
+            {/* サマリーカード（投稿風） */}
+            <article className="bg-white">
+              {/* ヘッダー */}
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    profitIsPositive ? "bg-gradient-to-br from-emerald-400 to-teal-500" : "bg-gradient-to-br from-red-400 to-rose-500"
+                  }`}>
+                    {profitIsPositive ? (
+                      <TrendingUp className="w-5 h-5 text-white" />
+                    ) : (
+                      <TrendingDown className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">AdProfit</p>
+                    <p className="text-xs text-gray-500">本日のサマリー</p>
                   </div>
                 </div>
-              </Link>
-            ))}
-          </div>
-        </nav>
+                <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <MoreHorizontal className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
 
-        {/* クイックリンク */}
-        <div className="mt-8 flex items-center justify-center gap-8">
-          <Link 
-            href="/results" 
-            className="text-xs text-slate-500 hover:text-emerald-400 transition-colors font-medium"
-          >
-            判断結果 →
-          </Link>
-          <Link 
-            href="/history" 
-            className="text-xs text-slate-500 hover:text-emerald-400 transition-colors font-medium"
-          >
-            実行履歴 →
-          </Link>
+              {/* コンテンツ */}
+              <div className={`mx-3 rounded-xl p-6 ${
+                profitIsPositive 
+                  ? "bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100" 
+                  : "bg-gradient-to-br from-red-50 to-rose-50 border border-red-100"
+              }`}>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500 mb-2">本日の利益</p>
+                  <p className={`text-4xl font-bold mb-4 ${
+                    profitIsPositive ? "text-emerald-600" : "text-red-600"
+                  }`}>
+                    {profitIsPositive ? "+" : "-"}¥{formatNumber(todaySummary.profit)}
+                  </p>
+                  <div className="flex items-center justify-center gap-6 text-sm">
+                    <div>
+                      <span className="text-gray-500">ROAS</span>
+                      <p className={`font-bold ${todaySummary.roas >= 100 ? "text-emerald-600" : "text-red-600"}`}>
+                        {todaySummary.roas.toFixed(0)}%
+                      </p>
+                    </div>
+                    <div className="w-px h-8 bg-gray-200" />
+                    <div>
+                      <span className="text-gray-500">CV</span>
+                      <p className="font-bold text-gray-900">{todaySummary.cv}</p>
+                    </div>
+                    <div className="w-px h-8 bg-gray-200" />
+                    <div>
+                      <span className="text-gray-500">消化</span>
+                      <p className="font-bold text-gray-900">¥{formatNumber(todaySummary.spend)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* アクション */}
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => toggleLike("summary")}
+                    className="hover:opacity-70 transition-opacity"
+                  >
+                    <Heart className={`w-6 h-6 ${likedPosts.has("summary") ? "fill-red-500 text-red-500" : "text-gray-900"}`} />
+                  </button>
+                  <Link href="/analysis" className="hover:opacity-70 transition-opacity">
+                    <MessageCircle className="w-6 h-6 text-gray-900" />
+                  </Link>
+                </div>
+                <button 
+                  onClick={() => toggleSave("summary")}
+                  className="hover:opacity-70 transition-opacity"
+                >
+                  <Bookmark className={`w-6 h-6 ${savedPosts.has("summary") ? "fill-gray-900 text-gray-900" : "text-gray-900"}`} />
+                </button>
+              </div>
+
+              {/* いいね数 */}
+              <div className="px-3 pb-3">
+                <p className="text-sm font-semibold text-gray-900">
+                  {likedPosts.has("summary") ? "あなた" : ""}がチェックしました
+                </p>
+                <Link href="/analysis" className="text-sm text-gray-500 hover:text-gray-900">
+                  詳細を見る
+                </Link>
+              </div>
+            </article>
+
+            {/* アクティビティカード */}
+            {activities.map((activity) => {
+              const IconComponent = getIconComponent(activity.icon);
+              return (
+                <article key={activity.id} className="bg-white">
+                  <div className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        activity.type === "profit" ? "bg-gradient-to-br from-emerald-400 to-teal-500" :
+                        activity.type === "alert" ? "bg-gradient-to-br from-amber-400 to-orange-500" :
+                        activity.type === "success" ? "bg-gradient-to-br from-blue-400 to-indigo-500" :
+                        "bg-gradient-to-br from-purple-400 to-violet-500"
+                      }`}>
+                        <IconComponent className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{activity.title}</p>
+                        <p className="text-xs text-gray-500">{activity.time}</p>
+                      </div>
+                    </div>
+                    <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                      <MoreHorizontal className="w-5 h-5 text-gray-600" />
+                    </button>
+                  </div>
+
+                  <div className="px-3 pb-3">
+                    <p className="text-sm text-gray-600 mb-2">{activity.description}</p>
+                    {activity.value && (
+                      <p className={`text-2xl font-bold ${
+                        activity.type === "profit" || activity.type === "success" ? "text-emerald-600" : 
+                        activity.type === "alert" ? "text-amber-600" : "text-gray-900"
+                      }`}>
+                        {activity.value}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4 px-3 pb-3">
+                    <button 
+                      onClick={() => toggleLike(activity.id)}
+                      className="hover:opacity-70 transition-opacity"
+                    >
+                      <Heart className={`w-5 h-5 ${likedPosts.has(activity.id) ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+
+            {/* クイックリンクカード */}
+            <article className="bg-white p-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                Quick Links
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Link 
+                  href="/results"
+                  className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors group"
+                >
+                  <span className="text-sm font-medium text-gray-700">判定結果一覧</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link 
+                  href="/results/stop"
+                  className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors group"
+                >
+                  <span className="text-sm font-medium text-gray-700">CPN診断</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link 
+                  href="/auto-stop-rules"
+                  className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors group"
+                >
+                  <span className="text-sm font-medium text-gray-700">自動停止ルール</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link 
+                  href="/history"
+                  className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors group"
+                >
+                  <span className="text-sm font-medium text-gray-700">実行履歴</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+            </article>
+          </div>
         </div>
 
-        {/* フッター */}
-        <footer className="mt-16 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700/50">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[11px] text-slate-500 font-medium">
-              GrowthDeck
-            </span>
+        {/* 右サイドバー（デスクトップのみ） */}
+        <aside className="hidden xl:block w-80 p-6 sticky top-20 h-fit">
+          {/* ユーザー情報 */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 p-0.5">
+              <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+                <span className="text-lg font-bold text-gray-700">
+                  {userName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">{userName}</p>
+              <p className="text-sm text-gray-500">{session?.user?.teamName || "AdProfit"}</p>
+            </div>
+            <button className="text-xs font-semibold text-blue-500 hover:text-blue-600">
+              切替
+            </button>
           </div>
-        </footer>
+
+          {/* おすすめ */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-gray-500">おすすめ</p>
+              <Link href="/analysis" className="text-xs font-semibold text-gray-900 hover:text-gray-600">
+                すべて見る
+              </Link>
+            </div>
+            <div className="space-y-3">
+              <Link href="/analysis" className="flex items-center gap-3 group">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">マイ分析</p>
+                  <p className="text-xs text-gray-500">詳細データを確認</p>
+                </div>
+                <span className="text-xs font-semibold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                  開く
+                </span>
+              </Link>
+              <Link href="/team-analysis" className="flex items-center gap-3 group">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center">
+                  <Users className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">チーム分析</p>
+                  <p className="text-xs text-gray-500">チーム全体の成績</p>
+                </div>
+                <span className="text-xs font-semibold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                  開く
+                </span>
+              </Link>
+              <Link href="/reports/weekly" className="flex items-center gap-3 group">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">週次レポート</p>
+                  <p className="text-xs text-gray-500">週間パフォーマンス</p>
+                </div>
+                <span className="text-xs font-semibold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                  開く
+                </span>
+              </Link>
+            </div>
+          </div>
+
+          {/* 月間サマリー */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              今月のサマリー
+            </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">累計利益</span>
+                <span className={`text-sm font-bold ${todaySummary.monthlyProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {todaySummary.monthlyProfit >= 0 ? "+" : ""}¥{formatNumber(todaySummary.monthlyProfit)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">本日CV</span>
+                <span className="text-sm font-bold text-gray-900">{todaySummary.cv}件</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">ROAS</span>
+                <span className={`text-sm font-bold ${todaySummary.roas >= 100 ? "text-emerald-600" : "text-red-600"}`}>
+                  {todaySummary.roas.toFixed(0)}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* フッター */}
+          <footer className="mt-8 text-xs text-gray-400 space-y-2">
+            <div className="flex flex-wrap gap-x-2">
+              <span>AdProfit</span>
+              <span>・</span>
+              <span>ヘルプ</span>
+              <span>・</span>
+              <span>API</span>
+            </div>
+            <p>&copy; 2026 AdProfit from Growth</p>
+          </footer>
+        </aside>
       </div>
     </div>
   );
