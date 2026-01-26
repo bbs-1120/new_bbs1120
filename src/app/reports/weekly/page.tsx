@@ -38,6 +38,25 @@ interface MediaData {
   roas: number;
 }
 
+// 媒体ロゴコンポーネント
+function MediaLogo({ media, size = 20 }: { media: string; size?: number }) {
+  const logoMap: Record<string, string> = {
+    "FB": "/icons/fb-logo.png",
+    "Meta": "/icons/fb-logo.png",
+    "TikTok": "/icons/tiktok-logo.png",
+    "Pangle": "/icons/pangle-logo.png",
+    "Yahoo": "/icons/yahoo-logo.png",
+  };
+  const src = logoMap[media];
+  if (!src) return <span className="text-sm font-medium">{media}</span>;
+  return (
+    <div className="flex items-center gap-2">
+      <img src={src} alt={media} style={{ width: size, height: size }} className="object-contain shrink-0" />
+      <span className="text-sm font-medium">{media}</span>
+    </div>
+  );
+}
+
 interface ProjectMediaData {
   project: string;
   media: string;
@@ -432,7 +451,7 @@ export default function WeeklyReportsPage() {
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card><CardHeader className="bg-amber-500 text-white py-3 rounded-t-lg"><CardTitle className="text-base">📊 案件別</CardTitle></CardHeader><CardContent className="p-0 max-h-80 overflow-y-auto"><table className="w-full text-sm"><thead className="bg-slate-50 sticky top-0"><tr><th className="p-2 text-left">案件名</th><th className="p-2 text-right">利益</th><th className="p-2 text-right">ROAS</th></tr></thead><tbody>{projectData.map((p, i) => (<tr key={p.name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}><td className="p-2">{p.name}</td><td className={`p-2 text-right font-bold ${p.profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(p.profit)}</td><td className="p-2 text-right">{p.roas.toFixed(1)}%</td></tr>))}</tbody></table></CardContent></Card>
-                <Card><CardHeader className="bg-pink-500 text-white py-3 rounded-t-lg"><CardTitle className="text-base">📺 媒体別</CardTitle></CardHeader><CardContent className="p-0"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="p-2 text-left">媒体</th><th className="p-2 text-right">消化</th><th className="p-2 text-right">利益</th><th className="p-2 text-right">ROAS</th></tr></thead><tbody>{mediaData.map((m) => (<tr key={m.media} className="border-b"><td className="p-2 font-bold">{m.media}</td><td className="p-2 text-right">¥{Math.round(m.spend).toLocaleString()}</td><td className={`p-2 text-right font-bold ${m.profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(m.profit)}</td><td className="p-2 text-right">{m.roas.toFixed(1)}%</td></tr>))}</tbody></table></CardContent></Card>
+                <Card><CardHeader className="bg-pink-500 text-white py-3 rounded-t-lg"><CardTitle className="text-base">📺 媒体別</CardTitle></CardHeader><CardContent className="p-0"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="p-2 text-left">媒体</th><th className="p-2 text-right">消化</th><th className="p-2 text-right">利益</th><th className="p-2 text-right">ROAS</th></tr></thead><tbody>{mediaData.map((m) => (<tr key={m.media} className="border-b"><td className="p-2"><MediaLogo media={m.media} size={24} /></td><td className="p-2 text-right">¥{Math.round(m.spend).toLocaleString()}</td><td className={`p-2 text-right font-bold ${m.profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(m.profit)}</td><td className="p-2 text-right">{m.roas.toFixed(1)}%</td></tr>))}</tbody></table></CardContent></Card>
               </div>
               
               <section className="space-y-6">
@@ -485,7 +504,7 @@ export default function WeeklyReportsPage() {
                           onClick={() => setSelectedProjectMedia({project: pm.project, media: pm.media})}
                         >
                           <td className="p-3 font-medium">{pm.project}</td>
-                          <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${pm.media === "FB" ? "bg-blue-100 text-blue-700" : pm.media === "TikTok" ? "bg-slate-800 text-white" : "bg-cyan-100 text-cyan-700"}`}>{pm.media}</span></td>
+                          <td className="p-3"><MediaLogo media={pm.media} size={20} /></td>
                           <td className="p-3 text-right">¥{Math.round(pm.spend).toLocaleString()}</td>
                           <td className="p-3 text-right">¥{Math.round(pm.revenue).toLocaleString()}</td>
                           <td className={`p-3 text-right font-bold ${pm.profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(pm.profit)}</td>
