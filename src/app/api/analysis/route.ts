@@ -432,8 +432,9 @@ export async function GET(request: Request) {
     return response;
   } catch (error) {
     console.error("Analysis API error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "分析データの取得に失敗しました" },
+      { success: false, error: "分析データの取得に失敗しました", details: errorMessage },
       { status: 500 }
     );
   }
