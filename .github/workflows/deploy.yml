@@ -62,3 +62,4 @@ jobs:
 # Retry deploy 20260128185320
 # Deploy with API enabled 20260128190414
 # Deploy with Storage Admin 20260128193159
+# Deploy with Cloud Build Editor 20260128194429
