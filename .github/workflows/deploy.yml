@@ -77,3 +77,4 @@ jobs:
           URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
           echo "✅ Deployed successfully!"
           echo "🌐 URL: $URL"
+# Trigger deploy 20260128181531
