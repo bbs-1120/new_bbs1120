@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect, useCallback } from "react";
 import { 
   Users, Briefcase, Plus, Trash2, ChevronRight, Save, X,
-  AlertTriangle, History, GripVertical, Clock, User,
-  UserCheck, Building2, Zap, ChevronUp, ChevronDown
+  AlertTriangle, History, Clock, User,
+  UserCheck, Building2, Zap, ChevronUp, ChevronDown, Play, Eye, Loader2
 } from "lucide-react";
 
 interface Rule {
@@ -36,10 +36,11 @@ interface StopHistory {
   memberName: string;
   projectName: string;
   ruleName: string;
-  conditions: Record<string, number>;
+  conditions: Record<string, number | string[]> & { matched_descriptions?: string[] };
   metrics: Record<string, number>;
   stoppedAt: string;
   status: string;
+  errorMessage?: string;
 }
 
 export default function AutoStopRulesPage() {
@@ -51,6 +52,17 @@ export default function AutoStopRulesPage() {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"rules" | "history">("rules");
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewResults, setPreviewResults] = useState<{
+    cpnName: string;
+    media: string;
+    memberName: string;
+    projectName: string;
+    ruleName: string;
+    metrics: { spend: number; cv: number; mcv: number; profit: number; roas: number };
+  }[] | null>(null);
+  const [executeMessage, setExecuteMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
   // 新規ルール作成用
   const [newRule, setNewRule] = useState({
@@ -174,6 +186,58 @@ export default function AutoStopRulesPage() {
       console.error("Failed to reorder:", error);
     }
   };
+
+  // プレビュー（どのCPNが停止対象か確認）
+  const previewStopTargets = async () => {
+    setIsPreviewing(true);
+    setPreviewResults(null);
+    try {
+      const res = await fetch("/api/auto-stop/execute");
+      const data = await res.json();
+      if (data.success) {
+        setPreviewResults(data.targets || []);
+      } else {
+        setExecuteMessage({ type: "error", text: data.error || "プレビューに失敗しました" });
+      }
+    } catch (error) {
+      console.error("Preview failed:", error);
+      setExecuteMessage({ type: "error", text: "プレビューに失敗しました" });
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  // 自動停止を実行
+  const executeAutoStop = async () => {
+    if (!confirm("本当に自動停止を実行しますか？\n対象のCPNがすべてOFFになります。")) return;
+    
+    setIsExecuting(true);
+    setExecuteMessage(null);
+    try {
+      const res = await fetch("/api/auto-stop/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExecuteMessage({ 
+          type: "success", 
+          text: `${data.stopped}/${data.processed}件のCPNを停止しました` 
+        });
+        setPreviewResults(null);
+        await fetchData(); // 履歴を更新
+      } else {
+        setExecuteMessage({ type: "error", text: data.error || "実行に失敗しました" });
+      }
+    } catch (error) {
+      console.error("Execute failed:", error);
+      setExecuteMessage({ type: "error", text: "実行に失敗しました" });
+    } finally {
+      setIsExecuting(false);
+      setTimeout(() => setExecuteMessage(null), 5000);
+    }
+  };
   
   const formatConditions = (conditions: Rule["conditions"]): string => {
     const parts: string[] = [];
@@ -218,6 +282,99 @@ export default function AutoStopRulesPage() {
       
       {activeTab === "rules" && (
         <>
+          {/* 実行セクション */}
+          {!isCreating && rules.length > 0 && (
+            <Card className="mb-6 border-2 border-red-200 bg-red-50">
+              <CardContent className="p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Zap className="h-5 w-5 text-red-500" />
+                        自動停止を実行
+                      </h3>
+                      <p className="text-sm text-slate-600 mt-1">
+                        設定したルールに基づいて、条件に該当するCPNを自動的にOFFにします
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="secondary" 
+                        onClick={previewStopTargets}
+                        disabled={isPreviewing || isExecuting}
+                      >
+                        {isPreviewing ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Eye className="h-4 w-4 mr-2" />
+                        )}
+                        プレビュー
+                      </Button>
+                      <Button 
+                        onClick={executeAutoStop}
+                        disabled={isExecuting || isPreviewing}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        {isExecuting ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Play className="h-4 w-4 mr-2" />
+                        )}
+                        実行する
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* メッセージ */}
+                  {executeMessage && (
+                    <div className={`p-3 rounded-lg ${
+                      executeMessage.type === "success" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                    }`}>
+                      {executeMessage.text}
+                    </div>
+                  )}
+
+                  {/* プレビュー結果 */}
+                  {previewResults !== null && (
+                    <div className="border-t border-red-200 pt-4">
+                      <h4 className="font-medium text-slate-700 mb-3">
+                        停止対象: {previewResults.length}件
+                      </h4>
+                      {previewResults.length === 0 ? (
+                        <p className="text-sm text-slate-500">条件に該当するCPNはありません</p>
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto space-y-2">
+                          {previewResults.map((target, idx) => (
+                            <div key={idx} className="bg-white p-3 rounded-lg border text-sm">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  target.media === "Meta" || target.media === "FB" ? "bg-blue-100 text-blue-700" :
+                                  target.media === "TikTok" ? "bg-slate-800 text-white" :
+                                  "bg-cyan-100 text-cyan-700"
+                                }`}>{target.media}</span>
+                                <span className="text-xs text-slate-500">
+                                  {target.memberName} / {target.projectName}
+                                </span>
+                              </div>
+                              <p className="font-medium text-slate-800 break-all">{target.cpnName}</p>
+                              <div className="flex gap-4 mt-1 text-xs text-slate-500">
+                                <span>消化: ¥{target.metrics.spend.toLocaleString()}</span>
+                                <span>CV: {target.metrics.cv}</span>
+                                <span>利益: ¥{target.metrics.profit.toLocaleString()}</span>
+                                <span>ROAS: {target.metrics.roas.toFixed(1)}%</span>
+                              </div>
+                              <p className="text-xs text-amber-600 mt-1">適用ルール: {target.ruleName}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* ルール作成ボタン */}
           {!isCreating && (
             <div className="mb-6">
@@ -482,18 +639,38 @@ export default function AutoStopRulesPage() {
                           }`}>{h.media}</span>
                         </div>
                         
-                        <p className="font-medium text-sm text-slate-800 break-all mb-1">{h.cpnName}</p>
+                        <p className="font-medium text-sm text-slate-800 break-all mb-2">{h.cpnName}</p>
                         
-                        <div className="text-xs text-slate-500 space-y-1">
+                        <div className="text-xs text-slate-500 space-y-2">
                           <p><span className="font-medium">適用ルール:</span> {h.ruleName}</p>
                           <p><span className="font-medium">対象:</span> {h.memberName} / {h.projectName}</p>
+                          
+                          {/* マッチした条件を表示 */}
+                          {h.conditions?.matched_descriptions && h.conditions.matched_descriptions.length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-2 mt-2">
+                              <p className="font-medium text-red-700 mb-1">📌 停止理由（該当した条件）:</p>
+                              <ul className="list-disc list-inside text-red-600 space-y-0.5">
+                                {h.conditions.matched_descriptions.map((desc, idx) => (
+                                  <li key={idx}>{desc}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
                           {h.metrics && (
-                            <p>
-                              <span className="font-medium">停止時の数値:</span> 
-                              消化¥{h.metrics.spend?.toLocaleString() || 0} / 
-                              利益¥{h.metrics.profit?.toLocaleString() || 0} / 
-                              ROAS {h.metrics.roas?.toFixed(1) || 0}%
-                            </p>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              <span className="px-2 py-0.5 bg-slate-100 rounded">消化: ¥{h.metrics.spend?.toLocaleString() || 0}</span>
+                              <span className="px-2 py-0.5 bg-slate-100 rounded">MCV: {h.metrics.mcv || 0}</span>
+                              <span className="px-2 py-0.5 bg-slate-100 rounded">CV: {h.metrics.cv || 0}</span>
+                              <span className={`px-2 py-0.5 rounded ${(h.metrics.profit || 0) >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                利益: ¥{h.metrics.profit?.toLocaleString() || 0}
+                              </span>
+                              <span className="px-2 py-0.5 bg-slate-100 rounded">ROAS: {h.metrics.roas?.toFixed(1) || 0}%</span>
+                            </div>
+                          )}
+                          
+                          {h.errorMessage && (
+                            <p className="text-amber-600 mt-1">⚠️ エラー: {h.errorMessage}</p>
                           )}
                         </div>
                       </div>

@@ -104,10 +104,11 @@ export async function GET(request: Request) {
         memberName: h.member_name,
         projectName: h.project_name,
         ruleName: h.rule_name,
-        conditions: (h.conditions as StopRuleConditions) || {},
+        conditions: (h.conditions as StopRuleConditions & { matched_descriptions?: string[] }) || {},
         metrics: (h.metrics as Record<string, number>) || {},
         stoppedAt: h.stopped_at.toISOString(),
         status: h.status,
+        errorMessage: h.error_message || undefined,
       }));
     }
     

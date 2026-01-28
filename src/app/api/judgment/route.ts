@@ -36,7 +36,8 @@ export async function GET(request: Request) {
     // ユーザーセッションを取得
     const session = await auth();
     const userRole = session?.user?.role || "member";
-    const userTeamName = session?.user?.teamName || null;
+    // teamNameがなければユーザー名を使用（メンバーは自分のCPNのみ表示）
+    const userTeamName = session?.user?.teamName || session?.user?.name || null;
     const userMediaFilter = session?.user?.mediaFilter || null;
 
     const { searchParams } = new URL(request.url);
@@ -77,8 +78,8 @@ export async function GET(request: Request) {
       // マイ分析と同じデータソースからデータを取得
       let analysisData = await getFullAnalysisData();
 
-      // メンバーの場合、担当者名でCPNをフィルタリング
-      if (userRole !== "admin" && userTeamName) {
+      // 担当者名でCPNをフィルタリング（全ユーザーに適用）
+      if (userTeamName) {
         const filterPattern = `新規グロース部_${userTeamName}_`;
         analysisData = analysisData.filter(row => row.cpnName?.includes(filterPattern));
       }

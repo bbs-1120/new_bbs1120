@@ -50,7 +50,12 @@ export default function RootLayout({
         <DataProvider>
           <Sidebar />
           <main>
-            <div className="min-h-screen pt-16 px-4 py-4 lg:pt-20 lg:px-8 lg:py-6">
+            <div 
+              className="min-h-screen px-3 py-4 sm:px-4 lg:px-8 lg:py-6 main-content"
+              style={{ 
+                paddingTop: 'calc(64px + env(safe-area-inset-top, 0px))',
+              }}
+            >
               {children}
             </div>
           </main>

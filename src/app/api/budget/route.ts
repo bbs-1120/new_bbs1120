@@ -310,6 +310,16 @@ async function updateTikTokSpcBudget(
     } else {
       // 権限エラーの詳細を確認
       console.log(`SPC API Failed - full response:`, JSON.stringify(data));
+      
+      // Upgraded Smart Plus はAPIで未サポート
+      if (data.message?.includes("Upgraded Smart Plus") || 
+          data.message?.includes("does not support")) {
+        return { 
+          success: false, 
+          error: `【API未対応】このキャンペーンは「Upgraded Smart Plus」タイプのため、APIでの予算変更ができません。TikTok Ads Manager（https://ads.tiktok.com/）から手動で変更してください。` 
+        };
+      }
+      
       return { success: false, error: data.message || "SPC APIエラー" };
     }
   } catch (error) {

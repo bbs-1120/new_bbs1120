@@ -1,6 +1,34 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from "react";
+
+// プリフェッチ用のグローバルキャッシュ
+const prefetchCache = new Map<string, { data: unknown; timestamp: number }>();
+const PREFETCH_TTL = 5 * 60 * 1000; // 5分
+
+// ページプリフェッチ関数
+export function prefetchPageData(url: string) {
+  const cached = prefetchCache.get(url);
+  if (cached && Date.now() - cached.timestamp < PREFETCH_TTL) {
+    return; // 既にキャッシュ済み
+  }
+  
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      prefetchCache.set(url, { data, timestamp: Date.now() });
+    })
+    .catch(() => {});
+}
+
+// プリフェッチデータを取得
+export function getPrefetchedData<T>(url: string): T | null {
+  const cached = prefetchCache.get(url);
+  if (cached && Date.now() - cached.timestamp < PREFETCH_TTL) {
+    return cached.data as T;
+  }
+  return null;
+}
 
 interface AnalysisData {
   summary: {
@@ -64,6 +92,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [isStale, setIsStale] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const isMounted = useRef(true);
+
+  // アプリ起動時に関連APIをプリフェッチ
+  useEffect(() => {
+    // 判定データをプリフェッチ
+    prefetchPageData("/api/judgment");
+    // 自動停止ルールをプリフェッチ
+    prefetchPageData("/api/auto-stop-rules");
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchData = useCallback(async (force = false) => {
     // まずローカルキャッシュをチェック

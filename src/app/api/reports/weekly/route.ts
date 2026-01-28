@@ -43,9 +43,40 @@ export async function GET(request: Request) {
     // DBからcampaignIdマッピングを取得
     const dbMappings = await prisma.cpn_campaign_mapping.findMany().catch(() => []);
     const campaignIdMap = new Map<string, { campaignId: string; media: string }>();
+    // 正規化したCPN名でもマッチングできるようにする
+    const normalizedCampaignIdMap = new Map<string, { campaignId: string; media: string; originalName: string }>();
+    
     for (const m of dbMappings) {
       campaignIdMap.set(m.cpn_name, { campaignId: m.campaign_id, media: m.media });
+      // 正規化したCPN名もマップに追加（スペースや特殊文字を除去）
+      const normalized = m.cpn_name.replace(/[\s\u3000]/g, "").toLowerCase();
+      normalizedCampaignIdMap.set(normalized, { 
+        campaignId: m.campaign_id, 
+        media: m.media,
+        originalName: m.cpn_name 
+      });
     }
+    
+    // CPN名でマッピングを検索するヘルパー関数
+    const findCampaignId = (cpnName: string): string => {
+      // 完全一致
+      const exact = campaignIdMap.get(cpnName);
+      if (exact?.campaignId) return exact.campaignId;
+      
+      // 正規化して検索
+      const normalized = cpnName.replace(/[\s\u3000]/g, "").toLowerCase();
+      const normalizedMatch = normalizedCampaignIdMap.get(normalized);
+      if (normalizedMatch?.campaignId) return normalizedMatch.campaignId;
+      
+      // 部分一致検索（CPN名が含まれるマッピングを探す）
+      for (const [key, value] of campaignIdMap.entries()) {
+        if (value.campaignId && (key.includes(cpnName) || cpnName.includes(key))) {
+          return value.campaignId;
+        }
+      }
+      
+      return "";
+    };
     
     // 当日データから新しいマッピングを取得して保存
     const { getFullAnalysisData } = await import("@/lib/googleSheets");
@@ -180,8 +211,7 @@ export async function GET(request: Request) {
         cpnExisting.clicks += clicks;
       } else {
         // campaignIdはマッピングから取得（履歴データには含まれていないため）
-        const mapping = campaignIdMap.get(cpnName);
-        const mappedCampaignId = mapping?.campaignId || row.campaignId || "";
+        const mappedCampaignId = findCampaignId(cpnName) || row.campaignId || "";
         cpnMap.set(cpnName, {
           cpnKey: row.cpnKey || cpnName,
           cpnName,

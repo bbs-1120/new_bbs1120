@@ -91,6 +91,7 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingJudgment, setPendingJudgment] = useState<string | null>(null); // メモ入力待ちの判定
   const [memoText, setMemoText] = useState<string>("");
+  const [previewCpn, setPreviewCpn] = useState<JudgmentResult | null>(null); // CPN名プレビュー用
 
   const config = judgmentConfig[judgment] || judgmentConfig.error;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -262,10 +263,10 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
     }
   };
 
-  // 全件コピー機能
+  // 全件コピー機能（CPN名のみ）
   const handleCopyAll = async () => {
     const text = filteredResults
-      .map((r) => `${r.accountName || ""}\t${r.cpnName}`)
+      .map((r) => r.cpnName)
       .join("\n");
     
     try {
@@ -554,9 +555,14 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                   </button>
                 </div>
 
-                {/* CPN名 */}
+                {/* CPN名 - タップでプレビュー */}
                 <div className="flex items-center gap-1.5 mb-1">
-                  <p className="text-sm font-medium text-slate-900 truncate flex-1">{result.cpnName}</p>
+                  <button
+                    onClick={() => setPreviewCpn(result)}
+                    className="text-sm font-medium text-slate-900 truncate flex-1 text-left hover:text-indigo-600 active:text-indigo-700 transition-colors"
+                  >
+                    {result.cpnName}
+                  </button>
                   <button
                     onClick={() => handleCopy(result, "cpn")}
                     className={`p-1 rounded transition-colors flex-shrink-0 ${
@@ -669,10 +675,15 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
                           </button>
                         </div>
                       </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 min-w-[400px]">
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-slate-900">{result.cpnName}</p>
+                          <div className="flex items-start gap-2">
+                            <button
+                              onClick={() => setPreviewCpn(result)}
+                              className="text-sm font-medium text-slate-900 text-left hover:text-indigo-600 transition-colors break-all leading-relaxed"
+                            >
+                              {result.cpnName}
+                            </button>
                             {isOverridden && (
                               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
                                 変更済
@@ -798,6 +809,163 @@ export default function JudgmentDetailPage({ params }: { params: Promise<{ judgm
           </div>
         )}
       </Card>
+
+      {/* CPN名プレビューモーダル */}
+      {previewCpn && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+          onClick={() => setPreviewCpn(null)}
+        >
+          <div 
+            className="bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg overflow-hidden animate-slide-in"
+            onClick={(e) => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* ドラッグハンドル（モバイル） */}
+            <div className="sm:hidden flex justify-center py-2">
+              <div className="w-10 h-1 bg-slate-300 rounded-full"></div>
+            </div>
+            
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">CPN詳細</h3>
+              <button
+                onClick={() => setPreviewCpn(null)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {/* アカウント名 */}
+              <div>
+                <p className="text-xs text-slate-500 mb-1">アカウント名</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-slate-700 flex-1">{previewCpn.accountName || "-"}</p>
+                  <button
+                    onClick={() => handleCopy(previewCpn, "account")}
+                    className={`p-2 rounded-lg transition-colors ${
+                      copiedKey === `${previewCpn.cpnKey}-account`
+                        ? "bg-green-100 text-green-600"
+                        : "bg-slate-100 text-slate-500 active:bg-slate-200"
+                    }`}
+                  >
+                    {copiedKey === `${previewCpn.cpnKey}-account` ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              
+              {/* CPN名（フル表示） */}
+              <div>
+                <p className="text-xs text-slate-500 mb-1">CPN名</p>
+                <div className="flex items-start gap-2">
+                  <p className="text-sm font-medium text-slate-900 flex-1 break-all leading-relaxed">{previewCpn.cpnName}</p>
+                  <button
+                    onClick={() => handleCopy(previewCpn, "cpn")}
+                    className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                      copiedKey === `${previewCpn.cpnKey}-cpn`
+                        ? "bg-green-100 text-green-600"
+                        : "bg-slate-100 text-slate-500 active:bg-slate-200"
+                    }`}
+                  >
+                    {copiedKey === `${previewCpn.cpnKey}-cpn` ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              
+              {/* 媒体 & Re */}
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">媒体</p>
+                  <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
+                    previewCpn.media === "Meta" ? "bg-blue-100 text-blue-700" :
+                    previewCpn.media === "TikTok" ? "bg-pink-100 text-pink-700" :
+                    previewCpn.media === "Pangle" ? "bg-orange-100 text-orange-700" :
+                    "bg-slate-100 text-slate-700"
+                  }`}>
+                    {previewCpn.media}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">種別</p>
+                  <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
+                    previewCpn.isRe
+                      ? "bg-purple-100 text-purple-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {previewCpn.isRe ? "Re" : "新規"}
+                  </span>
+                </div>
+              </div>
+              
+              {/* 数値 */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center bg-slate-50 rounded-xl py-3">
+                  <p className="text-xs text-slate-500 mb-1">当日利益</p>
+                  <p className={`text-base font-bold ${previewCpn.todayProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {previewCpn.todayProfit >= 0 ? "+" : ""}¥{Math.floor(previewCpn.todayProfit).toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-center bg-slate-50 rounded-xl py-3">
+                  <p className="text-xs text-slate-500 mb-1">7日利益</p>
+                  <p className={`text-base font-bold ${previewCpn.profit7Days >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {previewCpn.profit7Days >= 0 ? "+" : ""}¥{Math.floor(previewCpn.profit7Days).toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-center bg-slate-50 rounded-xl py-3">
+                  <p className="text-xs text-slate-500 mb-1">7日ROAS</p>
+                  <p className="text-base font-bold text-slate-700">{previewCpn.roas7Days.toFixed(1)}%</p>
+                </div>
+              </div>
+              
+              {/* 理由 */}
+              <div>
+                <p className="text-xs text-slate-500 mb-2">判定理由</p>
+                <div className="flex flex-wrap gap-2">
+                  {previewCpn.reasons.map((reason, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs bg-slate-100 text-slate-600"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              
+              {/* アクションボタン */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    handleCopy(previewCpn, "both");
+                  }}
+                  className={`flex-1 py-3 rounded-xl text-sm font-medium transition ${
+                    copiedKey === `${previewCpn.cpnKey}-both`
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-100 text-slate-700 active:bg-slate-200"
+                  }`}
+                >
+                  {copiedKey === `${previewCpn.cpnKey}-both` ? (
+                    <>✓ コピー完了</>
+                  ) : (
+                    <>📋 全てコピー</>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setPreviewCpn(null);
+                    setSelectedCpn(previewCpn);
+                    setShowMoveModal(previewCpn.cpnKey);
+                  }}
+                  className="flex-1 py-3 rounded-xl text-sm font-medium bg-indigo-500 text-white active:bg-indigo-600 transition"
+                >
+                  📦 判定を変更
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 判定変更モーダル */}
       {showMoveModal && selectedCpn && (

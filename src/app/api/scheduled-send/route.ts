@@ -70,6 +70,22 @@ function generateContinueMessages(
 // POSTで手動実行/スケジュール実行
 export async function POST(request: Request) {
   try {
+    // ======================================
+    // この機能は無効化されています
+    // 10:00/11:00の自動送信を停止
+    // ======================================
+    const body = await request.json().catch(() => ({}));
+    
+    // 手動実行（manual: true）の場合のみ実行を許可
+    if (!body.manual) {
+      return NextResponse.json({
+        success: true,
+        message: "スケジュール送信は無効化されています",
+        sentCount: 0,
+        disabled: true,
+      });
+    }
+
     // 認証チェック（Cloud Schedulerからの呼び出し用）
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
@@ -77,10 +93,6 @@ export async function POST(request: Request) {
     // Cloud Schedulerからの呼び出しの場合は認証をチェック
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       // 手動実行の場合は認証不要
-      const body = await request.json().catch(() => ({}));
-      if (!body.manual) {
-        // Cloud Schedulerはヘッダーなしで呼び出すこともあるので許可
-      }
     }
 
     // データを取得

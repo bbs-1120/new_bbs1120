@@ -67,6 +67,8 @@ export default function JudgmentRulesPage() {
   const [editingRule, setEditingRule] = useState<JudgmentRule | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<{ stop: number; replace: number; continue: number; error: number } | null>(null);
 
   // 新規ルールのテンプレート
   const createNewRule = (): JudgmentRule => ({
@@ -88,6 +90,29 @@ export default function JudgmentRulesPage() {
       }
     } catch (error) {
       console.error("Failed to fetch logs:", error);
+    }
+  };
+
+  // 判定を更新（リアルタイム実行）
+  const refreshJudgment = async () => {
+    setIsRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const res = await fetch("/api/judgment?refresh=true");
+      const data = await res.json();
+      if (data.success) {
+        setRefreshResult(data.summary);
+        setMessage({ type: "success", text: `判定を更新しました！ 停止:${data.summary.stop}件 / 作り替え:${data.summary.replace}件 / 継続:${data.summary.continue}件` });
+        fetchLogs();
+      } else {
+        setMessage({ type: "error", text: "判定の更新に失敗しました" });
+      }
+    } catch (error) {
+      console.error("Failed to refresh judgment:", error);
+      setMessage({ type: "error", text: "判定の更新に失敗しました" });
+    } finally {
+      setIsRefreshing(false);
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
@@ -242,6 +267,66 @@ export default function JudgmentRulesPage() {
                 </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* 判定更新ボタン */}
+        <Card className="mb-6 border-2 border-indigo-200 bg-indigo-50">
+          <CardContent className="py-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-medium text-slate-800 mb-1">CPN診断を実行</h3>
+                <p className="text-sm text-slate-600">
+                  設定したルールでCPN診断をリアルタイムで実行します
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={refreshJudgment}
+                  disabled={isRefreshing}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                  {isRefreshing ? "診断中..." : "判定を更新"}
+                </Button>
+                <Link href="/results/continue">
+                  <Button variant="secondary">
+                    診断結果を見る
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            
+            {/* 診断結果サマリー */}
+            {refreshResult && (
+              <div className="mt-4 pt-4 border-t border-indigo-200">
+                <p className="text-sm font-medium text-slate-700 mb-2">最新の診断結果：</p>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/results/stop">
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-sm font-medium cursor-pointer hover:bg-red-200 transition">
+                      停止 <span className="font-bold">{refreshResult.stop}件</span>
+                    </span>
+                  </Link>
+                  <Link href="/results/replace">
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-sm font-medium cursor-pointer hover:bg-amber-200 transition">
+                      作り替え <span className="font-bold">{refreshResult.replace}件</span>
+                    </span>
+                  </Link>
+                  <Link href="/results/continue">
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 text-sm font-medium cursor-pointer hover:bg-emerald-200 transition">
+                      継続 <span className="font-bold">{refreshResult.continue}件</span>
+                    </span>
+                  </Link>
+                  {refreshResult.error > 0 && (
+                    <Link href="/results/error">
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium cursor-pointer hover:bg-slate-200 transition">
+                        エラー <span className="font-bold">{refreshResult.error}件</span>
+                      </span>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

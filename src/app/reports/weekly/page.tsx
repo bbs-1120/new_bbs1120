@@ -7,7 +7,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Calendar, Users, Play, X, ChevronDown, ChevronUp,
   Save, Plus, Trash2, Check, Trophy, AlertTriangle, 
-  Briefcase, Video, ExternalLink, MessageSquare, FileText, Search
+  Briefcase, Video, ExternalLink, MessageSquare, FileText, Search,
+  RefreshCw
 } from "lucide-react";
 
 interface MemberRanking {
@@ -184,6 +185,9 @@ export default function WeeklyReportsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" }>({ key: "profit", direction: "desc" });
   const [expandedCpn, setExpandedCpn] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [unmappedCount, setUnmappedCount] = useState(0);
   
   const weekList = useMemo(() => generateWeekList(8), []);
   
@@ -224,6 +228,37 @@ export default function WeeklyReportsPage() {
   useEffect(() => {
     if (selectedWeek) fetchData(selectedWeek, selectedMember);
   }, [selectedWeek, selectedMember, fetchData]);
+  
+  // 未マッピングCPN数をカウント
+  useEffect(() => {
+    const count = cpnList.filter(c => !c.campaignId || c.campaignId === "").length;
+    setUnmappedCount(count);
+  }, [cpnList]);
+  
+  // マッピング同期
+  const syncMappings = async () => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/sync-campaigns", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setSyncResult({
+          success: true,
+          message: `同期完了: 新規 ${data.stats.newMappings}件, 更新 ${data.stats.updatedMappings}件`,
+        });
+        // データを再読み込み
+        if (selectedWeek) fetchData(selectedWeek, selectedMember);
+      } else {
+        setSyncResult({ success: false, message: data.error || "同期に失敗しました" });
+      }
+    } catch (error) {
+      setSyncResult({ success: false, message: "同期に失敗しました" });
+      console.error("Sync error:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   
   // 週の開始日と終了日を計算する関数
   const getWeekDates = useCallback((weekKey: string) => {
@@ -425,10 +460,36 @@ export default function WeeklyReportsPage() {
       </div>
       
       {/* タブ */}
-      <div className="mb-6 border-b flex gap-4">
-        <button onClick={() => setActiveTab("overview")} className={`pb-2 px-1 font-medium ${activeTab === "overview" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500"}`}>📊 概要</button>
-        <button onClick={() => setActiveTab("project-media")} className={`pb-2 px-1 font-medium ${activeTab === "project-media" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500"}`}>📁 案件×媒体別</button>
-        <button onClick={() => setActiveTab("cpn-list")} className={`pb-2 px-1 font-medium ${activeTab === "cpn-list" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500"}`}>📋 全CPN一覧 ({cpnList.length}件)</button>
+      <div className="mb-6 border-b flex gap-4 items-center justify-between">
+        <div className="flex gap-4">
+          <button onClick={() => setActiveTab("overview")} className={`pb-2 px-1 font-medium ${activeTab === "overview" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500"}`}>📊 概要</button>
+          <button onClick={() => setActiveTab("project-media")} className={`pb-2 px-1 font-medium ${activeTab === "project-media" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500"}`}>📁 案件×媒体別</button>
+          <button onClick={() => setActiveTab("cpn-list")} className={`pb-2 px-1 font-medium ${activeTab === "cpn-list" ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500"}`}>📋 全CPN一覧 ({cpnList.length}件)</button>
+        </div>
+        
+        {/* マッピング同期ボタン */}
+        <div className="flex items-center gap-3 pb-2">
+          {unmappedCount > 0 && (
+            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+              Campaign ID未取得: {unmappedCount}件
+            </span>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={syncMappings}
+            disabled={isSyncing}
+            className="text-xs"
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "同期中..." : "マッピング同期"}
+          </Button>
+          {syncResult && (
+            <span className={`text-xs ${syncResult.success ? "text-emerald-600" : "text-red-600"}`}>
+              {syncResult.message}
+            </span>
+          )}
+        </div>
       </div>
       
       {isLoading ? (

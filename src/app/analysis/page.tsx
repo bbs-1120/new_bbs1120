@@ -178,6 +178,8 @@ export default function AnalysisPage() {
   const [budgetMessages, setBudgetMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
   const [statusMessages, setStatusMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+  const [exclusionList, setExclusionList] = useState<Set<string>>(new Set());
+  const [exclusionUpdating, setExclusionUpdating] = useState<Record<string, boolean>>({});
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
   const [showAlertSettings, setShowAlertSettings] = useState(false);
@@ -572,6 +574,49 @@ export default function AnalysisPage() {
     }
   };
 
+  // 除外トグル
+  const handleExclusionToggle = async (cpn: CpnData) => {
+    const isCurrentlyExcluded = exclusionList.has(cpn.cpnName);
+    
+    setExclusionUpdating(prev => ({ ...prev, [cpn.cpnKey]: true }));
+    
+    try {
+      if (isCurrentlyExcluded) {
+        // 除外を解除
+        const response = await fetch(`/api/auto-stop-rules/exclusions?cpnName=${encodeURIComponent(cpn.cpnName)}`, {
+          method: "DELETE",
+        });
+        const result = await response.json();
+        if (result.success) {
+          setExclusionList(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(cpn.cpnName);
+            return newSet;
+          });
+        }
+      } else {
+        // 除外に追加
+        const response = await fetch("/api/auto-stop-rules/exclusions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cpnName: cpn.cpnName,
+            cpnKey: cpn.cpnKey,
+            reason: "マイ分析から除外設定",
+          }),
+        });
+        const result = await response.json();
+        if (result.success) {
+          setExclusionList(prev => new Set([...prev, cpn.cpnName]));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to toggle exclusion:", error);
+    } finally {
+      setExclusionUpdating(prev => ({ ...prev, [cpn.cpnKey]: false }));
+    }
+  };
+
   const handleCpnSort = (key: string) => {
     if (cpnSortKey === key) {
       setCpnSortDir(cpnSortDir === "asc" ? "desc" : "asc");
@@ -671,19 +716,25 @@ export default function AnalysisPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       
-      // データとステータスオーバーライドを並列取得
-      const [response, overrideResponse] = await Promise.all([
+      // データとステータスオーバーライドと除外リストを並列取得
+      const [response, overrideResponse, exclusionResponse] = await Promise.all([
         fetch(url, { 
           signal: controller.signal,
           cache: refresh ? "no-store" : "default",
         }),
         fetch("/api/status-override", { signal: controller.signal }).catch(() => null),
+        fetch("/api/auto-stop-rules/exclusions", { signal: controller.signal }).catch(() => null),
       ]);
       clearTimeout(timeoutId);
       
       const data = await response.json();
       const overrideData = overrideResponse ? await overrideResponse.json().catch(() => ({ overrides: {} })) : { overrides: {} };
       const statusOverrides = overrideData.overrides || {};
+      
+      // 除外リストを取得
+      const exclusionData = exclusionResponse ? await exclusionResponse.json().catch(() => ({ exclusions: [] })) : { exclusions: [] };
+      const excludedCpnNames = new Set<string>((exclusionData.exclusions || []).map((e: { cpn_name: string }) => e.cpn_name));
+      setExclusionList(excludedCpnNames);
 
       if (data.success) {
         setSummary(data.summary);
@@ -1869,6 +1920,9 @@ export default function AnalysisPage() {
                   >
                     7日ROAS<SortIcon columnKey="roas7Days" />
                   </th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-amber-50">
+                    除外
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -2036,6 +2090,27 @@ export default function AnalysisPage() {
                     </td>
                     {/* 7日ROAS */}
                     <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{formatPercent(cpn.roas7Days)}</td>
+                    {/* 除外 */}
+                    <td className="px-2 py-2 text-center bg-amber-50/50">
+                      <button
+                        onClick={() => handleExclusionToggle(cpn)}
+                        disabled={exclusionUpdating[cpn.cpnKey]}
+                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                          exclusionUpdating[cpn.cpnKey]
+                            ? "bg-slate-100 border-slate-300 cursor-wait"
+                            : exclusionList.has(cpn.cpnName)
+                              ? "bg-amber-500 border-amber-500 text-white"
+                              : "bg-white border-slate-300 hover:border-amber-400"
+                        }`}
+                        title={exclusionList.has(cpn.cpnName) ? "クリックで除外解除" : "クリックで自動停止から除外"}
+                      >
+                        {exclusionUpdating[cpn.cpnKey] ? (
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                        ) : exclusionList.has(cpn.cpnName) ? (
+                          <span className="text-xs font-bold">✓</span>
+                        ) : null}
+                      </button>
+                    </td>
                   </tr>
                   );
                 })}

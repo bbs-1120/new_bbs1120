@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { prefetchPageData } from "@/components/providers/data-provider";
 import { cn } from "@/lib/utils";
 import {
   ListChecks,
@@ -212,8 +213,9 @@ export function Sidebar() {
 
   return (
     <>
-      {/* 固定ヘッダー（モバイル・デスクトップ共通） */}
-      <div className="fixed top-0 left-0 right-0 z-40 h-14 bg-white flex items-center justify-between px-4 border-b border-slate-200 shadow-sm">
+      {/* 固定ヘッダー（モバイル・デスクトップ共通）- Safe Area対応 */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="h-14 flex items-center justify-between px-4">
         <button
           onClick={() => setIsOpen(true)}
           className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -225,6 +227,7 @@ export function Sidebar() {
           <span className="text-slate-800 font-bold">AdProfit</span>
         </div>
         <DarkModeToggle />
+        </div>
       </div>
 
       {/* ホバーエリア（デスクトップ用 - 左端にマウスを持っていくと開く） */}
@@ -242,12 +245,13 @@ export function Sidebar() {
         />
       )}
 
-      {/* サイドバー */}
+      {/* サイドバー - Safe Area対応 */}
       <aside
         className={cn(
-          "fixed top-14 bottom-0 left-0 z-50 w-72 lg:w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out shadow-lg",
+          "fixed bottom-0 left-0 z-50 w-72 lg:w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out shadow-lg",
           (isOpen || isHovered) ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{ top: 'calc(56px + env(safe-area-inset-top, 0px))' }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -285,10 +289,27 @@ export function Sidebar() {
                 {category.items.map((item) => {
                   const isActive = pathname === item.href;
                   const Icon = item.icon;
+                  
+                  // ホバー時にAPIデータをプリフェッチ
+                  const handleMouseEnter = () => {
+                    if (item.href === "/analysis") {
+                      prefetchPageData("/api/analysis");
+                    } else if (item.href === "/results/stop" || item.href.startsWith("/results")) {
+                      prefetchPageData("/api/judgment");
+                    } else if (item.href === "/auto-stop-rules") {
+                      prefetchPageData("/api/auto-stop-rules");
+                    } else if (item.href === "/reports/weekly") {
+                      prefetchPageData("/api/reports/weekly");
+                    } else if (item.href === "/team-analysis") {
+                      prefetchPageData("/api/team-analysis");
+                    }
+                  };
+                  
                   return (
                     <li key={item.name}>
                       <Link
                         href={item.href}
+                        onMouseEnter={handleMouseEnter}
                         className={cn(
                           "flex items-center gap-2.5 rounded-md px-3 py-2.5 lg:py-1.5 text-[15px] transition-all",
                           isActive
@@ -313,6 +334,65 @@ export function Sidebar() {
         {/* フッター - ユーザー情報 */}
         <UserProfile />
       </aside>
+
+      {/* モバイル用ボトムナビゲーション */}
+      <nav 
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="flex items-center justify-around h-16">
+          <Link
+            href="/analysis"
+            className={cn(
+              "flex flex-col items-center justify-center w-16 h-full touch-feedback",
+              pathname === "/analysis" ? "text-emerald-600" : "text-slate-500"
+            )}
+          >
+            <BarChart3 className="h-6 w-6" />
+            <span className="text-[10px] mt-1 font-medium">分析</span>
+          </Link>
+          <Link
+            href="/results/stop"
+            className={cn(
+              "flex flex-col items-center justify-center w-16 h-full touch-feedback",
+              pathname.startsWith("/results") ? "text-emerald-600" : "text-slate-500"
+            )}
+          >
+            <Stethoscope className="h-6 w-6" />
+            <span className="text-[10px] mt-1 font-medium">診断</span>
+          </Link>
+          <Link
+            href="/auto-stop-rules"
+            className={cn(
+              "flex flex-col items-center justify-center w-16 h-full touch-feedback",
+              pathname === "/auto-stop-rules" ? "text-emerald-600" : "text-slate-500"
+            )}
+          >
+            <AlertTriangle className="h-6 w-6" />
+            <span className="text-[10px] mt-1 font-medium">自動停止</span>
+          </Link>
+          <Link
+            href="/reports/weekly"
+            className={cn(
+              "flex flex-col items-center justify-center w-16 h-full touch-feedback",
+              pathname.startsWith("/reports") ? "text-emerald-600" : "text-slate-500"
+            )}
+          >
+            <FileText className="h-6 w-6" />
+            <span className="text-[10px] mt-1 font-medium">レポート</span>
+          </Link>
+          <Link
+            href="/settings"
+            className={cn(
+              "flex flex-col items-center justify-center w-16 h-full touch-feedback",
+              pathname === "/settings" ? "text-emerald-600" : "text-slate-500"
+            )}
+          >
+            <Settings className="h-6 w-6" />
+            <span className="text-[10px] mt-1 font-medium">設定</span>
+          </Link>
+        </div>
+      </nav>
     </>
   );
 }

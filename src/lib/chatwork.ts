@@ -239,3 +239,64 @@ export async function sendAnomalyAlert(
   return sendToChatwork(apiToken, roomId, message);
 }
 
+/**
+ * 自動停止失敗アラートをChatworkに送信
+ */
+export interface AutoStopFailedCpn {
+  cpnName: string;
+  media: string;
+  memberName: string;
+  projectName: string;
+  ruleName: string;
+  error?: string;
+  metrics: {
+    spend: number;
+    profit: number;
+    roas: number;
+  };
+}
+
+export async function sendAutoStopFailedAlert(
+  failedCpns: AutoStopFailedCpn[]
+): Promise<{ success: boolean; error?: string }> {
+  const apiToken = process.env.CHATWORK_API_TOKEN;
+  const roomId = process.env.CHATWORK_ERROR_ROOM_ID;
+
+  if (!apiToken || !roomId) {
+    return { success: false, error: "Chatwork設定が不完全です" };
+  }
+
+  if (failedCpns.length === 0) {
+    return { success: true };
+  }
+
+  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+
+  let message = `[toall]\n\n`;
+  message += `【自動停止アラート】\n`;
+  message += `発生日時：${now}\n\n`;
+  message += `以下のCPNが自動停止ルールにヒットしましたが、停止に失敗しました。\n`;
+  message += `手動での確認・停止をお願いします。\n\n`;
+  
+  for (const cpn of failedCpns) {
+    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+    message += `📛 ${cpn.cpnName}\n`;
+    message += `媒体：${cpn.media}\n`;
+    message += `担当：${cpn.memberName}\n`;
+    message += `案件：${cpn.projectName}\n`;
+    message += `適用ルール：${cpn.ruleName}\n`;
+    message += `消化：¥${cpn.metrics.spend.toLocaleString()}\n`;
+    message += `利益：¥${cpn.metrics.profit.toLocaleString()}\n`;
+    message += `ROAS：${cpn.metrics.roas.toFixed(1)}%\n`;
+    if (cpn.error) {
+      message += `エラー：${cpn.error}\n`;
+    }
+    message += `\n`;
+  }
+
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `対象CPN数：${failedCpns.length}件\n`;
+
+  return sendToChatwork(apiToken, roomId, message);
+}
+

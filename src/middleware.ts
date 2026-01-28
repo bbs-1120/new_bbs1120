@@ -16,9 +16,10 @@ export default auth((req) => {
   const isSetupApi = pathname.startsWith("/api/admin/setup");
   const isRegisterApi = pathname.startsWith("/api/register");
   const isDebugApi = pathname.startsWith("/api/debug-consecutive");
+  const isSyncCampaignsApi = pathname === "/api/sync-campaigns";
 
   // 公開API・ページは常に許可
-  if (isAuthApi || isPublicApi || isScheduledApi || isScheduledOnExecute || isSetupApi || isRegisterApi || isDebugApi) {
+  if (isAuthApi || isPublicApi || isScheduledApi || isScheduledOnExecute || isSetupApi || isRegisterApi || isDebugApi || isSyncCampaignsApi) {
     return NextResponse.next();
   }
 
