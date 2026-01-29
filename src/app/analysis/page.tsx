@@ -237,21 +237,30 @@ export default function AnalysisPage() {
     }
   }, []);
   
-  // Meta CPNのスケジュールを一括取得
+  // Meta CPNのスケジュールを遅延取得（表示されているCPN優先）
   useEffect(() => {
     if (!cpnList || cpnList.length === 0) return;
     
     const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
     const uncachedCpns = metaCpns.filter(cpn => !scheduleCache[cpn.campaignId!]);
     
-    // すべてのMeta CPNを取得（APIレート制限対策でバッチ処理）
-    const toFetch = uncachedCpns;
+    // 最初の20件を即時取得（画面に表示される分）
+    const immediateFetch = uncachedCpns.slice(0, 20);
+    // 残りはバックグラウンドで遅延取得
+    const delayedFetch = uncachedCpns.slice(20);
     
-    toFetch.forEach((cpn, index) => {
-      // 順番に取得（APIレート制限対策：100msずつ遅延）
+    // 即時取得（50msずつ）
+    immediateFetch.forEach((cpn, index) => {
       setTimeout(() => {
         fetchSchedule(cpn.campaignId!);
-      }, index * 100);
+      }, index * 50);
+    });
+    
+    // 遅延取得（2秒後から300msずつ）
+    delayedFetch.forEach((cpn, index) => {
+      setTimeout(() => {
+        fetchSchedule(cpn.campaignId!);
+      }, 2000 + index * 300);
     });
   }, [cpnList, scheduleCache, fetchSchedule]);
   
