@@ -63,3 +63,4 @@ jobs:
 # Deploy with API enabled 20260128190414
 # Deploy with Storage Admin 20260128193159
 # Deploy with Cloud Build Editor 20260128194429
+# Deploy with Secret Manager 20260129144921
