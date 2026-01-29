@@ -244,14 +244,14 @@ export default function AnalysisPage() {
     const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
     const uncachedCpns = metaCpns.filter(cpn => !scheduleCache[cpn.campaignId!]);
     
-    // 最初の10件のみ取得（パフォーマンス対策）
-    const toFetch = uncachedCpns.slice(0, 10);
+    // すべてのMeta CPNを取得（APIレート制限対策でバッチ処理）
+    const toFetch = uncachedCpns;
     
     toFetch.forEach((cpn, index) => {
-      // 順番に取得（APIレート制限対策）
+      // 順番に取得（APIレート制限対策：100msずつ遅延）
       setTimeout(() => {
         fetchSchedule(cpn.campaignId!);
-      }, index * 200);
+      }, index * 100);
     });
   }, [cpnList, scheduleCache, fetchSchedule]);
   
@@ -2031,16 +2031,17 @@ export default function AnalysisPage() {
                         
                         if (formattedSchedule) {
                           return (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <div className="px-2 py-0.5 bg-purple-500 text-white rounded text-[10px] font-bold">
+                            <div className="flex flex-col items-center gap-1 p-1 bg-purple-100 rounded-lg border border-purple-300">
+                              <div className="px-3 py-1 bg-purple-600 text-white rounded-md text-sm font-bold shadow-sm">
                                 {formattedSchedule.amount}
                               </div>
-                              <span className="text-[8px] text-purple-600 leading-tight">{formattedSchedule.period}</span>
+                              <span className="text-[10px] text-purple-700 font-medium leading-tight">{formattedSchedule.period}</span>
                               <button
                                 onClick={() => openBudgetScheduleModal(cpn)}
-                                className="text-[9px] text-purple-600 hover:underline font-medium"
+                                className="text-[10px] text-purple-600 hover:text-purple-800 hover:underline font-medium flex items-center gap-0.5"
                               >
-                                編集
+                                <Calendar className="h-3 w-3" />
+                                変更
                               </button>
                             </div>
                           );
