@@ -59,13 +59,18 @@ export async function POST(request: Request) {
         message: `${cpnName}を${statusText}にしました`,
       });
     } else {
-      // エラー通知を送信
-      await sendErrorNotification("status_change", result.error || "ステータス変更に失敗", {
-        cpnName,
-        media,
-        campaignId,
-        status,
-      });
+      // 「API未対応」の場合はChatWork通知をスキップ（既知の制限のため）
+      const isApiLimitation = result.error?.includes("API未対応");
+      
+      if (!isApiLimitation) {
+        // エラー通知を送信
+        await sendErrorNotification("status_change", result.error || "ステータス変更に失敗", {
+          cpnName,
+          media,
+          campaignId,
+          status,
+        });
+      }
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 500 }
@@ -279,12 +284,19 @@ async function updateTikTokSpcStatus(
     if (data.code === 0) {
       return { success: true };
     } else {
-      // Upgraded Smart Plus はAPIで未サポート
-      if (data.message?.includes("Upgraded Smart Plus") || 
-          data.message?.includes("does not support")) {
+      // エラーメッセージを正規化
+      const errorMsg = (data.message || "").toLowerCase();
+      
+      // Upgraded Smart Plus / Smart Plus はAPIで未サポート
+      if (errorMsg.includes("upgraded smart plus") || 
+          errorMsg.includes("smart plus") ||
+          errorMsg.includes("does not support") ||
+          errorMsg.includes("not support") ||
+          errorMsg.includes("spc") ||
+          data.code === 40701) {
         return { 
           success: false, 
-          error: `【API未対応】このキャンペーンは「Upgraded Smart Plus」タイプのため、APIでのステータス変更ができません。TikTok Ads Manager（https://ads.tiktok.com/）から手動で変更してください。` 
+          error: `【API未対応】このキャンペーンは「Smart Plus」タイプのため、APIでのステータス変更ができません。TikTok Ads Manager（https://ads.tiktok.com/）から手動で変更してください。` 
         };
       }
       return { success: false, error: data.message || "SPC APIエラー" };
