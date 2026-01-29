@@ -19,7 +19,7 @@ let cpnDataCache: {
 
 const CACHE_TTL = 30 * 60 * 1000; // 30分
 
-// Googleシートからデータを取得してキャッシュ
+// DBとGoogleシートからデータを取得してキャッシュ
 async function getCpnDataMap() {
   const now = Date.now();
   
@@ -27,33 +27,48 @@ async function getCpnDataMap() {
     return cpnDataCache.data;
   }
 
+  const cpnMap = new Map<string, { campaignId: string; accountName: string; media: string }>();
+
   try {
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-    if (!spreadsheetId) {
-      console.error("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
-      return new Map();
-    }
-
-    const todayData = await fetchTodayData(spreadsheetId);
-    const cpnMap = new Map<string, { campaignId: string; accountName: string; media: string }>();
-
-    for (const row of todayData) {
-      if (row.cpnName && row.campaignId) {
-        cpnMap.set(row.cpnName, {
-          campaignId: row.campaignId,
-          accountName: row.accountName,
-          media: row.media,
+    // 1. まずDBのマッピングテーブルから取得（履歴データを含む）
+    const dbMappings = await prisma.cpn_campaign_mapping.findMany();
+    for (const mapping of dbMappings) {
+      if (mapping.cpn_name && mapping.campaign_id) {
+        cpnMap.set(mapping.cpn_name, {
+          campaignId: mapping.campaign_id,
+          accountName: mapping.account_name || "",
+          media: mapping.media || "",
         });
       }
     }
-
-    cpnDataCache = { data: cpnMap, timestamp: now };
-    console.log(`CPN data cache updated: ${cpnMap.size} entries`);
-    return cpnMap;
+    console.log(`Loaded ${dbMappings.length} CPN mappings from DB`);
   } catch (error) {
-    console.error("Error fetching CPN data for mapping:", error);
-    return cpnDataCache?.data || new Map();
+    console.error("Error fetching CPN mappings from DB:", error);
   }
+
+  try {
+    // 2. Googleシートの当日データで上書き（最新データを優先）
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    if (spreadsheetId) {
+      const todayData = await fetchTodayData(spreadsheetId);
+      for (const row of todayData) {
+        if (row.cpnName && row.campaignId) {
+          cpnMap.set(row.cpnName, {
+            campaignId: row.campaignId,
+            accountName: row.accountName,
+            media: row.media,
+          });
+        }
+      }
+      console.log(`Updated with ${todayData.length} entries from today's data`);
+    }
+  } catch (error) {
+    console.error("Error fetching CPN data from Google Sheets:", error);
+  }
+
+  cpnDataCache = { data: cpnMap, timestamp: now };
+  console.log(`CPN data cache total: ${cpnMap.size} entries`);
+  return cpnMap;
 }
 
 // GET: 予約一覧と履歴を取得
