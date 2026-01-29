@@ -1881,6 +1881,7 @@ export default function AnalysisPage() {
                   </th>
                   <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">予算変更</th>
                   <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">スケジュール</th>
+                  <th className="px-2 lg:px-3 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">追加予算/期限</th>
                   <th 
                     className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("profit")}
@@ -2066,6 +2067,30 @@ export default function AnalysisPage() {
                             追加
                           </button>
                         );
+                      })() : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </td>
+                    {/* 追加予算/期限（Metaのみ） */}
+                    <td className="px-2 py-2 text-center whitespace-nowrap bg-purple-50/30">
+                      {cpn.media === "Meta" ? (() => {
+                        const schedules = scheduleCache[cpn.campaignId || ""];
+                        const formattedSchedule = schedules ? formatSchedule(schedules) : null;
+                        
+                        if (formattedSchedule) {
+                          return (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <div className="text-sm font-bold text-purple-700">
+                                {formattedSchedule.amount}
+                              </div>
+                              <div className="text-[10px] text-purple-600">
+                                〜{formattedSchedule.period.split("〜")[1]}
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        return <span className="text-xs text-slate-400">未設定</span>;
                       })() : (
                         <span className="text-xs text-slate-400">-</span>
                       )}
