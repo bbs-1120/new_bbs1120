@@ -238,6 +238,28 @@ export async function GET(request: Request) {
 
     let { sheetData, monthlyProfit, dailyTrend, projectMonthly } = cachedData;
 
+    // DBからcampaignIdマッピングを取得（シートにIDがないCPN用）
+    let dbCampaignIdMap: Map<string, string> = new Map();
+    try {
+      const dbMappings = await prisma.cpn_campaign_mapping.findMany({
+        where: { campaign_id: { not: "" } },
+        select: { cpn_name: true, campaign_id: true },
+      });
+      for (const m of dbMappings) {
+        if (m.cpn_name && m.campaign_id) {
+          dbCampaignIdMap.set(m.cpn_name, m.campaign_id);
+        }
+      }
+    } catch {}
+
+    // シートデータにDBのcampaignIdを補完
+    sheetData = sheetData.map(row => {
+      if (!row.campaignId && row.cpnName && dbCampaignIdMap.has(row.cpnName)) {
+        return { ...row, campaignId: dbCampaignIdMap.get(row.cpnName) || "" };
+      }
+      return row;
+    });
+
     // メンバーの場合、担当者名でCPNをフィルタリング
     // CPN名に「新規グロース部_{担当者名}_」が含まれるもののみ表示
     if (filterTeamName) {
