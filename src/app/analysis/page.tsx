@@ -246,63 +246,79 @@ export default function AnalysisPage() {
     }
   }, []);
 
+  // スケジュール取得中フラグ
+  const [isLoadingAllSchedules, setIsLoadingAllSchedules] = useState(false);
+
   // 全Meta CPNのスケジュールを一括更新
   const refreshAllSchedules = useCallback(async () => {
     if (!cpnList || cpnList.length === 0) return;
     
     const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
+    if (metaCpns.length === 0) {
+      console.log("No Meta CPNs with campaignId found");
+      return;
+    }
     
-    // 並列で取得（20件ずつバッチ処理）
-    const batchSize = 20;
+    console.log(`Fetching schedules for ${metaCpns.length} Meta CPNs...`);
+    setIsLoadingAllSchedules(true);
+    
+    // 並列で取得（10件ずつバッチ処理）
+    const batchSize = 10;
     for (let i = 0; i < metaCpns.length; i += batchSize) {
       const batch = metaCpns.slice(i, i + batchSize);
       await Promise.all(batch.map(cpn => fetchSchedule(cpn.campaignId!, false)));
       // バッチ間で少し待機
       if (i + batchSize < metaCpns.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
+    
+    setIsLoadingAllSchedules(false);
     setScheduleLastUpdated(Date.now());
+    console.log("Schedule fetch completed");
   }, [cpnList, fetchSchedule]);
   
-  // Meta CPNのスケジュールを初回取得
+  // Meta CPNのスケジュールを初回取得（cpnListが変わったら再取得）
   useEffect(() => {
     if (!cpnList || cpnList.length === 0) return;
     
     const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
-    const uncachedCpns = metaCpns.filter(cpn => !scheduleCache[cpn.campaignId!]);
+    console.log(`Found ${metaCpns.length} Meta CPNs with campaignId`);
     
-    if (uncachedCpns.length === 0) return;
+    if (metaCpns.length === 0) return;
     
-    // 最初の30件を即時取得（画面に表示される分）
-    const immediateFetch = uncachedCpns.slice(0, 30);
-    // 残りはバックグラウンドで遅延取得
-    const delayedFetch = uncachedCpns.slice(30);
+    // 初回取得を即座に開始
+    const fetchAllImmediately = async () => {
+      setIsLoadingAllSchedules(true);
+      
+      // 並列で取得（10件ずつバッチ処理）
+      const batchSize = 10;
+      for (let i = 0; i < metaCpns.length; i += batchSize) {
+        const batch = metaCpns.slice(i, i + batchSize);
+        await Promise.all(batch.map(cpn => fetchSchedule(cpn.campaignId!, false)));
+        // バッチ間で少し待機
+        if (i + batchSize < metaCpns.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+      
+      setIsLoadingAllSchedules(false);
+      setScheduleLastUpdated(Date.now());
+    };
     
-    // 即時取得（30msずつ）
-    immediateFetch.forEach((cpn, index) => {
-      setTimeout(() => {
-        fetchSchedule(cpn.campaignId!, false);
-      }, index * 30);
-    });
+    // 500ms後に開始（データロード完了を待つ）
+    const timeout = setTimeout(fetchAllImmediately, 500);
     
-    // 遅延取得（1秒後から100msずつ）
-    delayedFetch.forEach((cpn, index) => {
-      setTimeout(() => {
-        fetchSchedule(cpn.campaignId!, false);
-      }, 1000 + index * 100);
-    });
-    
-    setScheduleLastUpdated(Date.now());
-  }, [cpnList, fetchSchedule]); // scheduleCache を依存配列から削除して初回のみ実行
+    return () => clearTimeout(timeout);
+  }, [cpnList, fetchSchedule]);
 
-  // スケジュール自動更新（60秒ごと）
+  // スケジュール自動更新（30秒ごと）
   useEffect(() => {
     if (!cpnList || cpnList.length === 0) return;
     
     const interval = setInterval(() => {
       refreshAllSchedules();
-    }, 60000); // 60秒ごと
+    }, 30000); // 30秒ごと
     
     return () => clearInterval(interval);
   }, [cpnList, refreshAllSchedules]);
@@ -2000,17 +2016,20 @@ export default function AnalysisPage() {
                         <span>スケジュール</span>
                         <button
                           onClick={refreshAllSchedules}
-                          className="p-0.5 hover:bg-purple-200 rounded text-purple-600"
+                          disabled={isLoadingAllSchedules}
+                          className="p-0.5 hover:bg-purple-200 rounded text-purple-600 disabled:opacity-50"
                           title="全スケジュールを更新"
                         >
-                          <RefreshCw className="h-3 w-3" />
+                          <RefreshCw className={`h-3 w-3 ${isLoadingAllSchedules ? "animate-spin" : ""}`} />
                         </button>
                       </div>
-                      {scheduleLastUpdated > 0 && (
+                      {isLoadingAllSchedules ? (
+                        <span className="text-[8px] text-purple-500 font-normal">取得中...</span>
+                      ) : scheduleLastUpdated > 0 ? (
                         <span className="text-[8px] text-purple-500 font-normal">
                           {new Date(scheduleLastUpdated).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}更新
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </th>
                   <th className="px-2 lg:px-3 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">追加予算/期限</th>
@@ -2229,12 +2248,16 @@ export default function AnalysisPage() {
                           );
                         }
                         
+                        // スケジュールが設定されていない場合
                         return (
                           <div className="flex flex-col items-center gap-1">
                             {!cpn.campaignId ? (
                               <span className="text-[9px] text-red-500 font-medium">ID未取得</span>
+                            ) : isLoadingAllSchedules ? (
+                              <span className="text-[9px] text-purple-500">読込中...</span>
                             ) : (
                               <>
+                                <span className="text-[9px] text-slate-400">未設定</span>
                                 <button
                                   onClick={() => openBudgetScheduleModal(cpn)}
                                   className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
@@ -2242,13 +2265,6 @@ export default function AnalysisPage() {
                                 >
                                   <Calendar className="h-3 w-3" />
                                   追加
-                                </button>
-                                <button
-                                  onClick={() => fetchSchedule(cpn.campaignId!, true)}
-                                  className="text-[9px] text-slate-400 hover:text-slate-600 flex items-center gap-0.5"
-                                >
-                                  <RefreshCw className="h-2.5 w-2.5" />
-                                  確認
                                 </button>
                               </>
                             )}
@@ -2295,9 +2311,14 @@ export default function AnalysisPage() {
                           );
                         }
                         
+                        // スケジュールが設定されていない場合
                         return (
                           <div className="text-center">
-                            <span className="text-xs text-slate-400">-</span>
+                            {isLoadingAllSchedules ? (
+                              <span className="text-[9px] text-purple-500">読込中...</span>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
                           </div>
                         );
                       })() : (
