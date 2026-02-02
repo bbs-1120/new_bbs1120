@@ -325,6 +325,7 @@ export default function AnalysisPage() {
     
     const startDate = new Date(schedule.time_start * 1000);
     const endDate = new Date(schedule.time_end * 1000);
+    const today = new Date();
     
     const formatDateTime = (d: Date) => {
       const month = d.getMonth() + 1;
@@ -334,6 +335,31 @@ export default function AnalysisPage() {
       return `${month}/${day} ${hour}:${min}`;
     };
     
+    const formatTimeOnly = (d: Date) => {
+      const hour = d.getHours();
+      const min = d.getMinutes().toString().padStart(2, "0");
+      return `${hour}:${min}`;
+    };
+    
+    // 時間のみ表示（11:00-23:45 形式）
+    const timeOnly = `${formatTimeOnly(startDate)}-${formatTimeOnly(endDate)}`;
+    
+    // 日付情報（今日以外の場合に表示）
+    const isSameDay = startDate.getDate() === endDate.getDate() && 
+                      startDate.getMonth() === endDate.getMonth();
+    const isToday = startDate.getDate() === today.getDate() && 
+                    startDate.getMonth() === today.getMonth();
+    
+    let dateInfo = "";
+    if (!isToday) {
+      dateInfo = `${startDate.getMonth() + 1}/${startDate.getDate()}`;
+      if (!isSameDay) {
+        dateInfo += `〜${endDate.getMonth() + 1}/${endDate.getDate()}`;
+      }
+    } else if (!isSameDay) {
+      dateInfo = `〜${endDate.getMonth() + 1}/${endDate.getDate()}`;
+    }
+    
     const isActive = activeSchedule !== undefined;
     const remainingMinutes = Math.floor((schedule.time_end - now) / 60);
     const remainingHours = Math.floor(remainingMinutes / 60);
@@ -342,18 +368,18 @@ export default function AnalysisPage() {
     let remainingText = "";
     if (isActive) {
       if (remainingHours > 0) {
-        remainingText = `残り${remainingHours}時間${remainingMins}分`;
+        remainingText = `残り${remainingHours}h${remainingMins}m`;
       } else {
-        remainingText = `残り${remainingMins}分`;
+        remainingText = `残り${remainingMins}m`;
       }
     } else {
       const startInMinutes = Math.floor((schedule.time_start - now) / 60);
       const startInHours = Math.floor(startInMinutes / 60);
       const startInMins = startInMinutes % 60;
       if (startInHours > 0) {
-        remainingText = `${startInHours}時間${startInMins}分後に開始`;
+        remainingText = `${startInHours}h${startInMins}m後開始`;
       } else {
-        remainingText = `${startInMins}分後に開始`;
+        remainingText = `${startInMins}m後開始`;
       }
     }
     
@@ -361,6 +387,8 @@ export default function AnalysisPage() {
       period: `${formatDateTime(startDate)}〜${formatDateTime(endDate)}`,
       startTime: formatDateTime(startDate),
       endTime: formatDateTime(endDate),
+      timeOnly,
+      dateInfo,
       amount: `¥${parseInt(schedule.budget_value).toLocaleString()}`,
       rawAmount: parseInt(schedule.budget_value),
       isActive,
@@ -2154,45 +2182,46 @@ export default function AnalysisPage() {
                         
                         if (formattedSchedule) {
                           return (
-                            <div className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border ${
+                            <div className={`flex flex-col items-center gap-0.5 p-1 rounded-lg border ${
                               formattedSchedule.isActive 
                                 ? "bg-green-100 border-green-400" 
                                 : "bg-purple-100 border-purple-300"
                             }`}>
-                              {formattedSchedule.isActive && (
-                                <span className="px-2 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded-full animate-pulse">
-                                  適用中
-                                </span>
+                              {/* 時間-時間: 金額 形式 */}
+                              <div className={`text-xs font-bold whitespace-nowrap ${
+                                formattedSchedule.isActive ? "text-green-800" : "text-purple-800"
+                              }`}>
+                                {formattedSchedule.timeOnly}: {formattedSchedule.amount}
+                              </div>
+                              
+                              {/* 日付（今日以外） */}
+                              {formattedSchedule.dateInfo && (
+                                <div className="text-[9px] text-slate-500">
+                                  ({formattedSchedule.dateInfo})
+                                </div>
                               )}
-                              <div className={`px-3 py-1 rounded-md text-sm font-bold shadow-sm ${
-                                formattedSchedule.isActive 
-                                  ? "bg-green-600 text-white" 
-                                  : "bg-purple-600 text-white"
+                              
+                              {/* 状態 */}
+                              <div className={`text-[9px] font-medium ${
+                                formattedSchedule.isActive ? "text-green-600" : "text-purple-600"
                               }`}>
-                                {formattedSchedule.amount}
+                                {formattedSchedule.isActive ? `適用中` : formattedSchedule.remainingText}
                               </div>
-                              <div className="text-[10px] text-slate-700 font-medium leading-tight text-center">
-                                <div>{formattedSchedule.startTime}</div>
-                                <div>〜{formattedSchedule.endTime}</div>
-                              </div>
-                              <span className={`text-[9px] font-medium ${
-                                formattedSchedule.isActive ? "text-green-700" : "text-purple-600"
-                              }`}>
-                                {formattedSchedule.remainingText}
-                              </span>
-                              <div className="flex gap-1">
+                              
+                              {/* ボタン */}
+                              <div className="flex gap-1 mt-0.5">
                                 <button
                                   onClick={() => cpn.campaignId && fetchSchedule(cpn.campaignId, true)}
-                                  className="text-[10px] text-slate-500 hover:text-slate-700 flex items-center"
+                                  className="text-[9px] text-slate-400 hover:text-slate-600 flex items-center"
                                   title="更新"
                                 >
-                                  <RefreshCw className="h-3 w-3" />
+                                  <RefreshCw className="h-2.5 w-2.5" />
                                 </button>
                                 <button
                                   onClick={() => openBudgetScheduleModal(cpn)}
-                                  className="text-[10px] text-purple-600 hover:text-purple-800 hover:underline font-medium flex items-center gap-0.5"
+                                  className="text-[9px] text-purple-600 hover:text-purple-800 font-medium flex items-center gap-0.5"
                                 >
-                                  <Calendar className="h-3 w-3" />
+                                  <Calendar className="h-2.5 w-2.5" />
                                   変更
                                 </button>
                               </div>
@@ -2233,39 +2262,30 @@ export default function AnalysisPage() {
                         
                         if (formattedSchedule) {
                           return (
-                            <div className={`flex flex-col items-center gap-1 p-1.5 rounded-lg ${
+                            <div className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg ${
                               formattedSchedule.isActive 
-                                ? "bg-green-50 border border-green-200" 
-                                : "bg-purple-50 border border-purple-200"
+                                ? "bg-green-100 border border-green-300" 
+                                : "bg-purple-100 border border-purple-300"
                             }`}>
-                              {/* 適用中/予定ラベル */}
-                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full ${
-                                formattedSchedule.isActive 
-                                  ? "bg-green-500 text-white" 
-                                  : "bg-purple-400 text-white"
+                              {/* 時間範囲: 金額 形式 */}
+                              <div className={`text-xs font-bold ${
+                                formattedSchedule.isActive ? "text-green-800" : "text-purple-800"
                               }`}>
-                                {formattedSchedule.isActive ? "適用中" : "予定"}
-                              </span>
-                              
-                              {/* 金額 */}
-                              <div className={`text-base font-bold ${
-                                formattedSchedule.isActive ? "text-green-700" : "text-purple-700"
-                              }`}>
-                                {formattedSchedule.amount}
+                                {formattedSchedule.timeOnly}: {formattedSchedule.amount}
                               </div>
                               
-                              {/* 期間 */}
-                              <div className="text-[10px] text-slate-600 leading-tight text-center">
-                                <div className="font-medium">{formattedSchedule.startTime}</div>
-                                <div>↓</div>
-                                <div className="font-medium">{formattedSchedule.endTime}</div>
-                              </div>
+                              {/* 日付（今日以外の場合） */}
+                              {formattedSchedule.dateInfo && (
+                                <div className="text-[10px] text-slate-600">
+                                  {formattedSchedule.dateInfo}
+                                </div>
+                              )}
                               
-                              {/* 残り時間 */}
-                              <span className={`text-[10px] font-medium ${
+                              {/* 状態表示 */}
+                              <span className={`text-[9px] font-medium ${
                                 formattedSchedule.isActive ? "text-green-600" : "text-purple-600"
                               }`}>
-                                {formattedSchedule.remainingText}
+                                {formattedSchedule.isActive ? `適用中 (${formattedSchedule.remainingText})` : formattedSchedule.remainingText}
                               </span>
                             </div>
                           );
@@ -2273,7 +2293,7 @@ export default function AnalysisPage() {
                         
                         return (
                           <div className="text-center">
-                            <span className="text-xs text-slate-400">未設定</span>
+                            <span className="text-xs text-slate-400">-</span>
                           </div>
                         );
                       })() : (
