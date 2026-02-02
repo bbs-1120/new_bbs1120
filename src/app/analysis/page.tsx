@@ -2233,27 +2233,49 @@ export default function AnalysisPage() {
                         
                         if (formattedSchedule) {
                           return (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <div className={`text-sm font-bold ${
+                            <div className={`flex flex-col items-center gap-1 p-1.5 rounded-lg ${
+                              formattedSchedule.isActive 
+                                ? "bg-green-50 border border-green-200" 
+                                : "bg-purple-50 border border-purple-200"
+                            }`}>
+                              {/* 適用中/予定ラベル */}
+                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full ${
+                                formattedSchedule.isActive 
+                                  ? "bg-green-500 text-white" 
+                                  : "bg-purple-400 text-white"
+                              }`}>
+                                {formattedSchedule.isActive ? "適用中" : "予定"}
+                              </span>
+                              
+                              {/* 金額 */}
+                              <div className={`text-base font-bold ${
                                 formattedSchedule.isActive ? "text-green-700" : "text-purple-700"
                               }`}>
                                 {formattedSchedule.amount}
                               </div>
-                              <div className={`text-[10px] ${
+                              
+                              {/* 期間 */}
+                              <div className="text-[10px] text-slate-600 leading-tight text-center">
+                                <div className="font-medium">{formattedSchedule.startTime}</div>
+                                <div>↓</div>
+                                <div className="font-medium">{formattedSchedule.endTime}</div>
+                              </div>
+                              
+                              {/* 残り時間 */}
+                              <span className={`text-[10px] font-medium ${
                                 formattedSchedule.isActive ? "text-green-600" : "text-purple-600"
                               }`}>
-                                〜{formattedSchedule.endTime}
-                              </div>
-                              {formattedSchedule.isActive && (
-                                <span className="text-[9px] text-green-600 font-medium">
-                                  {formattedSchedule.remainingText}
-                                </span>
-                              )}
+                                {formattedSchedule.remainingText}
+                              </span>
                             </div>
                           );
                         }
                         
-                        return <span className="text-xs text-slate-400">未設定</span>;
+                        return (
+                          <div className="text-center">
+                            <span className="text-xs text-slate-400">未設定</span>
+                          </div>
+                        );
                       })() : (
                         <span className="text-xs text-slate-400">-</span>
                       )}
