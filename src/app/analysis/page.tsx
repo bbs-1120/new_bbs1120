@@ -221,10 +221,15 @@ export default function AnalysisPage() {
   }
   const [scheduleCache, setScheduleCache] = useState<Record<string, ScheduleInfo[]>>({});
   const [loadingSchedules, setLoadingSchedules] = useState<Record<string, boolean>>({});
+  const [scheduleLastUpdated, setScheduleLastUpdated] = useState<number>(0);
   
-  // スケジュールを取得する関数
-  const fetchSchedule = useCallback(async (campaignId: string) => {
+  // スケジュールを取得する関数（ローディング状態付き）
+  const fetchSchedule = useCallback(async (campaignId: string, showLoading = false) => {
     if (!campaignId) return;
+    
+    if (showLoading) {
+      setLoadingSchedules(prev => ({ ...prev, [campaignId]: true }));
+    }
     
     try {
       const response = await fetch(`/api/budget-schedule?campaignId=${campaignId}`);
@@ -234,51 +239,132 @@ export default function AnalysisPage() {
       }
     } catch (error) {
       console.error("Failed to fetch schedule:", error);
+    } finally {
+      if (showLoading) {
+        setLoadingSchedules(prev => ({ ...prev, [campaignId]: false }));
+      }
     }
   }, []);
+
+  // 全Meta CPNのスケジュールを一括更新
+  const refreshAllSchedules = useCallback(async () => {
+    if (!cpnList || cpnList.length === 0) return;
+    
+    const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
+    
+    // 並列で取得（20件ずつバッチ処理）
+    const batchSize = 20;
+    for (let i = 0; i < metaCpns.length; i += batchSize) {
+      const batch = metaCpns.slice(i, i + batchSize);
+      await Promise.all(batch.map(cpn => fetchSchedule(cpn.campaignId!, false)));
+      // バッチ間で少し待機
+      if (i + batchSize < metaCpns.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    setScheduleLastUpdated(Date.now());
+  }, [cpnList, fetchSchedule]);
   
-  // Meta CPNのスケジュールを遅延取得（表示されているCPN優先）
+  // Meta CPNのスケジュールを初回取得
   useEffect(() => {
     if (!cpnList || cpnList.length === 0) return;
     
     const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
     const uncachedCpns = metaCpns.filter(cpn => !scheduleCache[cpn.campaignId!]);
     
-    // 最初の20件を即時取得（画面に表示される分）
-    const immediateFetch = uncachedCpns.slice(0, 20);
-    // 残りはバックグラウンドで遅延取得
-    const delayedFetch = uncachedCpns.slice(20);
+    if (uncachedCpns.length === 0) return;
     
-    // 即時取得（50msずつ）
+    // 最初の30件を即時取得（画面に表示される分）
+    const immediateFetch = uncachedCpns.slice(0, 30);
+    // 残りはバックグラウンドで遅延取得
+    const delayedFetch = uncachedCpns.slice(30);
+    
+    // 即時取得（30msずつ）
     immediateFetch.forEach((cpn, index) => {
       setTimeout(() => {
-        fetchSchedule(cpn.campaignId!);
-      }, index * 50);
+        fetchSchedule(cpn.campaignId!, false);
+      }, index * 30);
     });
     
-    // 遅延取得（2秒後から300msずつ）
+    // 遅延取得（1秒後から100msずつ）
     delayedFetch.forEach((cpn, index) => {
       setTimeout(() => {
-        fetchSchedule(cpn.campaignId!);
-      }, 2000 + index * 300);
+        fetchSchedule(cpn.campaignId!, false);
+      }, 1000 + index * 100);
     });
-  }, [cpnList, scheduleCache, fetchSchedule]);
+    
+    setScheduleLastUpdated(Date.now());
+  }, [cpnList, fetchSchedule]); // scheduleCache を依存配列から削除して初回のみ実行
+
+  // スケジュール自動更新（60秒ごと）
+  useEffect(() => {
+    if (!cpnList || cpnList.length === 0) return;
+    
+    const interval = setInterval(() => {
+      refreshAllSchedules();
+    }, 60000); // 60秒ごと
+    
+    return () => clearInterval(interval);
+  }, [cpnList, refreshAllSchedules]);
   
-  // スケジュールをフォーマット
+  // スケジュールをフォーマット（より詳細な情報を返す）
   const formatSchedule = (schedules: ScheduleInfo[]) => {
     if (!schedules || schedules.length === 0) return null;
-    // 未来のスケジュールのみ表示
-    const now = Math.floor(Date.now() / 1000);
-    const futureSchedules = schedules.filter(s => s.time_end > now);
-    if (futureSchedules.length === 0) return null;
     
-    const schedule = futureSchedules[0];
+    const now = Math.floor(Date.now() / 1000);
+    
+    // 現在適用中のスケジュール（開始済みで終了前）
+    const activeSchedule = schedules.find(s => s.time_start <= now && s.time_end > now);
+    
+    // 未来のスケジュール（まだ開始していない）
+    const futureSchedules = schedules.filter(s => s.time_start > now);
+    
+    // 優先順位: 現在適用中 > 次に開始予定
+    const schedule = activeSchedule || futureSchedules[0];
+    if (!schedule) return null;
+    
     const startDate = new Date(schedule.time_start * 1000);
     const endDate = new Date(schedule.time_end * 1000);
-    const formatDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
+    
+    const formatDateTime = (d: Date) => {
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      const hour = d.getHours();
+      const min = d.getMinutes().toString().padStart(2, "0");
+      return `${month}/${day} ${hour}:${min}`;
+    };
+    
+    const isActive = activeSchedule !== undefined;
+    const remainingMinutes = Math.floor((schedule.time_end - now) / 60);
+    const remainingHours = Math.floor(remainingMinutes / 60);
+    const remainingMins = remainingMinutes % 60;
+    
+    let remainingText = "";
+    if (isActive) {
+      if (remainingHours > 0) {
+        remainingText = `残り${remainingHours}時間${remainingMins}分`;
+      } else {
+        remainingText = `残り${remainingMins}分`;
+      }
+    } else {
+      const startInMinutes = Math.floor((schedule.time_start - now) / 60);
+      const startInHours = Math.floor(startInMinutes / 60);
+      const startInMins = startInMinutes % 60;
+      if (startInHours > 0) {
+        remainingText = `${startInHours}時間${startInMins}分後に開始`;
+      } else {
+        remainingText = `${startInMins}分後に開始`;
+      }
+    }
+    
     return {
-      period: `${formatDate(startDate)}〜${formatDate(endDate)}`,
+      period: `${formatDateTime(startDate)}〜${formatDateTime(endDate)}`,
+      startTime: formatDateTime(startDate),
+      endTime: formatDateTime(endDate),
       amount: `¥${parseInt(schedule.budget_value).toLocaleString()}`,
+      rawAmount: parseInt(schedule.budget_value),
+      isActive,
+      remainingText,
     };
   };
 
@@ -1880,7 +1966,25 @@ export default function AnalysisPage() {
                     現在予算<SortIcon columnKey="dailyBudget" />
                   </th>
                   <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap">予算変更</th>
-                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">スケジュール</th>
+                  <th className="px-1.5 lg:px-2 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <span>スケジュール</span>
+                        <button
+                          onClick={refreshAllSchedules}
+                          className="p-0.5 hover:bg-purple-200 rounded text-purple-600"
+                          title="全スケジュールを更新"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {scheduleLastUpdated > 0 && (
+                        <span className="text-[8px] text-purple-500 font-normal">
+                          {new Date(scheduleLastUpdated).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}更新
+                        </span>
+                      )}
+                    </div>
+                  </th>
                   <th className="px-2 lg:px-3 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">追加予算/期限</th>
                   <th 
                     className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
@@ -2036,36 +2140,86 @@ export default function AnalysisPage() {
                     {/* スケジュール（Metaのみ） */}
                     <td className="px-2 py-2 text-center whitespace-nowrap bg-purple-50/30">
                       {cpn.media === "Meta" ? (() => {
+                        const isLoading = loadingSchedules[cpn.campaignId || ""];
                         const schedules = scheduleCache[cpn.campaignId || ""];
                         const formattedSchedule = schedules ? formatSchedule(schedules) : null;
                         
+                        if (isLoading) {
+                          return (
+                            <div className="flex items-center justify-center">
+                              <RefreshCw className="h-4 w-4 animate-spin text-purple-500" />
+                            </div>
+                          );
+                        }
+                        
                         if (formattedSchedule) {
                           return (
-                            <div className="flex flex-col items-center gap-1 p-1 bg-purple-100 rounded-lg border border-purple-300">
-                              <div className="px-3 py-1 bg-purple-600 text-white rounded-md text-sm font-bold shadow-sm">
+                            <div className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border ${
+                              formattedSchedule.isActive 
+                                ? "bg-green-100 border-green-400" 
+                                : "bg-purple-100 border-purple-300"
+                            }`}>
+                              {formattedSchedule.isActive && (
+                                <span className="px-2 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded-full animate-pulse">
+                                  適用中
+                                </span>
+                              )}
+                              <div className={`px-3 py-1 rounded-md text-sm font-bold shadow-sm ${
+                                formattedSchedule.isActive 
+                                  ? "bg-green-600 text-white" 
+                                  : "bg-purple-600 text-white"
+                              }`}>
                                 {formattedSchedule.amount}
                               </div>
-                              <span className="text-[10px] text-purple-700 font-medium leading-tight">{formattedSchedule.period}</span>
-                              <button
-                                onClick={() => openBudgetScheduleModal(cpn)}
-                                className="text-[10px] text-purple-600 hover:text-purple-800 hover:underline font-medium flex items-center gap-0.5"
-                              >
-                                <Calendar className="h-3 w-3" />
-                                変更
-                              </button>
+                              <div className="text-[10px] text-slate-700 font-medium leading-tight text-center">
+                                <div>{formattedSchedule.startTime}</div>
+                                <div>〜{formattedSchedule.endTime}</div>
+                              </div>
+                              <span className={`text-[9px] font-medium ${
+                                formattedSchedule.isActive ? "text-green-700" : "text-purple-600"
+                              }`}>
+                                {formattedSchedule.remainingText}
+                              </span>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => cpn.campaignId && fetchSchedule(cpn.campaignId, true)}
+                                  className="text-[10px] text-slate-500 hover:text-slate-700 flex items-center"
+                                  title="更新"
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </button>
+                                <button
+                                  onClick={() => openBudgetScheduleModal(cpn)}
+                                  className="text-[10px] text-purple-600 hover:text-purple-800 hover:underline font-medium flex items-center gap-0.5"
+                                >
+                                  <Calendar className="h-3 w-3" />
+                                  変更
+                                </button>
+                              </div>
                             </div>
                           );
                         }
                         
                         return (
-                          <button
-                            onClick={() => openBudgetScheduleModal(cpn)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
-                            title="予算スケジュールを設定"
-                          >
-                            <Calendar className="h-3 w-3" />
-                            追加
-                          </button>
+                          <div className="flex flex-col items-center gap-1">
+                            <button
+                              onClick={() => openBudgetScheduleModal(cpn)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
+                              title="予算スケジュールを設定"
+                            >
+                              <Calendar className="h-3 w-3" />
+                              追加
+                            </button>
+                            {cpn.campaignId && (
+                              <button
+                                onClick={() => fetchSchedule(cpn.campaignId!, true)}
+                                className="text-[9px] text-slate-400 hover:text-slate-600 flex items-center gap-0.5"
+                              >
+                                <RefreshCw className="h-2.5 w-2.5" />
+                                確認
+                              </button>
+                            )}
+                          </div>
                         );
                       })() : (
                         <span className="text-xs text-slate-400">-</span>
@@ -2080,12 +2234,21 @@ export default function AnalysisPage() {
                         if (formattedSchedule) {
                           return (
                             <div className="flex flex-col items-center gap-0.5">
-                              <div className="text-sm font-bold text-purple-700">
+                              <div className={`text-sm font-bold ${
+                                formattedSchedule.isActive ? "text-green-700" : "text-purple-700"
+                              }`}>
                                 {formattedSchedule.amount}
                               </div>
-                              <div className="text-[10px] text-purple-600">
-                                〜{formattedSchedule.period.split("〜")[1]}
+                              <div className={`text-[10px] ${
+                                formattedSchedule.isActive ? "text-green-600" : "text-purple-600"
+                              }`}>
+                                〜{formattedSchedule.endTime}
                               </div>
+                              {formattedSchedule.isActive && (
+                                <span className="text-[9px] text-green-600 font-medium">
+                                  {formattedSchedule.remainingText}
+                                </span>
+                              )}
                             </div>
                           );
                         }
