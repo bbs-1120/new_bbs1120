@@ -2231,22 +2231,26 @@ export default function AnalysisPage() {
                         
                         return (
                           <div className="flex flex-col items-center gap-1">
-                            <button
-                              onClick={() => openBudgetScheduleModal(cpn)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
-                              title="予算スケジュールを設定"
-                            >
-                              <Calendar className="h-3 w-3" />
-                              追加
-                            </button>
-                            {cpn.campaignId && (
-                              <button
-                                onClick={() => fetchSchedule(cpn.campaignId!, true)}
-                                className="text-[9px] text-slate-400 hover:text-slate-600 flex items-center gap-0.5"
-                              >
-                                <RefreshCw className="h-2.5 w-2.5" />
-                                確認
-                              </button>
+                            {!cpn.campaignId ? (
+                              <span className="text-[9px] text-red-500 font-medium">ID未取得</span>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openBudgetScheduleModal(cpn)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md transition-colors"
+                                  title="予算スケジュールを設定"
+                                >
+                                  <Calendar className="h-3 w-3" />
+                                  追加
+                                </button>
+                                <button
+                                  onClick={() => fetchSchedule(cpn.campaignId!, true)}
+                                  className="text-[9px] text-slate-400 hover:text-slate-600 flex items-center gap-0.5"
+                                >
+                                  <RefreshCw className="h-2.5 w-2.5" />
+                                  確認
+                                </button>
+                              </>
                             )}
                           </div>
                         );
