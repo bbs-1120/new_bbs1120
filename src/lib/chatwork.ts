@@ -345,7 +345,7 @@ export async function sendAutoStopFailedAlert(
   failedCpns: AutoStopFailedCpn[]
 ): Promise<{ success: boolean; error?: string }> {
   const apiToken = process.env.CHATWORK_API_TOKEN;
-  const roomId = process.env.CHATWORK_ERROR_ROOM_ID;
+  const roomId = process.env.CHATWORK_ROOM_ID; // 通常のルームに送信（メンバーがいるルーム）
 
   if (!apiToken || !roomId) {
     return { success: false, error: "Chatwork設定が不完全です" };
@@ -357,30 +357,55 @@ export async function sendAutoStopFailedAlert(
 
   const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
-  let message = `[toall]\n\n`;
-  message += `【自動停止アラート】\n`;
-  message += `発生日時：${now}\n\n`;
-  message += `以下のCPNが自動停止ルールにヒットしましたが、停止に失敗しました。\n`;
-  message += `手動での確認・停止をお願いします。\n\n`;
-  
+  // メンバー別にグループ化
+  const byMember: Record<string, AutoStopFailedCpn[]> = {};
   for (const cpn of failedCpns) {
-    message += `━━━━━━━━━━━━━━━━━━━━\n`;
-    message += `📛 ${cpn.cpnName}\n`;
-    message += `媒体：${cpn.media}\n`;
-    message += `担当：${cpn.memberName}\n`;
-    message += `案件：${cpn.projectName}\n`;
-    message += `適用ルール：${cpn.ruleName}\n`;
-    message += `消化：¥${cpn.metrics.spend.toLocaleString()}\n`;
-    message += `利益：¥${cpn.metrics.profit.toLocaleString()}\n`;
-    message += `ROAS：${cpn.metrics.roas.toFixed(1)}%\n`;
-    if (cpn.error) {
-      message += `エラー：${cpn.error}\n`;
-    }
-    message += `\n`;
+    const key = cpn.memberName || "不明";
+    if (!byMember[key]) byMember[key] = [];
+    byMember[key].push(cpn);
   }
-
-  message += `━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `対象CPN数：${failedCpns.length}件\n`;
-
-  return sendToChatwork(apiToken, roomId, message);
+  
+  // 各メンバーごとにメッセージを送信
+  const errors: string[] = [];
+  
+  for (const [member, cpns] of Object.entries(byMember)) {
+    const chatworkId = MEMBER_CHATWORK_IDS[member];
+    
+    let message = "";
+    
+    // TOメンションを追加（IDがある場合のみ）
+    if (chatworkId) {
+      message += `[To:${chatworkId}]\n`;
+    }
+    
+    message += `【自動停止エラー】${now}\n\n`;
+    message += `${member}さんの以下のCPNが停止ルールにヒットしましたが、停止に失敗しました。\n`;
+    message += `手動での確認・停止をお願いします。\n\n`;
+    
+    for (const cpn of cpns) {
+      message += `━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `📛 ${cpn.cpnName.split("_").slice(2, 6).join("_")}\n`;
+      message += `媒体：${cpn.media}\n`;
+      message += `案件：${cpn.projectName}\n`;
+      message += `消化：¥${cpn.metrics.spend.toLocaleString()}\n`;
+      message += `利益：¥${cpn.metrics.profit.toLocaleString()}\n`;
+      if (cpn.error) {
+        message += `エラー：${cpn.error}\n`;
+      }
+      message += `\n`;
+    }
+    
+    message += `対象：${cpns.length}件`;
+    
+    const result = await sendToChatwork(apiToken, roomId, message);
+    if (!result.success) {
+      errors.push(`${member}: ${result.error}`);
+    }
+  }
+  
+  if (errors.length > 0) {
+    return { success: false, error: errors.join(", ") };
+  }
+  
+  return { success: true };
 }
