@@ -474,6 +474,55 @@ export default function AutoStopRulesPage() {
                       <span className="font-bold text-amber-600 ml-1">{newRule.projectName}</span> に適用
                     </div>
                     
+                    {/* プリセットテンプレート */}
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-slate-700 mb-3">📋 よく使うルール（クリックで適用）</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { profitMax: -5000 } })}
+                          className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                        >
+                          利益 -5,000円以下
+                        </button>
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { profitMax: -10000 } })}
+                          className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                        >
+                          利益 -10,000円以下
+                        </button>
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { profitMax: -20000 } })}
+                          className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                        >
+                          利益 -20,000円以下
+                        </button>
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { spendMin: 5000, mcvMax: 0 } })}
+                          className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-full hover:bg-amber-200 transition-colors"
+                        >
+                          消化5,000円以上 & MCV0
+                        </button>
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { spendMin: 3000, cvMax: 0 } })}
+                          className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-full hover:bg-amber-200 transition-colors"
+                        >
+                          消化3,000円以上 & CV0
+                        </button>
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { consecutiveLossMin: 3 } })}
+                          className="px-3 py-1.5 text-xs bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors"
+                        >
+                          3日連続赤字
+                        </button>
+                        <button
+                          onClick={() => setNewRule({ ...newRule, conditions: { roasMax: 100 } })}
+                          className="px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded-full hover:bg-purple-200 transition-colors"
+                        >
+                          ROAS 100%以下
+                        </button>
+                      </div>
+                    </div>
+                    
                     <div className="bg-slate-50 rounded-xl p-6 mb-6">
                       <p className="text-sm text-slate-600 mb-4">💡 以下の条件を<strong>すべて満たす</strong>CPNを自動停止します</p>
                       
