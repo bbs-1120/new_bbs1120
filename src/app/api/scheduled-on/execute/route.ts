@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendErrorNotification } from "@/lib/chatwork";
+import { sendScheduledOnError } from "@/lib/chatwork";
 
 // 日本時間の今日の日付を取得
 function getJSTDate(): Date {
@@ -193,22 +193,10 @@ export async function POST() {
       },
     });
 
-    // 失敗があった場合はChatworkに通知
+    // 失敗があった場合はChatworkに通知（シンプルなフォーマット）
     if (failedCount > 0) {
       const failedItems = results.filter((r) => !r.success);
-      const errorDetails = failedItems
-        .map((r) => `・${r.media}: ${r.cpnName} - ${r.error}`)
-        .join("\n");
-
-      await sendErrorNotification(
-        "status_change",
-        `翌日ON自動実行で${failedCount}件の失敗がありました`,
-        {
-          成功: successCount,
-          失敗: failedCount,
-          失敗詳細: errorDetails,
-        }
-      );
+      await sendScheduledOnError(failedItems);
     }
 
     return NextResponse.json({
@@ -221,11 +209,7 @@ export async function POST() {
   } catch (error) {
     console.error("Execute scheduled ON error:", error);
 
-    await sendErrorNotification(
-      "system",
-      "翌日ON自動実行でシステムエラーが発生しました",
-      { error: error instanceof Error ? error.message : "Unknown error" }
-    );
+    // システムエラーはログのみ（ChatWork通知不要）
 
     return NextResponse.json(
       {

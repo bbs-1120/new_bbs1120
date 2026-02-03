@@ -388,15 +388,92 @@ export async function sendAutoStopFailedAlert(
       message += `\n`;
     }
     
-    // 簡潔なメッセージ
-    message += `【停止エラー】${cpns.length}件\n`;
+    // シンプルなメッセージ
+    message += `【停止エラー】${cpns.length}件\n\n`;
     
     for (const cpn of cpns) {
-      const shortName = cpn.cpnName.split("_").slice(2, 5).join("_");
-      message += `・${shortName}（${cpn.media}）利益:¥${cpn.metrics.profit.toLocaleString()}\n`;
+      message += `${cpn.cpnName}\n`;
     }
     
-    message += `→手動停止お願いします`;
+    message += `\n停止できませんでした。\n確認お願いします`;
+    
+    const result = await sendToChatwork(apiToken, roomId, message);
+    if (!result.success) {
+      errors.push(`${member}: ${result.error}`);
+    }
+  }
+  
+  if (errors.length > 0) {
+    return { success: false, error: errors.join(", ") };
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 0:00ONエラー通知をChatworkに送信（シンプルフォーマット）
+ */
+export interface ScheduledOnFailedItem {
+  cpnName: string;
+  media: string;
+  success: boolean;
+  error?: string;
+}
+
+export async function sendScheduledOnError(
+  failedItems: ScheduledOnFailedItem[]
+): Promise<{ success: boolean; error?: string }> {
+  const apiToken = process.env.CHATWORK_API_TOKEN;
+  const roomId = process.env.CHATWORK_ROOM_ID;
+
+  if (!apiToken || !roomId) {
+    return { success: false, error: "Chatwork設定が不完全です" };
+  }
+
+  if (failedItems.length === 0) {
+    return { success: true };
+  }
+
+  // 悠太さんのChatWork ID（CC用）
+  const yutaId = MEMBER_CHATWORK_IDS["悠太"];
+  
+  // メンバー別にグループ化
+  const byMember: Record<string, ScheduledOnFailedItem[]> = {};
+  for (const item of failedItems) {
+    // CPN名からメンバー名を抽出（新規グロース部_メンバー名_...）
+    const parts = item.cpnName.split("_");
+    const memberName = parts.length > 1 && parts[0] === "新規グロース部" ? parts[1] : "不明";
+    if (!byMember[memberName]) byMember[memberName] = [];
+    byMember[memberName].push(item);
+  }
+  
+  const errors: string[] = [];
+  
+  for (const [member, items] of Object.entries(byMember)) {
+    const chatworkId = MEMBER_CHATWORK_IDS[member];
+    
+    let message = "";
+    
+    // TOメンションを追加
+    if (chatworkId) {
+      message += `[To:${chatworkId}]`;
+    }
+    // 悠太さんをCC（本人以外の場合）
+    if (yutaId && member !== "悠太") {
+      message += `[To:${yutaId}]`;
+    }
+    if (chatworkId || yutaId) {
+      message += `\n`;
+    }
+    
+    // シンプルなメッセージ
+    message += `【0:00ONエラー】${items.length}件\n\n`;
+    
+    for (const item of items) {
+      message += `${item.cpnName}\n`;
+    }
+    
+    message += `\n0:00ONできませんでした。\n確認お願いします`;
     
     const result = await sendToChatwork(apiToken, roomId, message);
     if (!result.success) {
