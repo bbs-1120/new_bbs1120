@@ -240,6 +240,66 @@ export async function sendAnomalyAlert(
 }
 
 /**
+ * 自動停止成功通知をChatworkに送信
+ */
+export interface AutoStopSuccessCpn {
+  cpnName: string;
+  media: string;
+  memberName: string;
+  projectName: string;
+  ruleName: string;
+  matchedConditions: string[];
+  metrics: {
+    spend: number;
+    cv: number;
+    mcv: number;
+    profit: number;
+    roas: number;
+  };
+}
+
+export async function sendAutoStopAlert(
+  stoppedCpns: AutoStopSuccessCpn[]
+): Promise<{ success: boolean; error?: string }> {
+  const apiToken = process.env.CHATWORK_API_TOKEN;
+  const roomId = process.env.CHATWORK_ROOM_ID; // 通常のルームに送信
+
+  if (!apiToken || !roomId) {
+    return { success: false, error: "Chatwork設定が不完全です" };
+  }
+
+  if (stoppedCpns.length === 0) {
+    return { success: true };
+  }
+
+  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+
+  let message = `[info][title]【自動停止実行完了】${now}[/title]`;
+  message += `以下のCPNを自動停止しました。\n\n`;
+  
+  // メンバー別にグループ化
+  const byMember: Record<string, AutoStopSuccessCpn[]> = {};
+  for (const cpn of stoppedCpns) {
+    const key = cpn.memberName || "不明";
+    if (!byMember[key]) byMember[key] = [];
+    byMember[key].push(cpn);
+  }
+  
+  for (const [member, cpns] of Object.entries(byMember)) {
+    message += `■ ${member}（${cpns.length}件）\n`;
+    for (const cpn of cpns) {
+      message += `・${cpn.cpnName.split("_").slice(2, 5).join("_")}\n`;
+      message += `  ${cpn.matchedConditions.join(" / ")}\n`;
+    }
+    message += `\n`;
+  }
+  
+  message += `合計：${stoppedCpns.length}件停止[/info]`;
+
+  return sendToChatwork(apiToken, roomId, message);
+}
+
+/**
  * 自動停止失敗アラートをChatworkに送信
  */
 export interface AutoStopFailedCpn {
