@@ -215,11 +215,20 @@ export default function AnalysisPage() {
   // 設定済みスケジュール表示用
   interface ScheduleInfo {
     id: string;
-    time_start: number;
-    time_end: number;
-    budget_value: string;
+    time_start: number | string; // Unix timestamp or ISO string
+    time_end: number | string;   // Unix timestamp or ISO string
+    budget_value: string | number;
   }
   const [scheduleCache, setScheduleCache] = useState<Record<string, ScheduleInfo[]>>({});
+  
+  // Meta APIからの時刻をUnixタイムスタンプに変換するヘルパー
+  const parseScheduleTime = (time: number | string): number => {
+    if (typeof time === "number") {
+      return time;
+    }
+    // ISO形式の場合は Date.parse でミリ秒を取得し、秒に変換
+    return Math.floor(new Date(time).getTime() / 1000);
+  };
   const [loadingSchedules, setLoadingSchedules] = useState<Record<string, boolean>>({});
   const [scheduleLastUpdated, setScheduleLastUpdated] = useState<number>(0);
   
@@ -375,18 +384,25 @@ export default function AnalysisPage() {
     
     const now = Math.floor(Date.now() / 1000);
     
+    // 時刻を変換してから比較
+    const parsedSchedules = schedules.map(s => ({
+      ...s,
+      time_start_ts: parseScheduleTime(s.time_start),
+      time_end_ts: parseScheduleTime(s.time_end),
+    }));
+    
     // 現在適用中のスケジュール（開始済みで終了前）
-    const activeSchedule = schedules.find(s => s.time_start <= now && s.time_end > now);
+    const activeSchedule = parsedSchedules.find(s => s.time_start_ts <= now && s.time_end_ts > now);
     
     // 未来のスケジュール（まだ開始していない）
-    const futureSchedules = schedules.filter(s => s.time_start > now);
+    const futureSchedules = parsedSchedules.filter(s => s.time_start_ts > now);
     
     // 優先順位: 現在適用中 > 次に開始予定
     const schedule = activeSchedule || futureSchedules[0];
     if (!schedule) return null;
     
-    const startDate = new Date(schedule.time_start * 1000);
-    const endDate = new Date(schedule.time_end * 1000);
+    const startDate = new Date(schedule.time_start_ts * 1000);
+    const endDate = new Date(schedule.time_end_ts * 1000);
     const today = new Date();
     
     const formatDateTime = (d: Date) => {
@@ -423,7 +439,7 @@ export default function AnalysisPage() {
     }
     
     const isActive = activeSchedule !== undefined;
-    const remainingMinutes = Math.floor((schedule.time_end - now) / 60);
+    const remainingMinutes = Math.floor((schedule.time_end_ts - now) / 60);
     const remainingHours = Math.floor(remainingMinutes / 60);
     const remainingMins = remainingMinutes % 60;
     
@@ -435,7 +451,7 @@ export default function AnalysisPage() {
         remainingText = `残り${remainingMins}m`;
       }
     } else {
-      const startInMinutes = Math.floor((schedule.time_start - now) / 60);
+      const startInMinutes = Math.floor((schedule.time_start_ts - now) / 60);
       const startInHours = Math.floor(startInMinutes / 60);
       const startInMins = startInMinutes % 60;
       if (startInHours > 0) {
@@ -445,14 +461,19 @@ export default function AnalysisPage() {
       }
     }
     
+    // budget_value を数値に変換
+    const budgetValue = typeof schedule.budget_value === "number" 
+      ? schedule.budget_value 
+      : parseInt(String(schedule.budget_value));
+    
     return {
       period: `${formatDateTime(startDate)}〜${formatDateTime(endDate)}`,
       startTime: formatDateTime(startDate),
       endTime: formatDateTime(endDate),
       timeOnly,
       dateInfo,
-      amount: `¥${parseInt(schedule.budget_value).toLocaleString()}`,
-      rawAmount: parseInt(schedule.budget_value),
+      amount: `¥${budgetValue.toLocaleString()}`,
+      rawAmount: budgetValue,
       isActive,
       remainingText,
     };
