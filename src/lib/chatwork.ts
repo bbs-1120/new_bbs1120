@@ -3,10 +3,10 @@ import { formatDate, formatCurrency, formatPercentage } from "./utils";
 // メンバー名 → ChatWork アカウントID マッピング
 // ChatWork IDはプロフィールURLから取得: chatwork.com/#!rid123456-XXXXXXX の XXXXXXX 部分
 export const MEMBER_CHATWORK_IDS: Record<string, string> = {
-  "悠太": "", // TODO: ChatWork IDを設定
-  "正弥": "", // TODO: ChatWork IDを設定
-  "圭市": "", // TODO: ChatWork IDを設定
-  "祐輝": "", // TODO: ChatWork IDを設定
+  "悠太": "", // 悠太さんは通知不要
+  "正弥": "9281542",
+  "圭市": "6057012",
+  "祐輝": "3160255",
 };
 
 interface JudgmentResult {
