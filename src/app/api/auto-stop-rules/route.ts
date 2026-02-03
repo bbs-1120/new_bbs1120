@@ -39,41 +39,82 @@ export async function GET(request: Request) {
     // 案件リストを取得（チームで運用中の案件）
     let projects: string[] = [];
     let members: string[] = [];
+    let offers: string[] = [];
+    let mediaList: string[] = [];
+    // 案件ごとのオファーマップ
+    let projectOffers: Record<string, string[]> = {};
     
     if (includeProjects) {
       try {
         const allData = await getFullAnalysisData();
         const projectSet = new Set<string>();
         const memberSet = new Set<string>();
+        const offerSet = new Set<string>();
+        const mediaSet = new Set<string>();
+        const projectOfferMap: Record<string, Set<string>> = {};
         
         for (const row of allData) {
           const cpnName = row.cpnName || "";
+          const parts = cpnName.split("_");
           
-          // メンバー抽出
-          const memberMatch = cpnName.match(/新規グロース部_([^_]+)_/);
-          if (memberMatch) {
-            memberSet.add(memberMatch[1]);
+          // メンバー抽出 (parts[1])
+          if (parts.length > 1 && parts[0] === "新規グロース部") {
+            memberSet.add(parts[1]);
           }
           
-          // 案件抽出
-          const projectMatch = cpnName.match(/新規グロース部_[^_]+_([^_]+)_/);
-          if (projectMatch) {
-            projectSet.add(projectMatch[1]);
+          // 案件抽出 (parts[2])
+          if (parts.length > 2 && parts[0] === "新規グロース部") {
+            projectSet.add(parts[2]);
+            
+            // オファー抽出 (parts[3])
+            if (parts.length > 3) {
+              offerSet.add(parts[3]);
+              
+              // 案件ごとのオファーを記録
+              if (!projectOfferMap[parts[2]]) {
+                projectOfferMap[parts[2]] = new Set();
+              }
+              projectOfferMap[parts[2]].add(parts[3]);
+            }
+            
+            // 媒体抽出 (parts[4])
+            if (parts.length > 4) {
+              mediaSet.add(parts[4]);
+            }
+          }
+          
+          // row.mediaからも媒体を追加
+          if (row.media) {
+            mediaSet.add(row.media);
           }
         }
         
         projects = Array.from(projectSet).sort();
         members = Array.from(memberSet).sort();
+        offers = Array.from(offerSet).sort();
+        mediaList = Array.from(mediaSet).sort();
+        
+        // 案件ごとのオファーマップを変換
+        for (const [proj, offerSetItem] of Object.entries(projectOfferMap)) {
+          projectOffers[proj] = Array.from(offerSetItem).sort();
+        }
       } catch (error) {
         console.error("Failed to fetch analysis data:", error);
         // フォールバック: 既知のメンバーリストを返す
         members = ["悠太", "圭市", "正弥", "祐輝"];
         projects = [];
+        offers = [];
+        mediaList = ["Meta", "TikTok", "Pangle"];
       }
       
       // メンバーが取得できなかった場合のフォールバック
       if (members.length === 0) {
         members = ["悠太", "圭市", "正弥", "祐輝"];
+      }
+      
+      // 媒体リストのフォールバック
+      if (mediaList.length === 0) {
+        mediaList = ["Meta", "TikTok", "Pangle"];
       }
     }
     
@@ -117,6 +158,9 @@ export async function GET(request: Request) {
       rules,
       projects,
       members,
+      offers,
+      mediaList,
+      projectOffers,
       history,
     });
   } catch (error) {
@@ -137,7 +181,7 @@ export async function POST(request: Request) {
     }
     
     const body = await request.json();
-    const { memberName, projectName, conditions, priority } = body;
+    const { memberName, projectName, offerName, mediaFilter, conditions, priority } = body;
     
     if (!memberName || !projectName) {
       return NextResponse.json({ success: false, error: "メンバーと案件を選択してください" }, { status: 400 });
@@ -152,14 +196,32 @@ export async function POST(request: Request) {
       finalPriority = (maxPriority._max.priority || 0) + 1;
     }
     
+    // ルール名を構築
+    let ruleName = memberName;
+    if (projectName !== "全案件") {
+      ruleName += ` > ${projectName}`;
+    }
+    if (offerName && offerName !== "全オファー") {
+      ruleName += ` > ${offerName}`;
+    }
+    if (mediaFilter && mediaFilter !== "全媒体") {
+      ruleName += ` (${mediaFilter})`;
+    }
+    
+    // オファーと媒体をconditionsに含める
+    const extendedConditions = {
+      ...conditions,
+      offerName: offerName || "全オファー",
+    };
+    
     await prisma.auto_stop_rules.create({
       data: {
-        rule_name: `${memberName} - ${projectName}`,
+        rule_name: ruleName,
         priority: finalPriority,
         project_name: projectName,
         member_name: memberName,
-        media: "all",
-        conditions: conditions || {},
+        media: mediaFilter || "all",
+        conditions: extendedConditions || {},
         is_active: true,
         updated_at: new Date(),
       },

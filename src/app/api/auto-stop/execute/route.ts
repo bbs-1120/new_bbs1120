@@ -139,13 +139,19 @@ function matchesRule(cpn: CpnData, conditions: StopRuleConditions): boolean {
   return true;
 }
 
-// CPNからメンバー名と案件名を抽出
-function extractFromCpnName(cpnName: string): { memberName: string; projectName: string } {
+// CPNからメンバー名、案件名、オファー名を抽出
+function extractFromCpnName(cpnName: string): { memberName: string; projectName: string; offerName: string } {
   // 例: 新規グロース部_悠太_Rクリニック女性_新直LINE_FB_...
+  // parts[0]: 新規グロース部
+  // parts[1]: メンバー名 (悠太)
+  // parts[2]: 案件名 (Rクリニック女性)
+  // parts[3]: オファー名 (新直LINE)
+  // parts[4]: 媒体 (FB)
   const parts = cpnName.split("_");
   return {
     memberName: parts.length > 1 ? parts[1] : "",
     projectName: parts.length > 2 ? parts[2] : "",
+    offerName: parts.length > 3 ? parts[3] : "",
   };
 }
 
@@ -213,7 +219,7 @@ export async function POST(request: Request) {
       // campaignIdがない場合はスキップ
       if (!cpn.campaignId) continue;
 
-      const { memberName, projectName } = extractFromCpnName(cpn.cpnName);
+      const { memberName, projectName, offerName } = extractFromCpnName(cpn.cpnName);
 
       // 各ルールをチェック（優先度順）
       for (const rule of dbRules) {
@@ -224,7 +230,7 @@ export async function POST(request: Request) {
         if (rule.project_name !== "全案件" && rule.project_name !== projectName) continue;
 
         // 媒体が一致するかチェック（allまたは一致）
-        if (rule.media !== "all") {
+        if (rule.media !== "all" && rule.media !== "全媒体") {
           const ruleMedia = rule.media.toLowerCase();
           const cpnMedia = (cpn.media || "").toLowerCase();
           if (ruleMedia !== cpnMedia && 
@@ -234,7 +240,11 @@ export async function POST(request: Request) {
           }
         }
 
-        const conditions = rule.conditions as StopRuleConditions;
+        const conditions = rule.conditions as StopRuleConditions & { offerName?: string };
+        
+        // オファーが一致するかチェック
+        const ruleOfferName = conditions.offerName || "全オファー";
+        if (ruleOfferName !== "全オファー" && ruleOfferName !== offerName) continue;
 
         // 条件にマッチするかチェック
         if (matchesRule(cpn as CpnData, conditions)) {

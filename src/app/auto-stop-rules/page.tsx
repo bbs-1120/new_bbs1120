@@ -47,6 +47,9 @@ export default function AutoStopRulesPage() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
   const [members, setMembers] = useState<string[]>([]);
+  const [offers, setOffers] = useState<string[]>([]);
+  const [mediaList, setMediaList] = useState<string[]>([]);
+  const [projectOffers, setProjectOffers] = useState<Record<string, string[]>>({});
   const [history, setHistory] = useState<StopHistory[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [step, setStep] = useState(1);
@@ -68,6 +71,8 @@ export default function AutoStopRulesPage() {
   const [newRule, setNewRule] = useState({
     memberName: "",
     projectName: "",
+    offerName: "",
+    mediaFilter: "",
     conditions: {
       spendMin: undefined as number | undefined,
       mcvMax: undefined as number | undefined,
@@ -88,6 +93,9 @@ export default function AutoStopRulesPage() {
         setRules(data.rules || []);
         setProjects(data.projects || []);
         setMembers(data.members || []);
+        setOffers(data.offers || []);
+        setMediaList(data.mediaList || ["Meta", "TikTok", "Pangle"]);
+        setProjectOffers(data.projectOffers || {});
         setHistory(data.history || []);
       }
     } catch (error) {
@@ -105,6 +113,8 @@ export default function AutoStopRulesPage() {
     setNewRule({
       memberName: "",
       projectName: "",
+      offerName: "",
+      mediaFilter: "",
       conditions: {
         spendMin: undefined, mcvMax: undefined, cvMax: undefined,
         cvMin: undefined, roasMax: undefined, profitMax: undefined,
@@ -121,7 +131,11 @@ export default function AutoStopRulesPage() {
       const res = await fetch("/api/auto-stop-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newRule),
+        body: JSON.stringify({
+          ...newRule,
+          offerName: newRule.offerName || "全オファー",
+          mediaFilter: newRule.mediaFilter || "全媒体",
+        }),
       });
       if (res.ok) {
         await fetchData();
@@ -395,11 +409,13 @@ export default function AutoStopRulesPage() {
               <CardContent className="p-6">
                 {/* ステップインジケーター */}
                 <div className="flex items-center justify-center mb-8">
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${step >= 1 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>1</div>
-                  <div className={`w-16 h-1 ${step >= 2 ? "bg-emerald-500" : "bg-slate-200"}`}></div>
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${step >= 2 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>2</div>
-                  <div className={`w-16 h-1 ${step >= 3 ? "bg-emerald-500" : "bg-slate-200"}`}></div>
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${step >= 3 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>3</div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${step >= 1 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>1</div>
+                  <div className={`w-10 h-1 ${step >= 2 ? "bg-emerald-500" : "bg-slate-200"}`}></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${step >= 2 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>2</div>
+                  <div className={`w-10 h-1 ${step >= 3 ? "bg-emerald-500" : "bg-slate-200"}`}></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${step >= 3 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>3</div>
+                  <div className={`w-10 h-1 ${step >= 4 ? "bg-emerald-500" : "bg-slate-200"}`}></div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${step >= 4 ? "bg-emerald-500 text-white" : "bg-slate-200"}`}>4</div>
                 </div>
                 
                 {/* ステップ1: メンバー選択 */}
@@ -439,7 +455,7 @@ export default function AutoStopRulesPage() {
                     
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-80 overflow-y-auto">
                       <button
-                        onClick={() => { setNewRule({ ...newRule, projectName: "全案件" }); setStep(3); }}
+                        onClick={() => { setNewRule({ ...newRule, projectName: "全案件", offerName: "全オファー" }); setStep(3); }}
                         className="p-4 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white border-2 border-amber-500 hover:shadow-lg transition-all"
                       >
                         <Briefcase className="h-6 w-6 mx-auto mb-2" />
@@ -463,15 +479,108 @@ export default function AutoStopRulesPage() {
                   </div>
                 )}
                 
-                {/* ステップ3: 条件設定 */}
+                {/* ステップ3: オファー・媒体選択 */}
                 {step === 3 && (
+                  <div>
+                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                      <Briefcase className="h-6 w-6 text-emerald-500" />オファーと媒体を選択
+                    </h3>
+                    <div className="text-sm text-slate-500 mb-4">
+                      対象: <span className="font-bold text-purple-600">{newRule.memberName}</span> の 
+                      <span className="font-bold text-amber-600 ml-1">{newRule.projectName}</span>
+                    </div>
+                    
+                    {/* オファー選択 */}
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-slate-700 mb-3">📦 オファー（任意）</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setNewRule({ ...newRule, offerName: "全オファー" })}
+                          className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                            newRule.offerName === "全オファー" || !newRule.offerName
+                              ? "bg-emerald-500 text-white" 
+                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          }`}
+                        >
+                          全オファー
+                        </button>
+                        {(newRule.projectName !== "全案件" && projectOffers[newRule.projectName]
+                          ? projectOffers[newRule.projectName]
+                          : offers
+                        ).map((offer) => (
+                          <button
+                            key={offer}
+                            onClick={() => setNewRule({ ...newRule, offerName: offer })}
+                            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                              newRule.offerName === offer
+                                ? "bg-emerald-500 text-white" 
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            }`}
+                          >
+                            {offer}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* 媒体選択 */}
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-slate-700 mb-3">📱 媒体（任意）</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setNewRule({ ...newRule, mediaFilter: "全媒体" })}
+                          className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                            newRule.mediaFilter === "全媒体" || !newRule.mediaFilter
+                              ? "bg-blue-500 text-white" 
+                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          }`}
+                        >
+                          全媒体
+                        </button>
+                        {mediaList.map((media) => (
+                          <button
+                            key={media}
+                            onClick={() => setNewRule({ ...newRule, mediaFilter: media })}
+                            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                              newRule.mediaFilter === media
+                                ? "bg-blue-500 text-white" 
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            }`}
+                          >
+                            {media}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <Button variant="secondary" onClick={() => setStep(2)}>← 戻る</Button>
+                      <Button onClick={() => setStep(4)} className="bg-emerald-600 hover:bg-emerald-700">
+                        次へ →
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* ステップ4: 条件設定 */}
+                {step === 4 && (
                   <div>
                     <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                       <AlertTriangle className="h-6 w-6 text-emerald-500" />停止条件を設定
                     </h3>
-                    <div className="text-sm text-slate-500 mb-6">
-                      <span className="font-bold text-purple-600">{newRule.memberName}</span> の 
-                      <span className="font-bold text-amber-600 ml-1">{newRule.projectName}</span> に適用
+                    <div className="text-sm text-slate-500 mb-6 flex flex-wrap items-center gap-1">
+                      <span className="font-bold text-purple-600">{newRule.memberName}</span>
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                      <span className="font-bold text-amber-600">{newRule.projectName}</span>
+                      {newRule.offerName && newRule.offerName !== "全オファー" && (
+                        <>
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                          <span className="font-bold text-teal-600">{newRule.offerName}</span>
+                        </>
+                      )}
+                      {newRule.mediaFilter && newRule.mediaFilter !== "全媒体" && (
+                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{newRule.mediaFilter}</span>
+                      )}
                     </div>
                     
                     {/* プリセットテンプレート */}
@@ -577,7 +686,7 @@ export default function AutoStopRulesPage() {
                     </div>
                     
                     <div className="flex justify-between">
-                      <Button variant="secondary" onClick={() => setStep(2)}>← 戻る</Button>
+                      <Button variant="secondary" onClick={() => setStep(3)}>← 戻る</Button>
                       <div className="flex gap-2">
                         <Button variant="secondary" onClick={resetNewRule}><X className="h-4 w-4 mr-1" />キャンセル</Button>
                         <Button onClick={saveRule} className="bg-emerald-600 hover:bg-emerald-700"><Save className="h-4 w-4 mr-1" />ルールを保存</Button>
