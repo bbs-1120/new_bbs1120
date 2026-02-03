@@ -365,6 +365,9 @@ export async function sendAutoStopFailedAlert(
     byMember[key].push(cpn);
   }
   
+  // 悠太さんのChatWork ID（CC用）
+  const yutaId = MEMBER_CHATWORK_IDS["悠太"];
+  
   // 各メンバーごとにメッセージを送信
   const errors: string[] = [];
   
@@ -373,29 +376,27 @@ export async function sendAutoStopFailedAlert(
     
     let message = "";
     
-    // TOメンションを追加（IDがある場合のみ）
+    // TOメンションを追加
     if (chatworkId) {
-      message += `[To:${chatworkId}]\n`;
+      message += `[To:${chatworkId}]`;
     }
-    
-    message += `【自動停止エラー】${now}\n\n`;
-    message += `${member}さんの以下のCPNが停止ルールにヒットしましたが、停止に失敗しました。\n`;
-    message += `手動での確認・停止をお願いします。\n\n`;
-    
-    for (const cpn of cpns) {
-      message += `━━━━━━━━━━━━━━━━━━━━\n`;
-      message += `📛 ${cpn.cpnName.split("_").slice(2, 6).join("_")}\n`;
-      message += `媒体：${cpn.media}\n`;
-      message += `案件：${cpn.projectName}\n`;
-      message += `消化：¥${cpn.metrics.spend.toLocaleString()}\n`;
-      message += `利益：¥${cpn.metrics.profit.toLocaleString()}\n`;
-      if (cpn.error) {
-        message += `エラー：${cpn.error}\n`;
-      }
+    // 悠太さんをCC（本人以外の場合）
+    if (yutaId && member !== "悠太") {
+      message += `[To:${yutaId}]`;
+    }
+    if (chatworkId || yutaId) {
       message += `\n`;
     }
     
-    message += `対象：${cpns.length}件`;
+    // 簡潔なメッセージ
+    message += `【停止エラー】${cpns.length}件\n`;
+    
+    for (const cpn of cpns) {
+      const shortName = cpn.cpnName.split("_").slice(2, 5).join("_");
+      message += `・${shortName}（${cpn.media}）利益:¥${cpn.metrics.profit.toLocaleString()}\n`;
+    }
+    
+    message += `→手動停止お願いします`;
     
     const result = await sendToChatwork(apiToken, roomId, message);
     if (!result.success) {

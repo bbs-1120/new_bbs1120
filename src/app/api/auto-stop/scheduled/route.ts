@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getFullAnalysisData } from "@/lib/googleSheets";
-import { sendAutoStopAlert, sendAutoStopFailedAlert, AutoStopFailedCpn } from "@/lib/chatwork";
+import { sendAutoStopFailedAlert, AutoStopFailedCpn } from "@/lib/chatwork";
 
 interface StopRuleConditions {
   spendMin?: number;
@@ -352,25 +352,7 @@ export async function POST(request: Request) {
 
     console.log(`[Scheduled Auto-Stop] Completed: ${stoppedCount}/${results.length} stopped`);
 
-    // 停止成功したCPNがあればChatWorkに通知
-    if (stoppedCount > 0) {
-      const stoppedCpns = results.filter(r => r.stopped);
-      try {
-        await sendAutoStopAlert(stoppedCpns.map(r => ({
-          cpnName: r.cpnName,
-          media: r.media,
-          memberName: r.memberName,
-          projectName: r.projectName,
-          ruleName: r.ruleName,
-          matchedConditions: r.matchedDescriptions,
-          metrics: r.metrics,
-        })));
-      } catch (err) {
-        console.error("Failed to send ChatWork success alert:", err);
-      }
-    }
-
-    // 停止に失敗したCPNがあればChatWorkにアラートを送信
+    // 停止に失敗したCPNがあればChatWorkにアラートを送信（成功は通知しない）
     if (failedResults.length > 0) {
       const failedCpns: AutoStopFailedCpn[] = failedResults.map(r => ({
         cpnName: r.cpnName,
