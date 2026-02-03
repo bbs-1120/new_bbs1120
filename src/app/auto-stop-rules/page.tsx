@@ -72,8 +72,8 @@ export default function AutoStopRulesPage() {
   const [newRule, setNewRule] = useState({
     memberName: "",
     projectName: "",
-    offerName: "",
-    mediaFilter: "",
+    offerNames: [] as string[],  // 複数選択対応
+    mediaFilters: [] as string[], // 複数選択対応
     conditions: {
       spendMin: undefined as number | undefined,
       mcvMax: undefined as number | undefined,
@@ -114,8 +114,8 @@ export default function AutoStopRulesPage() {
     setNewRule({
       memberName: "",
       projectName: "",
-      offerName: "",
-      mediaFilter: "",
+      offerNames: [],
+      mediaFilters: [],
       conditions: {
         spendMin: undefined, mcvMax: undefined, cvMax: undefined,
         cvMin: undefined, roasMax: undefined, profitMax: undefined,
@@ -137,8 +137,8 @@ export default function AutoStopRulesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newRule,
-          offerName: newRule.offerName || "全オファー",
-          mediaFilter: newRule.mediaFilter || "全媒体",
+          offerNames: newRule.offerNames.length > 0 ? newRule.offerNames : ["全オファー"],
+          mediaFilters: newRule.mediaFilters.length > 0 ? newRule.mediaFilters : ["全媒体"],
         }),
       });
       if (res.ok) {
@@ -461,7 +461,7 @@ export default function AutoStopRulesPage() {
                     
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-80 overflow-y-auto">
                       <button
-                        onClick={() => { setNewRule({ ...newRule, projectName: "全案件", offerName: "全オファー" }); setStep(3); }}
+                        onClick={() => { setNewRule({ ...newRule, projectName: "全案件", offerNames: [] }); setStep(3); }}
                         className="p-4 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white border-2 border-amber-500 hover:shadow-lg transition-all"
                       >
                         <Briefcase className="h-6 w-6 mx-auto mb-2" />
@@ -496,14 +496,18 @@ export default function AutoStopRulesPage() {
                       <span className="font-bold text-amber-600 ml-1">{newRule.projectName}</span>
                     </div>
                     
-                    {/* オファー選択 */}
+                    {/* オファー選択（複数選択可） */}
                     <div className="mb-6">
-                      <p className="text-sm font-medium text-slate-700 mb-3">📦 オファー（任意）</p>
+                      <p className="text-sm font-medium text-slate-700 mb-3">📦 オファー（複数選択可）
+                        {newRule.offerNames.length > 0 && (
+                          <span className="ml-2 text-emerald-600">({newRule.offerNames.length}件選択中)</span>
+                        )}
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => setNewRule({ ...newRule, offerName: "全オファー" })}
+                          onClick={() => setNewRule({ ...newRule, offerNames: [] })}
                           className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                            newRule.offerName === "全オファー" || !newRule.offerName
+                            newRule.offerNames.length === 0
                               ? "bg-emerald-500 text-white" 
                               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                           }`}
@@ -516,9 +520,17 @@ export default function AutoStopRulesPage() {
                         ).map((offer) => (
                           <button
                             key={offer}
-                            onClick={() => setNewRule({ ...newRule, offerName: offer })}
+                            onClick={() => {
+                              const isSelected = newRule.offerNames.includes(offer);
+                              setNewRule({
+                                ...newRule,
+                                offerNames: isSelected
+                                  ? newRule.offerNames.filter(o => o !== offer)
+                                  : [...newRule.offerNames, offer]
+                              });
+                            }}
                             className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                              newRule.offerName === offer
+                              newRule.offerNames.includes(offer)
                                 ? "bg-emerald-500 text-white" 
                                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                             }`}
@@ -529,14 +541,18 @@ export default function AutoStopRulesPage() {
                       </div>
                     </div>
                     
-                    {/* 媒体選択 */}
+                    {/* 媒体選択（複数選択可） */}
                     <div className="mb-6">
-                      <p className="text-sm font-medium text-slate-700 mb-3">📱 媒体（任意）</p>
+                      <p className="text-sm font-medium text-slate-700 mb-3">📱 媒体（複数選択可）
+                        {newRule.mediaFilters.length > 0 && (
+                          <span className="ml-2 text-blue-600">({newRule.mediaFilters.length}件選択中)</span>
+                        )}
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => setNewRule({ ...newRule, mediaFilter: "全媒体" })}
+                          onClick={() => setNewRule({ ...newRule, mediaFilters: [] })}
                           className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                            newRule.mediaFilter === "全媒体" || !newRule.mediaFilter
+                            newRule.mediaFilters.length === 0
                               ? "bg-blue-500 text-white" 
                               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                           }`}
@@ -546,9 +562,17 @@ export default function AutoStopRulesPage() {
                         {mediaList.map((media) => (
                           <button
                             key={media}
-                            onClick={() => setNewRule({ ...newRule, mediaFilter: media })}
+                            onClick={() => {
+                              const isSelected = newRule.mediaFilters.includes(media);
+                              setNewRule({
+                                ...newRule,
+                                mediaFilters: isSelected
+                                  ? newRule.mediaFilters.filter(m => m !== media)
+                                  : [...newRule.mediaFilters, media]
+                              });
+                            }}
                             className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                              newRule.mediaFilter === media
+                              newRule.mediaFilters.includes(media)
                                 ? "bg-blue-500 text-white" 
                                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                             }`}
@@ -578,14 +602,18 @@ export default function AutoStopRulesPage() {
                       <span className="font-bold text-purple-600">{newRule.memberName}</span>
                       <ChevronRight className="h-4 w-4 text-slate-400" />
                       <span className="font-bold text-amber-600">{newRule.projectName}</span>
-                      {newRule.offerName && newRule.offerName !== "全オファー" && (
+                      {newRule.offerNames.length > 0 && (
                         <>
                           <ChevronRight className="h-4 w-4 text-slate-400" />
-                          <span className="font-bold text-teal-600">{newRule.offerName}</span>
+                          <span className="font-bold text-teal-600">
+                            {newRule.offerNames.length === 1 ? newRule.offerNames[0] : `${newRule.offerNames.length}オファー`}
+                          </span>
                         </>
                       )}
-                      {newRule.mediaFilter && newRule.mediaFilter !== "全媒体" && (
-                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{newRule.mediaFilter}</span>
+                      {newRule.mediaFilters.length > 0 && (
+                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                          {newRule.mediaFilters.length === 1 ? newRule.mediaFilters[0] : `${newRule.mediaFilters.length}媒体`}
+                        </span>
                       )}
                     </div>
                     

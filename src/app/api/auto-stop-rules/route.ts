@@ -181,11 +181,15 @@ export async function POST(request: Request) {
     }
     
     const body = await request.json();
-    const { memberName, projectName, offerName, mediaFilter, conditions, priority } = body;
+    const { memberName, projectName, offerNames, mediaFilters, conditions, priority } = body;
     
     if (!memberName || !projectName) {
       return NextResponse.json({ success: false, error: "メンバーと案件を選択してください" }, { status: 400 });
     }
+    
+    // 配列を正規化（互換性のため単一値も受け付ける）
+    const normalizedOffers: string[] = Array.isArray(offerNames) ? offerNames : (offerNames ? [offerNames] : ["全オファー"]);
+    const normalizedMedia: string[] = Array.isArray(mediaFilters) ? mediaFilters : (mediaFilters ? [mediaFilters] : ["全媒体"]);
     
     // 優先度が指定されていない場合、最大値+1を設定
     let finalPriority = priority;
@@ -201,18 +205,34 @@ export async function POST(request: Request) {
     if (projectName !== "全案件") {
       ruleName += ` > ${projectName}`;
     }
-    if (offerName && offerName !== "全オファー") {
-      ruleName += ` > ${offerName}`;
+    // オファー表示
+    const hasSpecificOffers = normalizedOffers.length > 0 && !normalizedOffers.includes("全オファー");
+    if (hasSpecificOffers) {
+      if (normalizedOffers.length === 1) {
+        ruleName += ` > ${normalizedOffers[0]}`;
+      } else {
+        ruleName += ` > ${normalizedOffers.length}オファー`;
+      }
     }
-    if (mediaFilter && mediaFilter !== "全媒体") {
-      ruleName += ` (${mediaFilter})`;
+    // 媒体表示
+    const hasSpecificMedia = normalizedMedia.length > 0 && !normalizedMedia.includes("全媒体");
+    if (hasSpecificMedia) {
+      if (normalizedMedia.length === 1) {
+        ruleName += ` (${normalizedMedia[0]})`;
+      } else {
+        ruleName += ` (${normalizedMedia.length}媒体)`;
+      }
     }
     
-    // オファーと媒体をconditionsに含める
+    // オファーと媒体をconditionsに含める（配列対応）
     const extendedConditions = {
       ...conditions,
-      offerName: offerName || "全オファー",
+      offerNames: normalizedOffers,
+      mediaFilters: normalizedMedia,
     };
+    
+    // mediaカラムには最初の媒体または"all"を保存（互換性のため）
+    const mediaValue = hasSpecificMedia ? normalizedMedia[0] : "all";
     
     await prisma.auto_stop_rules.create({
       data: {
@@ -220,7 +240,7 @@ export async function POST(request: Request) {
         priority: finalPriority,
         project_name: projectName,
         member_name: memberName,
-        media: mediaFilter || "all",
+        media: mediaValue,
         conditions: extendedConditions || {},
         is_active: true,
         updated_at: new Date(),

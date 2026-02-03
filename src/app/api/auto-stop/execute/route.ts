@@ -229,22 +229,30 @@ export async function POST(request: Request) {
         // 案件が一致するかチェック
         if (rule.project_name !== "全案件" && rule.project_name !== projectName) continue;
 
-        // 媒体が一致するかチェック（allまたは一致）
-        if (rule.media !== "all" && rule.media !== "全媒体") {
-          const ruleMedia = rule.media.toLowerCase();
-          const cpnMedia = (cpn.media || "").toLowerCase();
-          if (ruleMedia !== cpnMedia && 
-              !(ruleMedia === "meta" && cpnMedia === "fb") &&
-              !(ruleMedia === "fb" && cpnMedia === "meta")) {
-            continue;
-          }
-        }
+        const conditions = rule.conditions as StopRuleConditions & { 
+          offerName?: string; 
+          offerNames?: string[]; 
+          mediaFilters?: string[]; 
+        };
 
-        const conditions = rule.conditions as StopRuleConditions & { offerName?: string };
+        // 媒体が一致するかチェック（配列対応）
+        const ruleMediaFilters = conditions.mediaFilters || (rule.media !== "all" && rule.media !== "全媒体" ? [rule.media] : []);
+        if (ruleMediaFilters.length > 0 && !ruleMediaFilters.includes("全媒体")) {
+          const cpnMedia = (cpn.media || "").toLowerCase();
+          const mediaMatches = ruleMediaFilters.some(m => {
+            const ruleMedia = m.toLowerCase();
+            return ruleMedia === cpnMedia || 
+                   (ruleMedia === "meta" && cpnMedia === "fb") ||
+                   (ruleMedia === "fb" && cpnMedia === "meta");
+          });
+          if (!mediaMatches) continue;
+        }
         
-        // オファーが一致するかチェック
-        const ruleOfferName = conditions.offerName || "全オファー";
-        if (ruleOfferName !== "全オファー" && ruleOfferName !== offerName) continue;
+        // オファーが一致するかチェック（配列対応）
+        const ruleOfferNames = conditions.offerNames || (conditions.offerName ? [conditions.offerName] : []);
+        if (ruleOfferNames.length > 0 && !ruleOfferNames.includes("全オファー")) {
+          if (!ruleOfferNames.includes(offerName)) continue;
+        }
 
         // 条件にマッチするかチェック
         if (matchesRule(cpn as CpnData, conditions)) {
@@ -433,23 +441,36 @@ export async function GET() {
       if (excludedCpns.has(cpn.cpnName)) continue;
       if (!cpn.campaignId) continue;
 
-      const { memberName, projectName } = extractFromCpnName(cpn.cpnName);
+      const { memberName, projectName, offerName } = extractFromCpnName(cpn.cpnName);
 
       for (const rule of dbRules) {
         if (rule.member_name !== "全員" && rule.member_name !== memberName) continue;
         if (rule.project_name !== "全案件" && rule.project_name !== projectName) continue;
 
-        if (rule.media !== "all") {
-          const ruleMedia = rule.media.toLowerCase();
-          const cpnMedia = (cpn.media || "").toLowerCase();
-          if (ruleMedia !== cpnMedia && 
-              !(ruleMedia === "meta" && cpnMedia === "fb") &&
-              !(ruleMedia === "fb" && cpnMedia === "meta")) {
-            continue;
-          }
-        }
+        const conditions = rule.conditions as StopRuleConditions & { 
+          offerName?: string; 
+          offerNames?: string[]; 
+          mediaFilters?: string[]; 
+        };
 
-        const conditions = rule.conditions as StopRuleConditions;
+        // 媒体が一致するかチェック（配列対応）
+        const ruleMediaFilters = conditions.mediaFilters || (rule.media !== "all" && rule.media !== "全媒体" ? [rule.media] : []);
+        if (ruleMediaFilters.length > 0 && !ruleMediaFilters.includes("全媒体")) {
+          const cpnMedia = (cpn.media || "").toLowerCase();
+          const mediaMatches = ruleMediaFilters.some(m => {
+            const ruleMedia = m.toLowerCase();
+            return ruleMedia === cpnMedia || 
+                   (ruleMedia === "meta" && cpnMedia === "fb") ||
+                   (ruleMedia === "fb" && cpnMedia === "meta");
+          });
+          if (!mediaMatches) continue;
+        }
+        
+        // オファーが一致するかチェック（配列対応）
+        const ruleOfferNames = conditions.offerNames || (conditions.offerName ? [conditions.offerName] : []);
+        if (ruleOfferNames.length > 0 && !ruleOfferNames.includes("全オファー")) {
+          if (!ruleOfferNames.includes(offerName)) continue;
+        }
 
         if (matchesRule(cpn as CpnData, conditions)) {
           targets.push({
