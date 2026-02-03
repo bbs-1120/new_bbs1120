@@ -57,6 +57,7 @@ export default function AutoStopRulesPage() {
   const [activeTab, setActiveTab] = useState<"rules" | "history">("rules");
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [previewResults, setPreviewResults] = useState<{
     cpnName: string;
     media: string;
@@ -127,6 +128,9 @@ export default function AutoStopRulesPage() {
   
   const saveRule = async () => {
     if (!newRule.memberName || !newRule.projectName) return;
+    if (isSaving) return; // 二重クリック防止
+    
+    setIsSaving(true);
     try {
       const res = await fetch("/api/auto-stop-rules", {
         method: "POST",
@@ -143,6 +147,8 @@ export default function AutoStopRulesPage() {
       }
     } catch (error) {
       console.error("Failed to save rule:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -689,7 +695,10 @@ export default function AutoStopRulesPage() {
                       <Button variant="secondary" onClick={() => setStep(3)}>← 戻る</Button>
                       <div className="flex gap-2">
                         <Button variant="secondary" onClick={resetNewRule}><X className="h-4 w-4 mr-1" />キャンセル</Button>
-                        <Button onClick={saveRule} className="bg-emerald-600 hover:bg-emerald-700"><Save className="h-4 w-4 mr-1" />ルールを保存</Button>
+                        <Button onClick={saveRule} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
+                          {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                          {isSaving ? "保存中..." : "ルールを保存"}
+                        </Button>
                       </div>
                     </div>
                   </div>
