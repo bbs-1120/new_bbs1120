@@ -1,5 +1,14 @@
 import { formatDate, formatCurrency, formatPercentage } from "./utils";
 
+// メンバー名 → ChatWork アカウントID マッピング
+// ChatWork IDはプロフィールURLから取得: chatwork.com/#!rid123456-XXXXXXX の XXXXXXX 部分
+export const MEMBER_CHATWORK_IDS: Record<string, string> = {
+  "悠太": "", // TODO: ChatWork IDを設定
+  "正弥": "", // TODO: ChatWork IDを設定
+  "圭市": "", // TODO: ChatWork IDを設定
+  "祐輝": "", // TODO: ChatWork IDを設定
+};
+
 interface JudgmentResult {
   cpn_name: string;
   media: { name: string };
@@ -274,9 +283,6 @@ export async function sendAutoStopAlert(
 
   const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
-  let message = `[info][title]【自動停止実行完了】${now}[/title]`;
-  message += `以下のCPNを自動停止しました。\n\n`;
-  
   // メンバー別にグループ化
   const byMember: Record<string, AutoStopSuccessCpn[]> = {};
   for (const cpn of stoppedCpns) {
@@ -285,8 +291,27 @@ export async function sendAutoStopAlert(
     byMember[key].push(cpn);
   }
   
+  // 各メンバーにTO（メンション）を追加
+  const toMentions: string[] = [];
+  for (const member of Object.keys(byMember)) {
+    const chatworkId = MEMBER_CHATWORK_IDS[member];
+    if (chatworkId) {
+      toMentions.push(`[To:${chatworkId}]`);
+    }
+  }
+  
+  let message = "";
+  if (toMentions.length > 0) {
+    message += toMentions.join("") + "\n";
+  }
+  
+  message += `[info][title]【自動停止実行完了】${now}[/title]`;
+  message += `以下のCPNを自動停止しました。\n\n`;
+  
   for (const [member, cpns] of Object.entries(byMember)) {
-    message += `■ ${member}（${cpns.length}件）\n`;
+    const chatworkId = MEMBER_CHATWORK_IDS[member];
+    const memberDisplay = chatworkId ? `${member}さん` : member;
+    message += `■ ${memberDisplay}（${cpns.length}件）\n`;
     for (const cpn of cpns) {
       message += `・${cpn.cpnName.split("_").slice(2, 5).join("_")}\n`;
       message += `  ${cpn.matchedConditions.join(" / ")}\n`;

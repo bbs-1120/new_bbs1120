@@ -304,25 +304,27 @@ export async function POST(request: Request) {
             error = `Unsupported media: ${cpn.media}`;
           }
 
-          // 履歴に保存
-          await prisma.auto_stop_history.create({
-            data: {
-              cpn_name: cpn.cpnName,
-              cpn_key: cpn.cpnKey || cpn.cpnName,
-              campaign_id: cpn.campaignId,
-              media: cpn.media || "unknown",
-              member_name: memberName,
-              project_name: projectName,
-              rule_name: rule.rule_name,
-              conditions: {
-                ...conditions,
-                matched_descriptions: descriptions,
-              } as object,
-              metrics: metrics as object,
-              status: stopped ? "stopped" : "error",
-              error_message: error || null,
-            },
-          });
+          // エラーの場合のみ履歴に保存
+          if (!stopped && error) {
+            await prisma.auto_stop_history.create({
+              data: {
+                cpn_name: cpn.cpnName,
+                cpn_key: cpn.cpnKey || cpn.cpnName,
+                campaign_id: cpn.campaignId,
+                media: cpn.media || "unknown",
+                member_name: memberName,
+                project_name: projectName,
+                rule_name: rule.rule_name,
+                conditions: {
+                  ...conditions,
+                  matched_descriptions: descriptions,
+                } as object,
+                metrics: metrics as object,
+                status: "error",
+                error_message: error,
+              },
+            });
+          }
 
           results.push({
             cpnName: cpn.cpnName,
