@@ -177,7 +177,7 @@ export async function sendToChatwork(
 }
 
 /**
- * エラー通知をChatworkに送信
+ * エラー通知をChatworkに送信（メンバーTO + 悠太CC）
  */
 export async function sendErrorNotification(
   errorType: "api_error" | "anomaly" | "budget_change" | "status_change" | "system",
@@ -185,14 +185,12 @@ export async function sendErrorNotification(
   details?: Record<string, unknown>
 ): Promise<{ success: boolean; error?: string }> {
   const apiToken = process.env.CHATWORK_API_TOKEN;
-  const roomId = process.env.CHATWORK_ERROR_ROOM_ID;
+  const roomId = process.env.CHATWORK_ROOM_ID; // メンバーがいるルームに送信
 
   if (!apiToken || !roomId) {
     console.error("Chatwork error notification: Missing API token or room ID");
     return { success: false, error: "Chatwork設定が不完全です" };
   }
-
-  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
   
   const errorTypeLabels: Record<string, string> = {
     api_error: "APIエラー",
@@ -202,25 +200,49 @@ export async function sendErrorNotification(
     system: "システムエラー",
   };
 
-  let message = `[toall]\n\n`;
-  message += `エラーが発生しています。\n`;
-  message += `以下エラー内容\n↓\n\n`;
-  message += `【${errorTypeLabels[errorType] || "エラー"}】\n`;
-  message += `発生日時：${now}\n`;
-  message += `内容：${errorMessage}\n`;
-  
-  if (details) {
-    message += `\n詳細：\n`;
-    for (const [key, value] of Object.entries(details)) {
-      message += `${key}: ${JSON.stringify(value)}\n`;
+  // CPN名からメンバー名を抽出
+  let memberName = "";
+  const cpnName = details?.cpnName as string | undefined;
+  if (cpnName) {
+    const parts = cpnName.split("_");
+    if (parts.length > 1 && parts[0] === "新規グロース部") {
+      memberName = parts[1];
     }
   }
+  
+  // 悠太さんのChatWork ID（CC用）
+  const yutaId = MEMBER_CHATWORK_IDS["悠太"];
+  const memberId = memberName ? MEMBER_CHATWORK_IDS[memberName] : "";
+
+  let message = "";
+  
+  // TOメンションを追加
+  if (memberId) {
+    message += `[To:${memberId}]`;
+  }
+  // 悠太さんをCC（本人以外の場合）
+  if (yutaId && memberName !== "悠太") {
+    message += `[To:${yutaId}]`;
+  }
+  if (memberId || yutaId) {
+    message += `\n`;
+  }
+
+  // シンプルなメッセージ
+  message += `【${errorTypeLabels[errorType] || "エラー"}】\n\n`;
+  
+  if (cpnName) {
+    message += `${cpnName}\n\n`;
+  }
+  
+  message += `${errorMessage}\n`;
+  message += `確認お願いします`;
 
   return sendToChatwork(apiToken, roomId, message);
 }
 
 /**
- * 異常検知アラートをChatworkに送信
+ * 異常検知アラートをChatworkに送信（メンバーTO + 悠太CC）
  */
 export async function sendAnomalyAlert(
   cpnName: string,
@@ -228,22 +250,42 @@ export async function sendAnomalyAlert(
   anomalyDetails: string
 ): Promise<{ success: boolean; error?: string }> {
   const apiToken = process.env.CHATWORK_API_TOKEN;
-  const roomId = process.env.CHATWORK_ERROR_ROOM_ID;
+  const roomId = process.env.CHATWORK_ROOM_ID; // メンバーがいるルームに送信
 
   if (!apiToken || !roomId) {
     return { success: false, error: "Chatwork設定が不完全です" };
   }
 
-  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+  // CPN名からメンバー名を抽出
+  let memberName = "";
+  const parts = cpnName.split("_");
+  if (parts.length > 1 && parts[0] === "新規グロース部") {
+    memberName = parts[1];
+  }
+  
+  // 悠太さんのChatWork ID（CC用）
+  const yutaId = MEMBER_CHATWORK_IDS["悠太"];
+  const memberId = memberName ? MEMBER_CHATWORK_IDS[memberName] : "";
 
-  let message = `[toall]\n\n`;
-  message += `エラーが発生しています。\n`;
-  message += `以下エラー内容\n↓\n\n`;
-  message += `【異常検知アラート】\n`;
-  message += `検知日時：${now}\n`;
-  message += `媒体：${media}\n`;
-  message += `CPN：${cpnName}\n`;
-  message += `\n${anomalyDetails}\n`;
+  let message = "";
+  
+  // TOメンションを追加
+  if (memberId) {
+    message += `[To:${memberId}]`;
+  }
+  // 悠太さんをCC（本人以外の場合）
+  if (yutaId && memberName !== "悠太") {
+    message += `[To:${yutaId}]`;
+  }
+  if (memberId || yutaId) {
+    message += `\n`;
+  }
+
+  // シンプルなメッセージ
+  message += `【異常検知】\n\n`;
+  message += `${cpnName}\n\n`;
+  message += `${anomalyDetails}\n`;
+  message += `確認お願いします`;
 
   return sendToChatwork(apiToken, roomId, message);
 }
