@@ -479,43 +479,43 @@ export default function AutoStopRulesPage() {
                       <p className="text-sm font-medium text-slate-700 mb-3">📋 よく使うルール（クリックで適用）</p>
                       <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { profitMax: -5000 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, profitMax: -5000, spendMin: undefined, mcvMax: undefined, cvMax: undefined, cvMin: undefined, roasMax: undefined, consecutiveLossMin: undefined } })}
                           className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
                         >
                           利益 -5,000円以下
                         </button>
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { profitMax: -10000 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, profitMax: -10000, spendMin: undefined, mcvMax: undefined, cvMax: undefined, cvMin: undefined, roasMax: undefined, consecutiveLossMin: undefined } })}
                           className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
                         >
                           利益 -10,000円以下
                         </button>
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { profitMax: -20000 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, profitMax: -20000, spendMin: undefined, mcvMax: undefined, cvMax: undefined, cvMin: undefined, roasMax: undefined, consecutiveLossMin: undefined } })}
                           className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
                         >
                           利益 -20,000円以下
                         </button>
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { spendMin: 5000, mcvMax: 0 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, spendMin: 5000, mcvMax: 0, profitMax: undefined, cvMax: undefined, cvMin: undefined, roasMax: undefined, consecutiveLossMin: undefined } })}
                           className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-full hover:bg-amber-200 transition-colors"
                         >
                           消化5,000円以上 & MCV0
                         </button>
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { spendMin: 3000, cvMax: 0 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, spendMin: 3000, cvMax: 0, profitMax: undefined, mcvMax: undefined, cvMin: undefined, roasMax: undefined, consecutiveLossMin: undefined } })}
                           className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-full hover:bg-amber-200 transition-colors"
                         >
                           消化3,000円以上 & CV0
                         </button>
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { consecutiveLossMin: 3 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, consecutiveLossMin: 3, profitMax: undefined, spendMin: undefined, mcvMax: undefined, cvMax: undefined, cvMin: undefined, roasMax: undefined } })}
                           className="px-3 py-1.5 text-xs bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors"
                         >
                           3日連続赤字
                         </button>
                         <button
-                          onClick={() => setNewRule({ ...newRule, conditions: { roasMax: 100 } })}
+                          onClick={() => setNewRule({ ...newRule, conditions: { ...newRule.conditions, roasMax: 100, profitMax: undefined, spendMin: undefined, mcvMax: undefined, cvMax: undefined, cvMin: undefined, consecutiveLossMin: undefined } })}
                           className="px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded-full hover:bg-purple-200 transition-colors"
                         >
                           ROAS 100%以下
