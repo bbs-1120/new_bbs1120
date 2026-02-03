@@ -2099,7 +2099,6 @@ export default function AnalysisPage() {
                       ) : null}
                     </div>
                   </th>
-                  <th className="px-2 lg:px-3 py-2 text-center text-[10px] lg:text-xs font-medium text-slate-500 whitespace-nowrap bg-purple-50">追加予算/期限</th>
                   <th 
                     className="px-2 lg:px-3 py-2 text-right text-[10px] lg:text-xs font-medium text-slate-500 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => handleCpnSort("profit")}
@@ -2334,57 +2333,6 @@ export default function AnalysisPage() {
                                   追加
                                 </button>
                               </>
-                            )}
-                          </div>
-                        );
-                      })() : (
-                        <span className="text-xs text-slate-400">-</span>
-                      )}
-                    </td>
-                    {/* 追加予算/期限（Metaのみ） */}
-                    <td className="px-2 py-2 text-center whitespace-nowrap bg-purple-50/30">
-                      {cpn.media === "Meta" ? (() => {
-                        const schedules = scheduleCache[cpn.campaignId || ""];
-                        const formattedSchedule = schedules ? formatSchedule(schedules) : null;
-                        
-                        if (formattedSchedule) {
-                          return (
-                            <div className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg ${
-                              formattedSchedule.isActive 
-                                ? "bg-green-100 border border-green-300" 
-                                : "bg-purple-100 border border-purple-300"
-                            }`}>
-                              {/* 時間範囲: 金額 形式 */}
-                              <div className={`text-xs font-bold ${
-                                formattedSchedule.isActive ? "text-green-800" : "text-purple-800"
-                              }`}>
-                                {formattedSchedule.timeOnly}: {formattedSchedule.amount}
-                              </div>
-                              
-                              {/* 日付（今日以外の場合） */}
-                              {formattedSchedule.dateInfo && (
-                                <div className="text-[10px] text-slate-600">
-                                  {formattedSchedule.dateInfo}
-                                </div>
-                              )}
-                              
-                              {/* 状態表示 */}
-                              <span className={`text-[9px] font-medium ${
-                                formattedSchedule.isActive ? "text-green-600" : "text-purple-600"
-                              }`}>
-                                {formattedSchedule.isActive ? `適用中 (${formattedSchedule.remainingText})` : formattedSchedule.remainingText}
-                              </span>
-                            </div>
-                          );
-                        }
-                        
-                        // スケジュールが設定されていない場合
-                        return (
-                          <div className="text-center">
-                            {isLoadingAllSchedules ? (
-                              <span className="text-[9px] text-purple-500">読込中...</span>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
                             )}
                           </div>
                         );

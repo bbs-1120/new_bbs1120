@@ -299,4 +299,3 @@ export async function sendAutoStopFailedAlert(
 
   return sendToChatwork(apiToken, roomId, message);
 }
-
