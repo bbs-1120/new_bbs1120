@@ -234,11 +234,18 @@ export default function AnalysisPage() {
     try {
       const response = await fetch(`/api/budget-schedule?campaignId=${campaignId}`);
       const data = await response.json();
-      if (data.success && data.schedules) {
-        setScheduleCache(prev => ({ ...prev, [campaignId]: data.schedules }));
+      
+      // デバッグログ
+      if (data.schedules && data.schedules.length > 0) {
+        console.log(`Schedule found for ${campaignId}:`, data.schedules);
+      }
+      
+      if (data.success) {
+        // スケジュールがある場合もない場合も保存（空配列も保存）
+        setScheduleCache(prev => ({ ...prev, [campaignId]: data.schedules || [] }));
       }
     } catch (error) {
-      console.error("Failed to fetch schedule:", error);
+      console.error(`Failed to fetch schedule for ${campaignId}:`, error);
     } finally {
       if (showLoading) {
         setLoadingSchedules(prev => ({ ...prev, [campaignId]: false }));
@@ -283,42 +290,81 @@ export default function AnalysisPage() {
     if (!cpnList || cpnList.length === 0) return;
     
     const metaCpns = cpnList.filter(cpn => cpn.media === "Meta" && cpn.campaignId);
-    console.log(`Found ${metaCpns.length} Meta CPNs with campaignId`);
+    console.log(`[Schedule] Found ${metaCpns.length} Meta CPNs with campaignId`);
+    
+    // campaignIdリストをログ出力
+    if (metaCpns.length > 0) {
+      console.log(`[Schedule] First 5 campaignIds:`, metaCpns.slice(0, 5).map(c => c.campaignId));
+    }
     
     if (metaCpns.length === 0) return;
     
     // 初回取得を即座に開始
     const fetchAllImmediately = async () => {
+      console.log("[Schedule] Starting to fetch all schedules...");
       setIsLoadingAllSchedules(true);
       
-      // 並列で取得（10件ずつバッチ処理）
-      const batchSize = 10;
+      let successCount = 0;
+      let foundCount = 0;
+      
+      // 並列で取得（5件ずつバッチ処理 - より安定性を重視）
+      const batchSize = 5;
       for (let i = 0; i < metaCpns.length; i += batchSize) {
         const batch = metaCpns.slice(i, i + batchSize);
-        await Promise.all(batch.map(cpn => fetchSchedule(cpn.campaignId!, false)));
+        
+        const results = await Promise.all(
+          batch.map(async (cpn) => {
+            try {
+              const response = await fetch(`/api/budget-schedule?campaignId=${cpn.campaignId}`);
+              const data = await response.json();
+              
+              if (data.success) {
+                successCount++;
+                if (data.schedules && data.schedules.length > 0) {
+                  foundCount++;
+                  console.log(`[Schedule] Found schedule for ${cpn.cpnName}:`, data.schedules);
+                }
+                return { campaignId: cpn.campaignId!, schedules: data.schedules || [] };
+              }
+              return null;
+            } catch (error) {
+              console.error(`[Schedule] Error fetching ${cpn.campaignId}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // 結果をキャッシュに保存
+        results.forEach(result => {
+          if (result) {
+            setScheduleCache(prev => ({ ...prev, [result.campaignId]: result.schedules }));
+          }
+        });
+        
         // バッチ間で少し待機
         if (i + batchSize < metaCpns.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       
+      console.log(`[Schedule] Fetch completed: ${successCount}/${metaCpns.length} success, ${foundCount} with schedules`);
       setIsLoadingAllSchedules(false);
       setScheduleLastUpdated(Date.now());
     };
     
-    // 500ms後に開始（データロード完了を待つ）
-    const timeout = setTimeout(fetchAllImmediately, 500);
+    // 1秒後に開始（データロード完了を待つ）
+    const timeout = setTimeout(fetchAllImmediately, 1000);
     
     return () => clearTimeout(timeout);
-  }, [cpnList, fetchSchedule]);
+  }, [cpnList]);
 
-  // スケジュール自動更新（30秒ごと）
+  // スケジュール自動更新（10分ごと）
   useEffect(() => {
     if (!cpnList || cpnList.length === 0) return;
     
     const interval = setInterval(() => {
       refreshAllSchedules();
-    }, 30000); // 30秒ごと
+    }, 600000); // 10分ごと
     
     return () => clearInterval(interval);
   }, [cpnList, refreshAllSchedules]);
