@@ -27,6 +27,7 @@ interface LocalFilterOptions {
 import { CpnMemo } from "@/components/ui/cpn-memo";
 import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
 import { DashboardConfigModal, getWidgetConfig, DashboardWidget } from "@/components/ui/dashboard-config";
+import { CpnDetailModal, GlobalCpnSearchButton } from "@/components/ui/cpn-detail-modal";
 
 // 媒体ロゴコンポーネント
 function MediaLogo({ media, size = 14 }: { media: string; size?: number }) {
@@ -163,6 +164,8 @@ export default function TeamAnalysisPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [showDashboardConfig, setShowDashboardConfig] = useState(false);
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
+  const [showCpnDetailModal, setShowCpnDetailModal] = useState(false);
+  const [selectedCpnForDetail, setSelectedCpnForDetail] = useState<string | undefined>(undefined);
   const [filterOptions, setFilterOptions] = useState<LocalFilterOptions>({
     searchQuery: "",
     mediaFilter: "all",
@@ -693,6 +696,7 @@ export default function TeamAnalysisPage() {
               <Settings className="h-3 w-3 mr-1" />
               表示設定
             </Button>
+            <GlobalCpnSearchButton />
             <Button
               variant="secondary"
               size="sm"
@@ -1174,7 +1178,7 @@ export default function TeamAnalysisPage() {
                     {sortedCpns.slice(0, 100).map((cpn, index) => (
                       <tr 
                         key={cpn.cpnKey} 
-                        className={`border-b hover:bg-slate-50 ${selectedCpns.has(cpn.cpnKey) ? "bg-indigo-50" : ""}`}
+                        className={`border-b hover:bg-slate-50 ${selectedCpns.has(cpn.cpnKey) ? "bg-indigo-50" : ""} ${cpn.status !== "ACTIVE" && cpn.spend === 0 ? "bg-slate-100 opacity-60" : ""}`}
                       >
                         <td className="p-2">
                           <input
@@ -1186,10 +1190,17 @@ export default function TeamAnalysisPage() {
                           />
                         </td>
                         <td className="p-2 text-slate-800 break-all max-w-xs">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 justify-between">
                             <span className="text-xs text-violet-600 bg-violet-50 px-1 rounded">{cpn.memberName}</span>
+                            <button
+                              onClick={() => { setSelectedCpnForDetail(cpn.cpnName); setShowCpnDetailModal(true); }}
+                              className="p-1 text-blue-500 hover:bg-blue-50 rounded shrink-0"
+                              title="詳細データを表示"
+                            >
+                              <BarChart3 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
-                          <div className="mt-0.5">{cpn.cpnName}</div>
+                          <div className={`mt-0.5 ${cpn.status !== "ACTIVE" && cpn.spend === 0 ? "text-slate-500" : ""}`}>{cpn.cpnName}</div>
                         </td>
                         <td className="p-2">
                           <div className="flex items-center gap-1">
@@ -1685,6 +1696,13 @@ export default function TeamAnalysisPage() {
           </Card>
         </div>
       )}
+
+      {/* CPN詳細モーダル */}
+      <CpnDetailModal
+        isOpen={showCpnDetailModal}
+        onClose={() => { setShowCpnDetailModal(false); setSelectedCpnForDetail(undefined); }}
+        cpnName={selectedCpnForDetail}
+      />
     </>
   );
 }

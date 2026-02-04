@@ -15,6 +15,7 @@ import { DashboardConfigModal, DashboardConfigButton, getWidgetConfig, Dashboard
 import { addChangeRecord, ChangeHistory } from "@/components/ui/change-history";
 import { AnalysisPageSkeleton } from "@/components/ui/skeleton";
 import { getRoasColorClass } from "@/lib/utils";
+import { CpnDetailModal, GlobalCpnSearchButton } from "@/components/ui/cpn-detail-modal";
 
 // 媒体ロゴコンポーネント
 function MediaLogo({ media, size = 14 }: { media: string; size?: number }) {
@@ -186,6 +187,8 @@ export default function AnalysisPage() {
   const [showDashboardConfig, setShowDashboardConfig] = useState(false);
   const [showChangeHistory, setShowChangeHistory] = useState(false);
   const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidget[]>([]);
+  const [showCpnDetailModal, setShowCpnDetailModal] = useState(false);
+  const [selectedCpnForDetail, setSelectedCpnForDetail] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<FilterOptions>({ media: [], profitRange: {}, roasRange: {}, status: [] });
   const [comparisonData, setComparisonData] = useState<{
@@ -1218,8 +1221,9 @@ export default function AnalysisPage() {
         onSave={(widgets) => setDashboardWidgets(widgets)}
       />
 
-      {/* 設定ボタン */}
-      <div className="mb-4 lg:mb-6 flex justify-end">
+      {/* 設定ボタン + CPN検索 */}
+      <div className="mb-4 lg:mb-6 flex justify-end gap-2">
+        <GlobalCpnSearchButton />
         <DashboardConfigButton onOpen={() => setShowDashboardConfig(true)} />
       </div>
 
@@ -2156,12 +2160,24 @@ export default function AnalysisPage() {
                 {getSortedCpnList().map((cpn, index) => {
                   const isTargetMedia = ["Meta", "TikTok", "Pangle"].includes(cpn.media);
                   const message = budgetMessages[cpn.cpnKey];
+                  const currentStatus = cpn.status?.toLowerCase() || "";
+                  const isActive = currentStatus === "active" || currentStatus === "enable" || currentStatus === "enabled" || currentStatus === "on";
+                  const isOff = !isActive && cpn.spend === 0; // OFFかつ消化0のCPNをグレーアウト
                   
                   return (
-                  <tr key={index} className="hover:bg-slate-50">
+                  <tr key={index} className={`hover:bg-slate-50 ${isOff ? "bg-slate-100 opacity-60" : ""}`}>
                     {/* CPN名 */}
                     <td className="px-3 py-3">
-                      <p className="font-medium text-slate-900 text-xs leading-relaxed">{cpn.cpnName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium text-xs leading-relaxed flex-1 ${isOff ? "text-slate-500" : "text-slate-900"}`}>{cpn.cpnName}</p>
+                        <button
+                          onClick={() => { setSelectedCpnForDetail(cpn.cpnName); setShowCpnDetailModal(true); }}
+                          className="p-1 text-blue-500 hover:bg-blue-50 rounded shrink-0"
+                          title="詳細データを表示"
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                     {/* 媒体 */}
                     <td className="px-2 py-2 text-center whitespace-nowrap">
@@ -2180,8 +2196,6 @@ export default function AnalysisPage() {
                     {/* ON/OFF */}
                     <td className="px-2 py-2 text-center whitespace-nowrap">
                       {isTargetMedia ? (() => {
-                        const currentStatus = cpn.status?.toLowerCase() || "";
-                        const isActive = currentStatus === "active" || currentStatus === "enable" || currentStatus === "enabled" || currentStatus === "on";
                         const statusMessage = statusMessages[cpn.cpnKey];
                         
                         return (
@@ -3051,6 +3065,13 @@ export default function AnalysisPage() {
           </div>
         </div>
       )}
+
+      {/* CPN詳細モーダル */}
+      <CpnDetailModal
+        isOpen={showCpnDetailModal}
+        onClose={() => { setShowCpnDetailModal(false); setSelectedCpnForDetail(undefined); }}
+        cpnName={selectedCpnForDetail}
+      />
     </>
   );
 }
