@@ -29,11 +29,12 @@ export async function GET(request: Request) {
       id: r.id,
       memberName: r.member_name || "全員",
       projectName: r.project_name || "全案件",
-      conditions: (r.conditions as StopRuleConditions) || {},
+      conditions: (r.conditions as StopRuleConditions & { offerNames?: string[]; mediaFilters?: string[] }) || {},
       isActive: r.is_active,
       priority: r.priority,
       createdBy: r.member_name || "不明",
       createdAt: r.created_at.toISOString(),
+      ruleName: r.rule_name,
     }));
     
     // 案件リストを取得（チームで運用中の案件）

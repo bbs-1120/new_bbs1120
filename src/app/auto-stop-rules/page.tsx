@@ -3,10 +3,11 @@
 import { Header } from "@/components/layout/header";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { 
   Users, Briefcase, Plus, Trash2, ChevronRight, Save, X,
-  AlertTriangle, History, Clock, User,
+  AlertTriangle, History, Clock, User, Edit2,
   UserCheck, Building2, Zap, ChevronUp, ChevronDown, Play, Eye, Loader2
 } from "lucide-react";
 
@@ -22,11 +23,14 @@ interface Rule {
     roasMax?: number;
     profitMax?: number;
     consecutiveLossMin?: number;
+    offerNames?: string[];
+    mediaFilters?: string[];
   };
   isActive: boolean;
   priority: number;
   createdBy: string;
   createdAt: string;
+  ruleName?: string;
 }
 
 interface StopHistory {
@@ -44,6 +48,10 @@ interface StopHistory {
 }
 
 export default function AutoStopRulesPage() {
+  const { data: session } = useSession();
+  const currentUserName = session?.user?.name || "";
+  const isAdmin = session?.user?.role === "admin";
+  
   const [rules, setRules] = useState<Rule[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
   const [members, setMembers] = useState<string[]>([]);
@@ -52,12 +60,15 @@ export default function AutoStopRulesPage() {
   const [projectOffers, setProjectOffers] = useState<Record<string, string[]>>({});
   const [history, setHistory] = useState<StopHistory[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"rules" | "history">("rules");
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [previewResults, setPreviewResults] = useState<{
     cpnName: string;
     media: string;
@@ -110,6 +121,34 @@ export default function AutoStopRulesPage() {
     fetchData();
   }, [fetchData]);
   
+  // ログインユーザーのルールのみ表示（管理者は全員表示）
+  const myRules = useMemo(() => {
+    if (isAdmin) return rules;
+    // ユーザー名からチーム名を抽出（例：「悠太（管理者）」→「悠太」）
+    const userName = currentUserName.replace(/（.*）$/, "").replace(/\(.*\)$/, "");
+    return rules.filter(rule => 
+      rule.memberName === userName || 
+      rule.memberName === currentUserName ||
+      rule.memberName === "全員"
+    );
+  }, [rules, currentUserName, isAdmin]);
+  
+  // 案件ごとにルールをグループ化
+  const rulesByProject = useMemo(() => {
+    const grouped: Record<string, Rule[]> = {};
+    for (const rule of myRules) {
+      const key = rule.projectName || "その他";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(rule);
+    }
+    return grouped;
+  }, [myRules]);
+  
+  // 表示する案件リスト
+  const projectList = useMemo(() => {
+    return Object.keys(rulesByProject).sort();
+  }, [rulesByProject]);
+  
   const resetNewRule = () => {
     setNewRule({
       memberName: "",
@@ -124,6 +163,31 @@ export default function AutoStopRulesPage() {
     });
     setStep(1);
     setIsCreating(false);
+    setIsEditing(false);
+    setEditingRuleId(null);
+  };
+  
+  // ルール編集を開始
+  const startEditRule = (rule: Rule) => {
+    setNewRule({
+      memberName: rule.memberName,
+      projectName: rule.projectName,
+      offerNames: rule.conditions.offerNames || [],
+      mediaFilters: rule.conditions.mediaFilters || [],
+      conditions: {
+        spendMin: rule.conditions.spendMin,
+        mcvMax: rule.conditions.mcvMax,
+        cvMax: rule.conditions.cvMax,
+        cvMin: rule.conditions.cvMin,
+        roasMax: rule.conditions.roasMax,
+        profitMax: rule.conditions.profitMax,
+        consecutiveLossMin: rule.conditions.consecutiveLossMin,
+      },
+    });
+    setEditingRuleId(rule.id);
+    setIsEditing(true);
+    setIsCreating(true);
+    setStep(4); // 条件編集ステップに直接移動
   };
   
   const saveRule = async () => {
@@ -132,6 +196,11 @@ export default function AutoStopRulesPage() {
     
     setIsSaving(true);
     try {
+      if (isEditing && editingRuleId) {
+        // 既存ルールを更新（削除して再作成）
+        await fetch(`/api/auto-stop-rules?id=${editingRuleId}`, { method: "DELETE" });
+      }
+      
       const res = await fetch("/api/auto-stop-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -404,12 +473,13 @@ export default function AutoStopRulesPage() {
             </div>
           )}
           
-          {/* ルール作成ウィザード */}
+          {/* ルール作成/編集ウィザード */}
           {isCreating && (
             <Card className="mb-8 border-2 border-emerald-500">
-              <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+              <CardHeader className={`bg-gradient-to-r ${isEditing ? "from-blue-500 to-indigo-500" : "from-emerald-500 to-teal-500"} text-white`}>
                 <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />新しいルールを作成
+                  {isEditing ? <Edit2 className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
+                  {isEditing ? "ルールを編集" : "新しいルールを作成"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -723,9 +793,9 @@ export default function AutoStopRulesPage() {
                       <Button variant="secondary" onClick={() => setStep(3)}>← 戻る</Button>
                       <div className="flex gap-2">
                         <Button variant="secondary" onClick={resetNewRule}><X className="h-4 w-4 mr-1" />キャンセル</Button>
-                        <Button onClick={saveRule} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
+                        <Button onClick={saveRule} disabled={isSaving} className={`${isEditing ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700"} disabled:opacity-50`}>
                           {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                          {isSaving ? "保存中..." : "ルールを保存"}
+                          {isSaving ? "保存中..." : isEditing ? "変更を保存" : "ルールを保存"}
                         </Button>
                       </div>
                     </div>
@@ -735,64 +805,108 @@ export default function AutoStopRulesPage() {
             </Card>
           )}
           
-          {/* ルール一覧 */}
+          {/* ルール一覧 - 案件ごとにグループ化 */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />設定済みルール（優先度順）
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                {isAdmin ? "全メンバーのルール" : "マイルール"}
+                <span className="text-sm font-normal text-slate-500">（{myRules.length}件）</span>
               </h2>
-              <p className="text-sm text-slate-500">↑↓ で優先度を変更</p>
+              {projectList.length > 1 && (
+                <select
+                  value={selectedProject || ""}
+                  onChange={(e) => setSelectedProject(e.target.value || null)}
+                  className="text-sm border rounded-lg px-3 py-1.5"
+                >
+                  <option value="">全案件</option>
+                  {projectList.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              )}
             </div>
             
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
               </div>
-            ) : rules.length === 0 ? (
+            ) : myRules.length === 0 ? (
               <Card className="p-8 text-center">
                 <AlertTriangle className="h-12 w-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500">まだルールがありません</p>
+                <p className="text-xs text-slate-400 mt-2">「新しいルールを作成」からルールを追加してください</p>
               </Card>
             ) : (
-              <div className="space-y-2">
-                {rules.map((rule, idx) => (
-                  <Card key={rule.id} className={`border-2 ${rule.isActive ? "border-emerald-200" : "border-slate-200 opacity-60"}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-4">
-                        {/* 優先度表示と上下ボタン */}
-                        <div className="flex flex-col items-center gap-1">
-                          <button onClick={() => movePriority(rule.id, "up")} disabled={idx === 0} className={`p-1 rounded ${idx === 0 ? "text-slate-300" : "text-slate-500 hover:bg-slate-100"}`}>
-                            <ChevronUp className="h-4 w-4" />
-                          </button>
-                          <span className="text-xs font-bold text-slate-400 w-6 text-center">{idx + 1}</span>
-                          <button onClick={() => movePriority(rule.id, "down")} disabled={idx === rules.length - 1} className={`p-1 rounded ${idx === rules.length - 1 ? "text-slate-300" : "text-slate-500 hover:bg-slate-100"}`}>
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </div>
+              <div className="space-y-6">
+                {projectList
+                  .filter(p => !selectedProject || p === selectedProject)
+                  .map(projectName => (
+                  <div key={projectName}>
+                    {/* 案件ヘッダー */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <Briefcase className="h-4 w-4 text-amber-500" />
+                      <h3 className="font-bold text-slate-700">{projectName}</h3>
+                      <span className="text-xs text-slate-400">({rulesByProject[projectName].length}件)</span>
+                    </div>
+                    
+                    {/* ルール一覧 */}
+                    <div className="space-y-2 ml-2 pl-4 border-l-2 border-amber-200">
+                      {rulesByProject[projectName].map((rule, idx) => {
+                        // オファー情報を取得
+                        const offerNames = rule.conditions.offerNames || [];
+                        const mediaFilters = rule.conditions.mediaFilters || [];
+                        const hasOffers = offerNames.length > 0 && !offerNames.includes("全オファー");
+                        const hasMedia = mediaFilters.length > 0 && !mediaFilters.includes("全媒体");
                         
-                        {/* ON/OFFスイッチ */}
-                        <button onClick={() => toggleRule(rule.id, rule.isActive)} className={`w-12 h-6 rounded-full transition-colors ${rule.isActive ? "bg-emerald-500" : "bg-slate-300"}`}>
-                          <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${rule.isActive ? "translate-x-6" : "translate-x-0.5"}`}></div>
-                        </button>
-                        
-                        {/* ルール情報 */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 text-sm mb-1">
-                            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">{rule.memberName}</span>
-                            <ChevronRight className="h-4 w-4 text-slate-400" />
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">{rule.projectName}</span>
-                          </div>
-                          <p className="text-sm text-slate-600">{formatConditions(rule.conditions)}</p>
-                          <p className="text-xs text-slate-400 mt-1">
-                            <User className="h-3 w-3 inline mr-1" />{rule.createdBy} が作成 • {formatDateTime(rule.createdAt)}
-                          </p>
-                        </div>
-                        
-                        {/* 削除ボタン */}
-                        <button onClick={() => deleteRule(rule.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="h-5 w-5" /></button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        return (
+                          <Card key={rule.id} className={`border-2 ${rule.isActive ? "border-emerald-200 bg-white" : "border-slate-200 bg-slate-50 opacity-60"}`}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center gap-3">
+                                {/* ON/OFFスイッチ */}
+                                <button onClick={() => toggleRule(rule.id, rule.isActive)} className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 ${rule.isActive ? "bg-emerald-500" : "bg-slate-300"}`}>
+                                  <div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${rule.isActive ? "translate-x-5" : "translate-x-0.5"}`}></div>
+                                </button>
+                                
+                                {/* ルール情報 */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1 flex-wrap mb-1">
+                                    {!isAdmin && (
+                                      <>
+                                        <span className="px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-700">{rule.memberName}</span>
+                                        <ChevronRight className="h-3 w-3 text-slate-400" />
+                                      </>
+                                    )}
+                                    {hasOffers && (
+                                      <span className="px-1.5 py-0.5 rounded text-xs bg-teal-100 text-teal-700">
+                                        {offerNames.length === 1 ? offerNames[0] : `${offerNames.length}オファー`}
+                                      </span>
+                                    )}
+                                    {hasMedia && (
+                                      <span className="px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700">
+                                        {mediaFilters.join(", ")}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-600 truncate">{formatConditions(rule.conditions)}</p>
+                                </div>
+                                
+                                {/* 編集・削除ボタン */}
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button onClick={() => startEditRule(rule)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded" title="編集">
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button onClick={() => deleteRule(rule.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded" title="削除">
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
