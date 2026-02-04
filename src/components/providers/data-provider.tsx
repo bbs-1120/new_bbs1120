@@ -3,31 +3,80 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from "react";
 
 // プリフェッチ用のグローバルキャッシュ
-const prefetchCache = new Map<string, { data: unknown; timestamp: number }>();
+const prefetchCache = new Map<string, { data: unknown; timestamp: number; promise?: Promise<unknown> }>();
 const PREFETCH_TTL = 5 * 60 * 1000; // 5分
+const prefetchingUrls = new Set<string>();
 
-// ページプリフェッチ関数
-export function prefetchPageData(url: string) {
+// ページプリフェッチ関数（重複リクエスト防止）
+export function prefetchPageData(url: string, priority: "high" | "low" = "low") {
   const cached = prefetchCache.get(url);
   if (cached && Date.now() - cached.timestamp < PREFETCH_TTL) {
-    return; // 既にキャッシュ済み
+    return cached.promise || Promise.resolve(cached.data); // 既にキャッシュ済み
   }
   
-  fetch(url)
+  if (prefetchingUrls.has(url)) {
+    return cached?.promise; // 既にフェッチ中
+  }
+  
+  prefetchingUrls.add(url);
+  
+  const fetchOptions: RequestInit = priority === "high" 
+    ? { priority: "high" as RequestPriority }
+    : {};
+  
+  const promise = fetch(url, fetchOptions)
     .then(res => res.json())
     .then(data => {
       prefetchCache.set(url, { data, timestamp: Date.now() });
+      prefetchingUrls.delete(url);
+      return data;
     })
-    .catch(() => {});
+    .catch((err) => {
+      prefetchingUrls.delete(url);
+      throw err;
+    });
+  
+  prefetchCache.set(url, { data: null, timestamp: 0, promise });
+  return promise;
 }
 
 // プリフェッチデータを取得
 export function getPrefetchedData<T>(url: string): T | null {
   const cached = prefetchCache.get(url);
-  if (cached && Date.now() - cached.timestamp < PREFETCH_TTL) {
+  if (cached && cached.data && Date.now() - cached.timestamp < PREFETCH_TTL) {
     return cached.data as T;
   }
   return null;
+}
+
+// 全ての重要APIをプリフェッチ
+export function prefetchAllCriticalData() {
+  prefetchPageData("/api/analysis", "high");
+  prefetchPageData("/api/judgment", "low");
+  prefetchPageData("/api/auto-stop-rules?projects=true", "low");
+}
+
+// ホバー時のプリフェッチ（遅延付き）
+const hoverTimeouts = new Map<string, NodeJS.Timeout>();
+export function prefetchOnHover(url: string, delayMs = 100) {
+  // 既存のタイムアウトをクリア
+  const existing = hoverTimeouts.get(url);
+  if (existing) clearTimeout(existing);
+  
+  const timeout = setTimeout(() => {
+    prefetchPageData(url);
+    hoverTimeouts.delete(url);
+  }, delayMs);
+  
+  hoverTimeouts.set(url, timeout);
+}
+
+export function cancelPrefetchOnHover(url: string) {
+  const existing = hoverTimeouts.get(url);
+  if (existing) {
+    clearTimeout(existing);
+    hoverTimeouts.delete(url);
+  }
 }
 
 interface AnalysisData {
@@ -96,13 +145,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // アプリ起動時に関連APIをプリフェッチ
   useEffect(() => {
-    // 判定データをプリフェッチ
-    prefetchPageData("/api/judgment");
-    // 自動停止ルールをプリフェッチ
-    prefetchPageData("/api/auto-stop-rules");
+    // 重要APIを全てプリフェッチ
+    prefetchAllCriticalData();
+    
+    // 定期的にバックグラウンドでリフレッシュ（5分ごと）
+    const interval = setInterval(() => {
+      if (!document.hidden) { // タブがアクティブな場合のみ
+        checkAndUpdateInBackground();
+      }
+    }, 5 * 60 * 1000);
     
     return () => {
       isMounted.current = false;
+      clearInterval(interval);
     };
   }, []);
 

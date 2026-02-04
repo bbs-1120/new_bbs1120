@@ -1,19 +1,64 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 interface SkeletonProps {
   className?: string;
+  shimmer?: boolean;
 }
 
-export function Skeleton({ className }: SkeletonProps) {
+// シマー効果付きスケルトン
+export function Skeleton({ className, shimmer = true }: SkeletonProps) {
   return (
     <div
       className={cn(
-        "animate-pulse rounded-md bg-slate-200 dark:bg-slate-700",
+        "rounded-md bg-slate-200 dark:bg-slate-700",
+        shimmer && "relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/60 before:to-transparent",
+        !shimmer && "animate-pulse",
         className
       )}
     />
+  );
+}
+
+// 即座に表示されるローディングインジケーター
+export function InstantLoader({ show, delay = 0 }: { show: boolean; delay?: number }) {
+  const [shouldShow, setShouldShow] = useState(delay === 0 && show);
+  
+  useEffect(() => {
+    if (!show) {
+      setShouldShow(false);
+      return;
+    }
+    
+    if (delay === 0) {
+      setShouldShow(true);
+      return;
+    }
+    
+    const timer = setTimeout(() => setShouldShow(true), delay);
+    return () => clearTimeout(timer);
+  }, [show, delay]);
+  
+  if (!shouldShow) return null;
+  
+  return (
+    <div className="fixed top-0 left-0 right-0 z-50">
+      <div className="h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-loading-bar" />
+    </div>
+  );
+}
+
+// プログレスバー付きローダー
+export function ProgressLoader({ progress }: { progress: number }) {
+  return (
+    <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+      <div 
+        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 ease-out"
+        style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+      />
+    </div>
   );
 }
 

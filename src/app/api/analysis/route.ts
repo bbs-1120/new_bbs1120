@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getFullAnalysisData, getMonthlyProfit, getDailyTrendData, getProjectMonthlyData } from "@/lib/googleSheets";
-import { getCache, setCache } from "@/lib/cache";
+import { getCacheWithSWR, setCache, markRevalidating, unmarkRevalidating } from "@/lib/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const CACHE_KEY = "analysis_data";
-const CACHE_TTL = 60 * 60 * 1000; // 60分間キャッシュ（パフォーマンス改善）
+const CACHE_TTL = 5 * 60 * 1000; // 5分間は新鮮
+const STALE_TTL = 55 * 60 * 1000; // +55分間はstaleデータとして使用可（合計60分）
 
 interface CachedData {
   sheetData: Awaited<ReturnType<typeof getFullAnalysisData>>;
@@ -197,10 +198,42 @@ export async function GET(request: Request) {
     const cacheKeyWithUser = userRole === "admin" && !userMediaFilter 
       ? CACHE_KEY 
       : `${CACHE_KEY}_${userTeamName || "all"}_${userMediaFilter || "all"}`;
-    let cachedData = skipCache ? null : getCache<CachedData>(cacheKeyWithUser);
+    
+    // SWRパターンでキャッシュ取得
+    const cacheResult = skipCache 
+      ? { data: null, isStale: false, shouldRevalidate: false }
+      : getCacheWithSWR<CachedData>(cacheKeyWithUser);
+    
+    let cachedData = cacheResult.data;
 
     // メンバーの場合のフィルタリング用teamName
     const filterTeamName = userRole !== "admin" ? userTeamName : null;
+
+    // バックグラウンド再取得関数
+    const revalidateInBackground = async () => {
+      try {
+        markRevalidating(cacheKeyWithUser);
+        const [sheetData, monthlyProfit, dailyTrend, projectMonthly] = await Promise.all([
+          getFullAnalysisData(),
+          getMonthlyProfit(filterTeamName),
+          getDailyTrendData(filterTeamName),
+          getProjectMonthlyData(filterTeamName),
+        ]);
+        const newData = { sheetData, monthlyProfit, dailyTrend, projectMonthly };
+        setCache(cacheKeyWithUser, newData, CACHE_TTL, STALE_TTL);
+        console.log(`[Analysis] Background revalidation complete for ${cacheKeyWithUser}`);
+      } catch (error) {
+        console.error("[Analysis] Background revalidation failed:", error);
+      } finally {
+        unmarkRevalidating(cacheKeyWithUser);
+      }
+    };
+
+    // Staleデータの場合、バックグラウンドで再取得
+    if (cacheResult.isStale && cacheResult.shouldRevalidate && cachedData) {
+      console.log(`[Analysis] Returning stale data, revalidating in background...`);
+      revalidateInBackground(); // 待たずにバックグラウンドで実行
+    }
 
     if (!cachedData) {
       // キャッシュがない場合はスプレッドシートから取得
@@ -213,7 +246,7 @@ export async function GET(request: Request) {
       ]);
 
       cachedData = { sheetData, monthlyProfit, dailyTrend, projectMonthly };
-      setCache(cacheKeyWithUser, cachedData, CACHE_TTL);
+      setCache(cacheKeyWithUser, cachedData, CACHE_TTL, STALE_TTL);
       
       // CPNマッピングをDBに保存（非同期）
       const mappingsToSave = sheetData
