@@ -62,7 +62,7 @@ async function createBudgetSchedule(
   startTime: number,  // Unix timestamp
   endTime: number,    // Unix timestamp
   budgetValue: number // 円
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; scheduleId?: string }> {
   const url = `${META_BASE_URL}${META_API_VERSION}/${campaignId}/budget_schedules`;
   
   const params = new URLSearchParams({
@@ -71,6 +71,15 @@ async function createBudgetSchedule(
     budget_value: budgetValue.toString(),
     budget_value_type: "ABSOLUTE",
     access_token: accessToken,
+  });
+
+  console.log("[Budget Schedule] Creating schedule with params:", {
+    url,
+    time_start: startTime,
+    time_start_date: new Date(startTime * 1000).toISOString(),
+    time_end: endTime,
+    time_end_date: new Date(endTime * 1000).toISOString(),
+    budget_value: budgetValue,
   });
 
   try {
@@ -84,13 +93,22 @@ async function createBudgetSchedule(
 
     const data = await response.json();
     
+    console.log("[Budget Schedule] Meta API response:", {
+      status: response.status,
+      ok: response.ok,
+      data: JSON.stringify(data),
+    });
+    
     if (response.ok && data.id) {
-      return { success: true };
+      console.log("[Budget Schedule] Schedule created successfully with ID:", data.id);
+      return { success: true, scheduleId: data.id };
     }
     
     const errorMessage = data.error?.error_user_msg || data.error?.message || "スケジュール作成失敗";
+    console.error("[Budget Schedule] Failed to create schedule:", errorMessage);
     return { success: false, error: errorMessage };
   } catch (error) {
+    console.error("[Budget Schedule] Exception:", error);
     return { success: false, error: error instanceof Error ? error.message : "接続エラー" };
   }
 }
@@ -246,6 +264,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const campaignId = searchParams.get("campaignId");
+  const debug = searchParams.get("debug") === "true";
 
   if (!campaignId) {
     return NextResponse.json(
@@ -268,13 +287,33 @@ export async function GET(request: Request) {
       const response = await fetch(url);
       const data = await response.json();
 
+      if (debug) {
+        console.log("[Budget Schedule GET] Response:", {
+          campaignId,
+          status: response.status,
+          data: JSON.stringify(data),
+        });
+      }
+
       if (response.ok && data.data) {
+        // デバッグ用: スケジュールの詳細をログ出力
+        if (data.data.length > 0) {
+          console.log(`[Budget Schedule] Found ${data.data.length} schedules for ${campaignId}:`, 
+            data.data.map((s: { id: string; time_start: number; time_end: number; budget_value: string }) => ({
+              id: s.id,
+              time_start: new Date(s.time_start * 1000).toISOString(),
+              time_end: new Date(s.time_end * 1000).toISOString(),
+              budget_value: s.budget_value,
+            }))
+          );
+        }
         return NextResponse.json({
           success: true,
           schedules: data.data,
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("[Budget Schedule GET] Error:", error);
       continue;
     }
   }

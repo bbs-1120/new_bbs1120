@@ -60,38 +60,243 @@ async function stopMetaCampaign(campaignId: string, accessTokens: string[]): Pro
   return { success: false, error: "All tokens failed" };
 }
 
-// TikTok広告を停止するAPI
-async function stopTikTokCampaign(campaignId: string, advertiserId: string): Promise<{ success: boolean; error?: string }> {
-  const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
-  if (!accessToken) {
-    return { success: false, error: "TikTok access token not configured" };
-  }
+// TikTok Smart Plus Campaign 停止API
+async function stopTikTokSpcCampaign(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string
+): Promise<{ success: boolean; error?: string }> {
+  // 明示的に文字列変換
+  const advertiserIdStr = String(advertiserId).trim();
+  const campaignIdStr = String(campaignId).trim();
+
+  const payload = {
+    advertiser_id: advertiserIdStr,
+    campaign_id: campaignIdStr,
+    operation_status: "DISABLE",
+  };
+
+  console.log(`[Auto-Stop] SPC API request:`, JSON.stringify(payload));
 
   try {
     const response = await fetch(
-      "https://business-api.tiktok.com/open_api/v1.3/campaign/update/status/",
+      "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/update/",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Access-Token": accessToken,
         },
-        body: JSON.stringify({
-          advertiser_id: advertiserId,
-          campaign_ids: [campaignId],
-          operation_status: "DISABLE",
-        }),
+        body: JSON.stringify(payload),
       }
     );
 
     const data = await response.json();
+    console.log(`[Auto-Stop] SPC API response for ${campaignIdStr}:`, JSON.stringify(data));
+    
     if (data.code === 0) {
       return { success: true };
     }
-    return { success: false, error: data.message || "TikTok API error" };
+    
+    // エラーメッセージを正規化
+    const errorMsg = (data.message || "").toLowerCase();
+    
+    // Upgraded Smart Plus / Smart Plus はAPIで未サポートの場合、広告グループレベルで試す
+    if (errorMsg.includes("upgraded smart plus") || 
+        errorMsg.includes("smart plus") ||
+        errorMsg.includes("does not support") ||
+        errorMsg.includes("not support") ||
+        errorMsg.includes("spc") ||
+        data.code === 40701) {
+      console.log(`[Auto-Stop] SPC API not supported for ${campaignIdStr}, trying adgroup level...`);
+      // 広告グループレベルでの停止を試す
+      return await stopTikTokAdGroups(accessToken, advertiserIdStr, campaignIdStr);
+    }
+    
+    return { success: false, error: data.message || "SPC API error" };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+    return { success: false, error: error instanceof Error ? error.message : "SPC API error" };
   }
+}
+
+// TikTok 広告グループ取得
+async function getTikTokAdGroups(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string
+): Promise<{ success: boolean; adgroupIds?: string[]; error?: string }> {
+  // 明示的に文字列変換
+  const advertiserIdStr = String(advertiserId).trim();
+  const campaignIdStr = String(campaignId).trim();
+
+  try {
+    const params = new URLSearchParams({
+      advertiser_id: advertiserIdStr,
+      filtering: JSON.stringify({
+        campaign_ids: [campaignIdStr],
+      }),
+      page_size: "100",
+    });
+
+    console.log(`[Auto-Stop] Get adgroups request for campaign ${campaignIdStr}:`, params.toString());
+
+    const response = await fetch(
+      `https://business-api.tiktok.com/open_api/v1.3/adgroup/get/?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+      }
+    );
+
+    const data = await response.json();
+    console.log(`[Auto-Stop] Get adgroups response for campaign ${campaignIdStr}:`, JSON.stringify(data));
+    
+    if (data.code === 0 && data.data?.list) {
+      const adgroupIds = data.data.list.map((ag: { adgroup_id: string }) => String(ag.adgroup_id));
+      return { success: true, adgroupIds };
+    }
+    
+    return { success: false, error: data.message || "Failed to get adgroups" };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Get adgroups error" };
+  }
+}
+
+// TikTok 広告グループレベルで停止
+async function stopTikTokAdGroups(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string
+): Promise<{ success: boolean; error?: string }> {
+  // 明示的に文字列変換
+  const advertiserIdStr = String(advertiserId).trim();
+  const campaignIdStr = String(campaignId).trim();
+
+  // まず広告グループIDを取得
+  const getResult = await getTikTokAdGroups(accessToken, advertiserIdStr, campaignIdStr);
+  
+  if (!getResult.success || !getResult.adgroupIds || getResult.adgroupIds.length === 0) {
+    return { success: false, error: getResult.error || "広告グループが見つかりません" };
+  }
+
+  console.log(`[Auto-Stop] Found ${getResult.adgroupIds.length} adgroups for campaign ${campaignIdStr}`);
+
+  const payload = {
+    advertiser_id: advertiserIdStr,
+    adgroup_ids: getResult.adgroupIds,
+    operation_status: "DISABLE",
+  };
+
+  console.log(`[Auto-Stop] Adgroup status update request:`, JSON.stringify(payload));
+
+  try {
+    // 広告グループを停止
+    const response = await fetch(
+      "https://business-api.tiktok.com/open_api/v1.3/adgroup/status/update/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const data = await response.json();
+    console.log(`[Auto-Stop] Adgroup status update response:`, JSON.stringify(data));
+    
+    if (data.code === 0) {
+      return { success: true };
+    }
+    
+    return { success: false, error: data.message || "Adgroup status update failed" };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Adgroup update error" };
+  }
+}
+
+// TikTok広告を停止するAPI（Smart Plus対応）
+async function stopTikTokCampaign(campaignId: string, advertiserId: string): Promise<{ success: boolean; error?: string }> {
+  // 複数のアクセストークンを取得
+  const accessTokens = [
+    process.env.TIKTOK_ACCESS_TOKEN,
+    process.env.TIKTOK_ACCESS_TOKEN_2,
+    process.env.TIKTOK_ACCESS_TOKEN_3,
+  ].filter(Boolean) as string[];
+  
+  if (accessTokens.length === 0) {
+    return { success: false, error: "TikTok access token not configured" };
+  }
+
+  // 明示的に文字列変換（GASと同じ方法）
+  const campaignIdStr = String(campaignId).trim();
+  const advertiserIdStr = String(advertiserId).trim();
+
+  let lastError = "TikTok API error";
+
+  for (const accessToken of accessTokens) {
+    try {
+      // リクエストペイロードを作成（GASと同じ形式）
+      const payload = {
+        advertiser_id: advertiserIdStr,
+        campaign_ids: [campaignIdStr],
+        operation_status: "DISABLE",
+      };
+
+      console.log(`[Auto-Stop] TikTok API request:`, JSON.stringify(payload));
+
+      // まず通常のステータス更新APIを試す
+      const response = await fetch(
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Token": accessToken,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+      console.log(`[Auto-Stop] TikTok API response for ${campaignIdStr}:`, JSON.stringify(data));
+      
+      if (data.code === 0) {
+        return { success: true };
+      }
+      
+      lastError = data.message || "TikTok API error";
+      
+      // Smart Plus / SPC の場合はSPC APIを試す
+      if (data.message?.includes("Smart Performance Campaign") || 
+          data.message?.includes("spc") ||
+          data.message?.includes("Upgraded Smart Plus") ||
+          data.message?.includes("Smart Plus")) {
+        console.log(`[Auto-Stop] Trying SPC API for ${campaignIdStr}...`);
+        const spcResult = await stopTikTokSpcCampaign(accessToken, advertiserIdStr, campaignIdStr);
+        if (spcResult.success) {
+          return { success: true };
+        }
+        lastError = spcResult.error || lastError;
+        // SPC APIも失敗した場合は次のトークンを試す
+        continue;
+      }
+      
+      // 権限エラーの場合は次のトークンを試す
+      if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
+        continue;
+      }
+    } catch (error) {
+      console.error(`[Auto-Stop] TikTok API error for ${campaignId}:`, error);
+      lastError = error instanceof Error ? error.message : "Unknown error";
+    }
+  }
+
+  return { success: false, error: lastError };
 }
 
 // 条件にマッチするかチェック
@@ -186,6 +391,18 @@ export async function POST(request: Request) {
     const exclusions = await prisma.auto_stop_exclusions.findMany();
     const excludedCpns = new Set(exclusions.map(e => e.cpn_name));
 
+    // 今日すでにエラーになったCPNを取得（重複通知を防ぐ）
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayErrors = await prisma.auto_stop_history.findMany({
+      where: {
+        status: "error",
+        stopped_at: { gte: today },
+      },
+      select: { cpn_name: true },
+    });
+    const todayErrorCpns = new Set(todayErrors.map(e => e.cpn_name));
+
     // 分析データを取得
     const analysisData = await getFullAnalysisData();
 
@@ -215,6 +432,9 @@ export async function POST(request: Request) {
     for (const cpn of analysisData) {
       // 除外リストにあるCPNはスキップ
       if (excludedCpns.has(cpn.cpnName)) continue;
+
+      // 今日すでにエラーになったCPNはスキップ（重複通知を防ぐ）
+      if (todayErrorCpns.has(cpn.cpnName)) continue;
 
       // campaignIdがない場合はスキップ
       if (!cpn.campaignId) continue;
