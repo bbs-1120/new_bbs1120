@@ -59,37 +59,124 @@ async function stopMetaCampaign(campaignId: string, accessTokens: string[]): Pro
   return { success: false, error: "All tokens failed" };
 }
 
-// TikTok広告を停止するAPI
+// TikTok広告を停止するAPI（GASと同じ方法で明示的に文字列変換）
 async function stopTikTokCampaign(campaignId: string, advertiserId: string): Promise<{ success: boolean; error?: string }> {
-  const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
-  if (!accessToken) {
+  // 複数のアクセストークンを取得
+  const accessTokens = [
+    process.env.TIKTOK_ACCESS_TOKEN,
+    process.env.TIKTOK_ACCESS_TOKEN_2,
+    process.env.TIKTOK_ACCESS_TOKEN_3,
+  ].filter(Boolean) as string[];
+  
+  if (accessTokens.length === 0) {
     return { success: false, error: "TikTok access token not configured" };
   }
 
+  // 明示的に文字列変換（GASと同じ方法）
+  const campaignIdStr = String(campaignId).trim();
+  const advertiserIdStr = String(advertiserId).trim();
+
+  let lastError = "TikTok API error";
+
+  for (const accessToken of accessTokens) {
+    try {
+      // リクエストペイロードを作成（GASと同じ形式）
+      const payload = {
+        advertiser_id: advertiserIdStr,
+        campaign_ids: [campaignIdStr],
+        operation_status: "DISABLE",
+      };
+
+      console.log(`[Scheduled Auto-Stop] TikTok API request:`, JSON.stringify(payload));
+
+      const response = await fetch(
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Token": accessToken,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+      console.log(`[Scheduled Auto-Stop] TikTok API response for ${campaignIdStr}:`, JSON.stringify(data));
+      
+      if (data.code === 0) {
+        return { success: true };
+      }
+      
+      lastError = data.message || "TikTok API error";
+      
+      // Smart Plus / SPC の場合はSPC APIを試す
+      if (data.message?.includes("Smart Performance Campaign") || 
+          data.message?.includes("spc") ||
+          data.message?.includes("Upgraded Smart Plus") ||
+          data.message?.includes("Smart Plus")) {
+        console.log(`[Scheduled Auto-Stop] Trying SPC API for ${campaignIdStr}...`);
+        const spcResult = await stopTikTokSpcCampaign(accessToken, advertiserIdStr, campaignIdStr);
+        if (spcResult.success) {
+          return { success: true };
+        }
+        lastError = spcResult.error || lastError;
+        continue;
+      }
+      
+      // 権限エラーの場合は次のトークンを試す
+      if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
+        continue;
+      }
+    } catch (error) {
+      console.error(`[Scheduled Auto-Stop] TikTok API error for ${campaignIdStr}:`, error);
+      lastError = error instanceof Error ? error.message : "Unknown error";
+    }
+  }
+
+  return { success: false, error: lastError };
+}
+
+// TikTok Smart Plus Campaign 停止API
+async function stopTikTokSpcCampaign(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string
+): Promise<{ success: boolean; error?: string }> {
+  const advertiserIdStr = String(advertiserId).trim();
+  const campaignIdStr = String(campaignId).trim();
+
+  const payload = {
+    advertiser_id: advertiserIdStr,
+    campaign_id: campaignIdStr,
+    operation_status: "DISABLE",
+  };
+
+  console.log(`[Scheduled Auto-Stop] SPC API request:`, JSON.stringify(payload));
+
   try {
     const response = await fetch(
-      "https://business-api.tiktok.com/open_api/v1.3/campaign/update/status/",
+      "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/update/",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Access-Token": accessToken,
         },
-        body: JSON.stringify({
-          advertiser_id: advertiserId,
-          campaign_ids: [campaignId],
-          operation_status: "DISABLE",
-        }),
+        body: JSON.stringify(payload),
       }
     );
 
     const data = await response.json();
+    console.log(`[Scheduled Auto-Stop] SPC API response for ${campaignIdStr}:`, JSON.stringify(data));
+    
     if (data.code === 0) {
       return { success: true };
     }
-    return { success: false, error: data.message || "TikTok API error" };
+    
+    return { success: false, error: data.message || "SPC API error" };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+    return { success: false, error: error instanceof Error ? error.message : "SPC API error" };
   }
 }
 
