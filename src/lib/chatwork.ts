@@ -1,4 +1,5 @@
 import { formatDate, formatCurrency, formatPercentage } from "./utils";
+import { prisma } from "./prisma";
 
 // メンバー名 → ChatWork アカウントID マッピング
 // ChatWork IDはプロフィールURLから取得: chatwork.com/#!rid123456-XXXXXXX の XXXXXXX 部分
@@ -385,7 +386,7 @@ export interface AutoStopFailedCpn {
 
 export async function sendAutoStopFailedAlert(
   failedCpns: AutoStopFailedCpn[]
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; skippedCount?: number }> {
   const apiToken = process.env.CHATWORK_API_TOKEN;
   const roomId = process.env.CHATWORK_ROOM_ID; // 通常のルームに送信（メンバーがいるルーム）
 
@@ -397,11 +398,51 @@ export async function sendAutoStopFailedAlert(
     return { success: true };
   }
 
-  const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+  // 今日の0:00（JST）を計算
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const jstNow = new Date(now.getTime() + jstOffset);
+  const todayStart = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate()) - jstOffset);
+
+  // 今日既にエラー通知済みのCPNをDBからチェック（重複通知を防ぐ）
+  let alreadyNotifiedCpnNames: Set<string> = new Set();
+  try {
+    const alreadyNotified = await prisma.auto_stop_history.findMany({
+      where: {
+        status: "error",
+        stopped_at: {
+          gte: todayStart,
+        },
+      },
+      select: {
+        cpn_name: true,
+      },
+    });
+    alreadyNotifiedCpnNames = new Set(alreadyNotified.map((r: { cpn_name: string }) => r.cpn_name));
+    console.log(`[ChatWork] 今日既に通知済みのCPN: ${alreadyNotifiedCpnNames.size}件`);
+  } catch (err) {
+    console.error("[ChatWork] 通知済みチェックに失敗:", err);
+    // チェックに失敗しても続行（全部送る）
+  }
+
+  // 未通知のCPNのみフィルタリング
+  const unnotifiedCpns = failedCpns.filter(cpn => !alreadyNotifiedCpnNames.has(cpn.cpnName));
+  const skippedCount = failedCpns.length - unnotifiedCpns.length;
+
+  if (skippedCount > 0) {
+    console.log(`[ChatWork] ${skippedCount}件のCPNは本日既に通知済みのためスキップ`);
+  }
+
+  if (unnotifiedCpns.length === 0) {
+    console.log("[ChatWork] 通知対象のCPNがないためスキップ");
+    return { success: true, skippedCount };
+  }
+
+  const nowStr = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
   // メンバー別にグループ化
   const byMember: Record<string, AutoStopFailedCpn[]> = {};
-  for (const cpn of failedCpns) {
+  for (const cpn of unnotifiedCpns) {
     const key = cpn.memberName || "不明";
     if (!byMember[key]) byMember[key] = [];
     byMember[key].push(cpn);
@@ -446,10 +487,10 @@ export async function sendAutoStopFailedAlert(
   }
   
   if (errors.length > 0) {
-    return { success: false, error: errors.join(", ") };
+    return { success: false, error: errors.join(", "), skippedCount };
   }
   
-  return { success: true };
+  return { success: true, skippedCount };
 }
 
 /**
