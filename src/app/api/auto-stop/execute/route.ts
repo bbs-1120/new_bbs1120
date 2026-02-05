@@ -1,8 +1,31 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { getFullAnalysisData } from "@/lib/googleSheets";
+import { getFullAnalysisData, getTikTokAdvertiserMapping } from "@/lib/googleSheets";
 import { sendAutoStopFailedAlert, AutoStopFailedCpn } from "@/lib/chatwork";
+
+// TikTok advertiser_idマッピングのキャッシュ
+let tikTokAdvertiserMapping: Map<string, string> | null = null;
+let mappingLoadedAt: number = 0;
+const MAPPING_CACHE_TTL = 5 * 60 * 1000; // 5分キャッシュ
+
+async function loadTikTokAdvertiserMapping(): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (tikTokAdvertiserMapping && (now - mappingLoadedAt) < MAPPING_CACHE_TTL) {
+    return tikTokAdvertiserMapping;
+  }
+  
+  try {
+    tikTokAdvertiserMapping = await getTikTokAdvertiserMapping();
+    mappingLoadedAt = now;
+    console.log(`[Auto-Stop] Loaded TikTok advertiser mapping: ${tikTokAdvertiserMapping.size} entries`);
+  } catch (error) {
+    console.error("[Auto-Stop] Failed to load TikTok advertiser mapping:", error);
+    tikTokAdvertiserMapping = new Map();
+  }
+  
+  return tikTokAdvertiserMapping;
+}
 
 interface StopRuleConditions {
   spendMin?: number;
@@ -28,8 +51,30 @@ interface CpnData {
   consecutiveLoss?: number;
 }
 
-// TikTok キャンペーンIDからadvertiser_idを検索
-async function findTikTokAdvertiserId(campaignId: string): Promise<string | null> {
+// TikTok キャンペーンIDからadvertiser_idを検索（スプレッドシート優先）
+async function findTikTokAdvertiserId(campaignId: string, cpnName?: string): Promise<string | null> {
+  const campaignIdStr = String(campaignId).trim();
+  
+  // 1. まずスプレッドシートのマッピングを確認
+  const mapping = await loadTikTokAdvertiserMapping();
+  
+  // キャンペーンIDで検索
+  if (mapping.has(campaignIdStr)) {
+    const advertiserId = mapping.get(campaignIdStr)!;
+    console.log(`[Auto-Stop] Found advertiser_id ${advertiserId} from spreadsheet for campaign ${campaignIdStr}`);
+    return advertiserId;
+  }
+  
+  // CPN名で検索（バックアップ）
+  if (cpnName && mapping.has(`cpn:${cpnName}`)) {
+    const advertiserId = mapping.get(`cpn:${cpnName}`)!;
+    console.log(`[Auto-Stop] Found advertiser_id ${advertiserId} from spreadsheet for cpn ${cpnName}`);
+    return advertiserId;
+  }
+
+  console.log(`[Auto-Stop] Not found in spreadsheet, searching via API for campaign ${campaignIdStr}...`);
+
+  // 2. スプレッドシートになければAPI検索
   const accessTokens = [
     process.env.TIKTOK_ACCESS_TOKEN,
     process.env.TIKTOK_ACCESS_TOKEN_2,
@@ -41,9 +86,6 @@ async function findTikTokAdvertiserId(campaignId: string): Promise<string | null
   if (accessTokens.length === 0 || advertiserIds.length === 0) {
     return null;
   }
-
-  const campaignIdStr = String(campaignId).trim();
-  console.log(`[Auto-Stop] Searching advertiser_id for campaign ${campaignIdStr} across ${advertiserIds.length} advertisers...`);
 
   for (const accessToken of accessTokens) {
     for (const advertiserId of advertiserIds) {
@@ -70,7 +112,7 @@ async function findTikTokAdvertiserId(campaignId: string): Promise<string | null
         const data = await response.json();
         
         if (data.code === 0 && data.data?.list?.length > 0) {
-          console.log(`[Auto-Stop] Found advertiser_id ${advertiserIdStr} for campaign ${campaignIdStr}`);
+          console.log(`[Auto-Stop] Found advertiser_id ${advertiserIdStr} via API for campaign ${campaignIdStr}`);
           return advertiserIdStr;
         }
       } catch (error) {
@@ -561,7 +603,7 @@ export async function POST(request: Request) {
               // マッピングにadvertiser_idがない場合はAPIで検索
               if (!advertiserId) {
                 console.log(`[Auto-Stop] No advertiser_id in mapping for ${cpn.cpnName}, searching...`);
-                const foundId = await findTikTokAdvertiserId(cpn.campaignId);
+                const foundId = await findTikTokAdvertiserId(cpn.campaignId, cpn.cpnName);
                 if (foundId) {
                   advertiserId = foundId;
                   // 見つかったらマッピングを更新

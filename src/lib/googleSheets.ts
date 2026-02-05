@@ -934,4 +934,64 @@ export async function getHistoricalData(startDate: Date, endDate: Date) {
   }
 }
 
+/**
+ * TikTok_Today シートからキャンペーンIDとadvertiser_idのマッピングを取得
+ * 
+ * カラム構成:
+ * B(1): アカウントID (advertiser_id)
+ * C(2): アカウント名
+ * D(3): CP名
+ * M(12): CP ID (campaign_id)
+ */
+export async function getTikTokAdvertiserMapping(): Promise<Map<string, string>> {
+  const sheets = getGoogleSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  
+  if (!spreadsheetId) {
+    console.warn("GOOGLE_SHEETS_SPREADSHEET_ID is not configured");
+    return new Map();
+  }
+
+  const mapping = new Map<string, string>();
+
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "TikTok_Today!A:Q",
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length <= 1) {
+      console.log("TikTok_Today sheet is empty or has only header");
+      return mapping;
+    }
+
+    // 1行目はヘッダー、2行目からデータ
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length < 13) continue;
+
+      const advertiserId = parseValue(row[1]); // B列: アカウントID
+      const campaignId = parseValue(row[12]); // M列: CP ID
+      const cpnName = parseValue(row[3]); // D列: CP名
+
+      if (advertiserId && campaignId) {
+        // キャンペーンIDをキーにadvertiser_idをマッピング
+        mapping.set(campaignId, advertiserId);
+        
+        // CPN名もキーにして保存（バックアップ用）
+        if (cpnName) {
+          mapping.set(`cpn:${cpnName}`, advertiserId);
+        }
+      }
+    }
+
+    console.log(`TikTok advertiser mapping loaded: ${mapping.size} entries`);
+    return mapping;
+  } catch (error) {
+    console.error("Error fetching TikTok_Today sheet:", error);
+    return mapping;
+  }
+}
+
 export type { RawRowData };
