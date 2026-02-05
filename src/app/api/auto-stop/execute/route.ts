@@ -28,6 +28,61 @@ interface CpnData {
   consecutiveLoss?: number;
 }
 
+// TikTok キャンペーンIDからadvertiser_idを検索
+async function findTikTokAdvertiserId(campaignId: string): Promise<string | null> {
+  const accessTokens = [
+    process.env.TIKTOK_ACCESS_TOKEN,
+    process.env.TIKTOK_ACCESS_TOKEN_2,
+    process.env.TIKTOK_ACCESS_TOKEN_3,
+  ].filter(Boolean) as string[];
+  
+  const advertiserIds = (process.env.TIKTOK_ADVERTISER_IDS || "").split(",").filter(Boolean);
+  
+  if (accessTokens.length === 0 || advertiserIds.length === 0) {
+    return null;
+  }
+
+  const campaignIdStr = String(campaignId).trim();
+  console.log(`[Auto-Stop] Searching advertiser_id for campaign ${campaignIdStr} across ${advertiserIds.length} advertisers...`);
+
+  for (const accessToken of accessTokens) {
+    for (const advertiserId of advertiserIds) {
+      try {
+        const advertiserIdStr = String(advertiserId).trim();
+        const params = new URLSearchParams({
+          advertiser_id: advertiserIdStr,
+          filtering: JSON.stringify({
+            campaign_ids: [campaignIdStr],
+          }),
+        });
+
+        const response = await fetch(
+          `https://business-api.tiktok.com/open_api/v1.3/campaign/get/?${params.toString()}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Token": accessToken,
+            },
+          }
+        );
+
+        const data = await response.json();
+        
+        if (data.code === 0 && data.data?.list?.length > 0) {
+          console.log(`[Auto-Stop] Found advertiser_id ${advertiserIdStr} for campaign ${campaignIdStr}`);
+          return advertiserIdStr;
+        }
+      } catch (error) {
+        // エラーは無視して次のadvertiser_idを試す
+      }
+    }
+  }
+
+  console.log(`[Auto-Stop] Could not find advertiser_id for campaign ${campaignIdStr}`);
+  return null;
+}
+
 // Meta広告を停止するAPI
 async function stopMetaCampaign(campaignId: string, accessTokens: string[]): Promise<{ success: boolean; error?: string }> {
   for (const accessToken of accessTokens) {
@@ -500,8 +555,36 @@ export async function POST(request: Request) {
               const mapping = await prisma.cpn_campaign_mapping.findUnique({
                 where: { cpn_name: cpn.cpnName },
               });
-              if (mapping?.advertiser_id) {
-                const result = await stopTikTokCampaign(cpn.campaignId, mapping.advertiser_id);
+              
+              let advertiserId = mapping?.advertiser_id;
+              
+              // マッピングにadvertiser_idがない場合はAPIで検索
+              if (!advertiserId) {
+                console.log(`[Auto-Stop] No advertiser_id in mapping for ${cpn.cpnName}, searching...`);
+                const foundId = await findTikTokAdvertiserId(cpn.campaignId);
+                if (foundId) {
+                  advertiserId = foundId;
+                  // 見つかったらマッピングを更新
+                  try {
+                    await prisma.cpn_campaign_mapping.upsert({
+                      where: { cpn_name: cpn.cpnName },
+                      update: { advertiser_id: foundId },
+                      create: {
+                        cpn_name: cpn.cpnName,
+                        campaign_id: cpn.campaignId,
+                        media: cpn.media || "TikTok",
+                        advertiser_id: foundId,
+                      },
+                    });
+                    console.log(`[Auto-Stop] Saved advertiser_id ${foundId} for ${cpn.cpnName}`);
+                  } catch (e) {
+                    console.error(`[Auto-Stop] Failed to save mapping:`, e);
+                  }
+                }
+              }
+              
+              if (advertiserId) {
+                const result = await stopTikTokCampaign(cpn.campaignId, advertiserId);
                 stopped = result.success;
                 error = result.error;
               } else {
