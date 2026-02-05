@@ -14,13 +14,14 @@ export default auth((req) => {
   const isScheduledApi = pathname.startsWith("/api/scheduled-send");
   const isScheduledOnExecute = pathname === "/api/scheduled-on/execute";
   const isAutoStopScheduled = pathname === "/api/auto-stop/scheduled";
+  const isAutoStopExecute = pathname === "/api/auto-stop/execute";
   const isSetupApi = pathname.startsWith("/api/admin/setup");
   const isRegisterApi = pathname.startsWith("/api/register");
   const isDebugApi = pathname.startsWith("/api/debug-consecutive");
   const isSyncCampaignsApi = pathname === "/api/sync-campaigns";
 
   // 公開API・ページは常に許可
-  if (isAuthApi || isPublicApi || isScheduledApi || isScheduledOnExecute || isAutoStopScheduled || isSetupApi || isRegisterApi || isDebugApi || isSyncCampaignsApi) {
+  if (isAuthApi || isPublicApi || isScheduledApi || isScheduledOnExecute || isAutoStopScheduled || isAutoStopExecute || isSetupApi || isRegisterApi || isDebugApi || isSyncCampaignsApi) {
     return NextResponse.next();
   }
 
