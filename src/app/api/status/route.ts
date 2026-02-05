@@ -59,18 +59,13 @@ export async function POST(request: Request) {
         message: `${cpnName}を${statusText}にしました`,
       });
     } else {
-      // 「API未対応」の場合はChatWork通知をスキップ（既知の制限のため）
-      const isApiLimitation = result.error?.includes("API未対応");
-      
-      if (!isApiLimitation) {
-        // エラー通知を送信
-        await sendErrorNotification("status_change", result.error || "ステータス変更に失敗", {
-          cpnName,
-          media,
-          campaignId,
-          status,
-        });
-      }
+      // エラー通知を送信
+      await sendErrorNotification("status_change", result.error || "ステータス変更に失敗", {
+        cpnName,
+        media,
+        campaignId,
+        status,
+      });
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 500 }
@@ -151,6 +146,21 @@ async function updateMetaStatus(
   return { success: false, error: lastError };
 }
 
+// TikTok Upgraded Smart Plus / SPC 対応判定
+function isSmartPlusCampaignError(message: string | undefined): boolean {
+  if (!message) return false;
+  const keywords = [
+    "Smart Performance Campaign",
+    "Upgraded Smart Plus",
+    "smart_plus",
+    "SPC",
+    "spc",
+    "This API does not support",
+    "not support Upgraded",
+  ];
+  return keywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
+}
+
 // TikTok Ads API - キャンペーンステータス変更 + 複数トークン対応 + 広告アカウント名マッピング対応
 async function updateTikTokStatus(
   campaignId: string | undefined,
@@ -200,7 +210,7 @@ async function updateTikTokStatus(
     for (let i = 0; i < advertiserIds.length; i++) {
       const advertiserId = advertiserIds[i].trim();
       
-      // campaign/status/update/ APIを使用（Upgraded Smart Plus対応）
+      // === 方法1: campaign/status/update/ API（推奨） ===
       try {
         const response = await fetch(
           "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
@@ -212,34 +222,42 @@ async function updateTikTokStatus(
             },
             body: JSON.stringify({
               advertiser_id: advertiserId,
-              campaign_ids: [campaignId],  // 配列で渡す
+              campaign_ids: [campaignId],
               operation_status: tiktokStatus,
             }),
           }
         );
 
         const data = await response.json();
-        console.log(`TikTok status update response:`, JSON.stringify(data));
+        console.log(`[TikTok] status/update response:`, JSON.stringify(data));
 
         if (data.code === 0) {
           return { success: true };
         } else {
           lastError = data.message || "TikTok APIエラー";
           
-          // Smart Plus / SPC の場合はSPC APIを試す
-          if (data.message?.includes("Smart Performance Campaign") || 
-              data.message?.includes("spc") ||
-              data.message?.includes("Upgraded Smart Plus") ||
-              data.message?.includes("Smart Plus")) {
+          // Upgraded Smart Plus / SPC エラーの場合は複数の方法を試す
+          if (isSmartPlusCampaignError(data.message)) {
+            console.log(`[TikTok] Upgraded Smart Plus detected, trying alternative APIs...`);
+            
+            // === 方法2: campaign/spc/update/ API（SPC専用） ===
             const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, tiktokStatus);
             if (spcResult.success) {
+              console.log(`[TikTok] SPC API succeeded`);
               return { success: true };
             }
-            lastError = spcResult.error || lastError;
-            // SPC API失敗時は次のトークン/広告主IDを試す
-            continue;
+            
+            // === 方法3: campaign/update/ API（通常キャンペーン更新） ===
+            const updateResult = await updateTikTokCampaignDirect(accessToken, advertiserId, campaignId, tiktokStatus);
+            if (updateResult.success) {
+              console.log(`[TikTok] Direct campaign/update API succeeded`);
+              return { success: true };
+            }
+            
+            lastError = `Upgraded Smart Plus: ${spcResult.error || updateResult.error || lastError}`;
           }
           
+          // 認証エラーの場合は次のトークン/広告主IDを試す
           if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {
             continue;
           }
@@ -252,6 +270,44 @@ async function updateTikTokStatus(
   }
 
   return { success: false, error: lastError };
+}
+
+// TikTok campaign/update/ API（直接更新）
+async function updateTikTokCampaignDirect(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string,
+  optStatus: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(
+      "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+        body: JSON.stringify({
+          advertiser_id: advertiserId,
+          campaign_id: campaignId,
+          operation_status: optStatus,
+        }),
+      }
+    );
+
+    const data = await response.json();
+    console.log(`[TikTok] campaign/update response:`, JSON.stringify(data));
+
+    if (data.code === 0) {
+      return { success: true };
+    } else {
+      return { success: false, error: data.message || "campaign/update APIエラー" };
+    }
+  } catch (error) {
+    console.error("TikTok campaign/update API error:", error);
+    return { success: false, error: "campaign/update APIへの接続に失敗しました" };
+  }
 }
 
 // TikTok Smart Performance Campaign ステータス変更
@@ -279,26 +335,10 @@ async function updateTikTokSpcStatus(
     );
 
     const data = await response.json();
-    console.log(`TikTok SPC status update response:`, JSON.stringify(data));
 
     if (data.code === 0) {
       return { success: true };
     } else {
-      // エラーメッセージを正規化
-      const errorMsg = (data.message || "").toLowerCase();
-      
-      // Upgraded Smart Plus / Smart Plus はAPIで未サポート
-      if (errorMsg.includes("upgraded smart plus") || 
-          errorMsg.includes("smart plus") ||
-          errorMsg.includes("does not support") ||
-          errorMsg.includes("not support") ||
-          errorMsg.includes("spc") ||
-          data.code === 40701) {
-        return { 
-          success: false, 
-          error: `【API未対応】このキャンペーンは「Smart Plus」タイプのため、APIでのステータス変更ができません。TikTok Ads Manager（https://ads.tiktok.com/）から手動で変更してください。` 
-        };
-      }
       return { success: false, error: data.message || "SPC APIエラー" };
     }
   } catch (error) {
@@ -370,17 +410,12 @@ async function updatePangleStatus(
       } else {
         lastError = data.message || "Pangle APIエラー";
         
-        // Smart Plus / SPC の場合はSPC APIを試す
-        if (data.message?.includes("Smart Performance Campaign") || 
-            data.message?.includes("spc") ||
-            data.message?.includes("Upgraded Smart Plus") ||
-            data.message?.includes("Smart Plus")) {
+        if (data.message?.includes("Smart Performance Campaign") || data.message?.includes("spc")) {
           const spcResult = await updateTikTokSpcStatus(accessToken, advertiserId, campaignId, pangleStatus);
           if (spcResult.success) {
             return { success: true };
           }
           lastError = spcResult.error || lastError;
-          continue;
         }
         
         if (data.code === 40002 || data.code === 40001 || data.code === 40100 || data.code === 40007) {

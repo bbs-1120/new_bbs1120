@@ -66,18 +66,13 @@ export async function POST(request: Request) {
         message: `${cpnName}の予算を¥${newBudget.toLocaleString()}に変更しました`,
       });
     } else {
-      // 「API未対応」の場合はChatWork通知をスキップ（既知の制限のため）
-      const isApiLimitation = result.error?.includes("API未対応");
-      
-      if (!isApiLimitation) {
-        // エラー通知を送信
-        await sendErrorNotification("budget_change", result.error || "予算変更に失敗", {
-          cpnName,
-          media,
-          campaignId,
-          newBudget,
-        });
-      }
+      // エラー通知を送信
+      await sendErrorNotification("budget_change", result.error || "予算変更に失敗", {
+        cpnName,
+        media,
+        campaignId,
+        newBudget,
+      });
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 500 }
@@ -162,6 +157,21 @@ async function updateMetaBudget(
   return { success: false, error: lastError };
 }
 
+// TikTok Upgraded Smart Plus / SPC 対応判定
+function isSmartPlusCampaignError(message: string | undefined): boolean {
+  if (!message) return false;
+  const keywords = [
+    "Smart Performance Campaign",
+    "Upgraded Smart Plus",
+    "smart_plus",
+    "SPC",
+    "spc",
+    "This API does not support",
+    "not support Upgraded",
+  ];
+  return keywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
+}
+
 // TikTok Ads API - 複数トークン対応 + 広告アカウント名から広告主ID特定 + Smart Performance Campaign対応
 async function updateTikTokBudget(
   campaignId: string | undefined,
@@ -175,10 +185,10 @@ async function updateTikTokBudget(
     process.env.TIKTOK_ACCESS_TOKEN_3,
   ].filter(Boolean) as string[];
   
-  console.log("TikTok budget update - starting...");
-  console.log("AccessTokens count:", accessTokens.length);
-  console.log("CampaignId:", campaignId);
-  console.log("Known Advertiser ID:", knownAdvertiserId);
+  console.log("[TikTok Budget] Starting update...");
+  console.log("[TikTok Budget] AccessTokens count:", accessTokens.length);
+  console.log("[TikTok Budget] CampaignId:", campaignId);
+  console.log("[TikTok Budget] Known Advertiser ID:", knownAdvertiserId);
   
   if (accessTokens.length === 0) {
     return { success: false, error: "TikTok APIの認証情報が設定されていません。.envにTIKTOK_ACCESS_TOKENを追加してください。" };
@@ -194,12 +204,12 @@ async function updateTikTokBudget(
   if (knownAdvertiserId) {
     // 広告アカウント名から特定した広告主IDを最優先で使用
     advertiserIds = [knownAdvertiserId];
-    console.log("Using known advertiser ID from account name mapping");
+    console.log("[TikTok Budget] Using known advertiser ID from account name mapping");
   } else {
     // フォールバック: 全広告主IDを試す（最大10個）
     const advertiserIdsStr = process.env.TIKTOK_ADVERTISER_IDS || "";
     advertiserIds = advertiserIdsStr.split(",").filter(Boolean);
-    console.log("Falling back to advertiser ID list, trying first 10");
+    console.log("[TikTok Budget] Falling back to advertiser ID list, trying first 10");
   }
 
   if (advertiserIds.length === 0) {
@@ -211,13 +221,13 @@ async function updateTikTokBudget(
   // 各トークンで試行（複数ビジネスセンター対応）
   for (let t = 0; t < accessTokens.length; t++) {
     const accessToken = accessTokens[t];
-    console.log(`[Token ${t + 1}/${accessTokens.length}] Trying...`);
+    console.log(`[TikTok Budget] [Token ${t + 1}/${accessTokens.length}] Trying...`);
     
     for (let i = 0; i < advertiserIds.length; i++) {
       const advertiserId = advertiserIds[i].trim();
-      console.log(`  [Advertiser ${i + 1}/${advertiserIds.length}] ${advertiserId}`);
+      console.log(`[TikTok Budget] [Advertiser ${i + 1}/${advertiserIds.length}] ${advertiserId}`);
       
-      // 1. まず通常のキャンペーン更新APIを試す
+      // === 方法1: campaign/update/ API（通常キャンペーン） ===
       try {
         const response = await fetch(
           "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
@@ -232,34 +242,35 @@ async function updateTikTokBudget(
               campaign_id: campaignId,
               budget: newBudget,
               budget_mode: "BUDGET_MODE_DAY",
-              operation_status: "ENABLE",
             }),
           }
         );
 
         const data = await response.json();
-        console.log(`  Response code: ${data.code}, message: ${data.message}`);
+        console.log(`[TikTok Budget] campaign/update response - code: ${data.code}, message: ${data.message}`);
 
         if (data.code === 0) {
-          console.log("  Success!");
+          console.log("[TikTok Budget] Success with campaign/update!");
           return { success: true };
         } else {
           lastError = data.message || "TikTok APIエラー";
           
-          // Smart Performance Campaign または Upgraded Smart Plus エラーの場合はSPC APIを試す
-          if (data.message?.includes("Smart Performance Campaign") || 
-              data.message?.includes("spc") ||
-              data.message?.includes("Upgraded Smart Plus") ||
-              data.message?.includes("Smart Plus")) {
-            console.log("  Trying SPC API for Smart Plus campaign...");
+          // Upgraded Smart Plus / SPC エラーの場合は複数の方法を試す
+          if (isSmartPlusCampaignError(data.message)) {
+            console.log("[TikTok Budget] Upgraded Smart Plus detected, trying alternative APIs...");
+            
+            // === 方法2: campaign/spc/update/ API（SPC専用） ===
             const spcResult = await updateTikTokSpcBudget(accessToken, advertiserId, campaignId, newBudget);
             if (spcResult.success) {
+              console.log("[TikTok Budget] Success with SPC API!");
               return { success: true };
             }
-            console.log(`  SPC API failed: ${spcResult.error}`);
-            lastError = spcResult.error || lastError;
-            // SPC APIも失敗した場合は次のトークン/広告主IDを試す
-            continue;
+            console.log(`[TikTok Budget] SPC API failed: ${spcResult.error}`);
+            
+            // === 方法3: campaign/budget/update/ API（予算専用、もしあれば） ===
+            // TikTokにはこのエンドポイントは存在しないが、将来のために記載
+            
+            lastError = `Upgraded Smart Plus: ${spcResult.error || data.message}`;
           }
           
           // 権限エラーやキャンペーンが見つからない場合は次を試す
@@ -268,13 +279,13 @@ async function updateTikTokBudget(
           }
         }
       } catch (error) {
-        console.error("  TikTok API error:", error);
+        console.error("[TikTok Budget] API error:", error);
         lastError = "TikTok APIへの接続に失敗しました";
       }
     }
   }
 
-  console.log(`All tries completed. Last error: ${lastError}`);
+  console.log(`[TikTok Budget] All tries completed. Last error: ${lastError}`);
   return { success: false, error: lastError };
 }
 
@@ -315,23 +326,6 @@ async function updateTikTokSpcBudget(
     } else {
       // 権限エラーの詳細を確認
       console.log(`SPC API Failed - full response:`, JSON.stringify(data));
-      
-      // エラーメッセージを正規化
-      const errorMsg = (data.message || "").toLowerCase();
-      
-      // Upgraded Smart Plus / Smart Plus はAPIで未サポート
-      if (errorMsg.includes("upgraded smart plus") || 
-          errorMsg.includes("smart plus") ||
-          errorMsg.includes("does not support") ||
-          errorMsg.includes("not support") ||
-          errorMsg.includes("spc") ||
-          data.code === 40701) {  // SPCキャンペーン関連のエラーコード
-        return { 
-          success: false, 
-          error: `【API未対応】このキャンペーンは「Smart Plus」タイプのため、APIでの予算変更ができません。TikTok Ads Manager（https://ads.tiktok.com/）から手動で変更してください。` 
-        };
-      }
-      
       return { success: false, error: data.message || "SPC APIエラー" };
     }
   } catch (error) {

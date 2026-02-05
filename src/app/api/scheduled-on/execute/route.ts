@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendScheduledOnError } from "@/lib/chatwork";
+import { sendErrorNotification } from "@/lib/chatwork";
 
 // 日本時間の今日の日付を取得
 function getJSTDate(): Date {
@@ -58,7 +58,22 @@ async function turnOnMetaCampaign(
   return { success: false, error: "全てのトークンで失敗しました" };
 }
 
-// TikTok/Pangle APIでキャンペーンをONにする
+// Upgraded Smart Plus / SPC エラー判定
+function isSmartPlusCampaignError(message: string | undefined): boolean {
+  if (!message) return false;
+  const keywords = [
+    "Smart Performance Campaign",
+    "Upgraded Smart Plus",
+    "smart_plus",
+    "SPC",
+    "spc",
+    "This API does not support",
+    "not support Upgraded",
+  ];
+  return keywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
+}
+
+// TikTok/Pangle APIでキャンペーンをONにする（Upgraded Smart Plus対応）
 async function turnOnTikTokCampaign(
   cpnName: string,
   campaignId?: string | null,
@@ -68,39 +83,112 @@ async function turnOnTikTokCampaign(
     return { success: false, error: "キャンペーンIDまたは広告主IDがありません" };
   }
 
-  const accessToken = process.env.TIKTOK_ACCESS_TOKEN;
-  if (!accessToken) {
+  const accessTokens = [
+    process.env.TIKTOK_ACCESS_TOKEN,
+    process.env.TIKTOK_ACCESS_TOKEN_2,
+    process.env.TIKTOK_ACCESS_TOKEN_3,
+  ].filter(Boolean) as string[];
+  
+  if (accessTokens.length === 0) {
     return { success: false, error: "TikTokアクセストークンがありません" };
   }
 
-  try {
-    const response = await fetch(
-      "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Token": accessToken,
-        },
-        body: JSON.stringify({
-          advertiser_id: advertiserId,
-          campaign_id: campaignId,
-          operation_status: "ENABLE",
-        }),
+  let lastError = "Unknown error";
+
+  for (const accessToken of accessTokens) {
+    // === 方法1: campaign/status/update/ API ===
+    try {
+      const response = await fetch(
+        "https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Token": accessToken,
+          },
+          body: JSON.stringify({
+            advertiser_id: advertiserId,
+            campaign_ids: [campaignId],
+            operation_status: "ENABLE",
+          }),
+        }
+      );
+
+      const data = await response.json();
+      console.log(`[Scheduled ON] TikTok status/update response for ${cpnName}:`, data.code, data.message);
+
+      if (data.code === 0) {
+        return { success: true };
       }
-    );
+      
+      lastError = data.message || "TikTok API error";
 
-    const data = await response.json();
+      // Upgraded Smart Plus エラーの場合は複数の方法を試す
+      if (isSmartPlusCampaignError(data.message)) {
+        console.log(`[Scheduled ON] Upgraded Smart Plus detected for ${cpnName}, trying SPC API...`);
+        
+        // === 方法2: campaign/spc/update/ API ===
+        const spcResponse = await fetch(
+          "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/update/",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Token": accessToken,
+            },
+            body: JSON.stringify({
+              advertiser_id: advertiserId,
+              campaign_id: campaignId,
+              operation_status: "ENABLE",
+            }),
+          }
+        );
 
-    if (data.code === 0) {
-      return { success: true };
-    } else {
-      return { success: false, error: data.message || "TikTok API error" };
+        const spcData = await spcResponse.json();
+        console.log(`[Scheduled ON] TikTok SPC API response for ${cpnName}:`, spcData.code, spcData.message);
+
+        if (spcData.code === 0) {
+          return { success: true };
+        }
+
+        // === 方法3: campaign/update/ API ===
+        const updateResponse = await fetch(
+          "https://business-api.tiktok.com/open_api/v1.3/campaign/update/",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Token": accessToken,
+            },
+            body: JSON.stringify({
+              advertiser_id: advertiserId,
+              campaign_id: campaignId,
+              operation_status: "ENABLE",
+            }),
+          }
+        );
+
+        const updateData = await updateResponse.json();
+        console.log(`[Scheduled ON] TikTok campaign/update response for ${cpnName}:`, updateData.code, updateData.message);
+
+        if (updateData.code === 0) {
+          return { success: true };
+        }
+
+        lastError = `Upgraded Smart Plus: ${spcData.message || updateData.message}`;
+      }
+
+      // 認証エラーの場合は次のトークンを試す
+      if (data.code === 40002 || data.code === 40001 || data.code === 40100) {
+        continue;
+      }
+    } catch (error) {
+      console.error(`[Scheduled ON] TikTok API error for ${cpnName}:`, error);
+      lastError = "TikTok API呼び出しに失敗しました";
     }
-  } catch (error) {
-    console.error(`TikTok API error for ${cpnName}:`, error);
-    return { success: false, error: "TikTok API呼び出しに失敗しました" };
   }
+
+  return { success: false, error: lastError };
 }
 
 // POST: 0:00 JSTに実行される自動ON処理
@@ -193,10 +281,22 @@ export async function POST() {
       },
     });
 
-    // 失敗があった場合はChatworkに通知（シンプルなフォーマット）
+    // 失敗があった場合はChatworkに通知
     if (failedCount > 0) {
       const failedItems = results.filter((r) => !r.success);
-      await sendScheduledOnError(failedItems);
+      const errorDetails = failedItems
+        .map((r) => `・${r.media}: ${r.cpnName} - ${r.error}`)
+        .join("\n");
+
+      await sendErrorNotification(
+        "status_change",
+        `翌日ON自動実行で${failedCount}件の失敗がありました`,
+        {
+          成功: successCount,
+          失敗: failedCount,
+          失敗詳細: errorDetails,
+        }
+      );
     }
 
     return NextResponse.json({
@@ -209,7 +309,11 @@ export async function POST() {
   } catch (error) {
     console.error("Execute scheduled ON error:", error);
 
-    // システムエラーはログのみ（ChatWork通知不要）
+    await sendErrorNotification(
+      "system",
+      "翌日ON自動実行でシステムエラーが発生しました",
+      { error: error instanceof Error ? error.message : "Unknown error" }
+    );
 
     return NextResponse.json(
       {
